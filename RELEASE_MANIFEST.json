@@ -2,7 +2,7 @@
   "product": "smart-contract",
   "architecture": "5.0",
   "package": "6.4.1-maira-compact-pulse",
-  "status": "V6_4_1_BUILD_PENDING",
+  "status": "V6_4_1_MAIRA_PULSE_FRONTEND_DEPLOYED",
   "repository_target": "andresmartalliance/smart-contract",
   "railway_project_id": "1f226324-580b-4b1c-b235-12c717d70af8",
   "railway_development_environment_id": "6e8d45ca-d6f2-448c-a48a-63e5a2ab1806",
@@ -53,7 +53,7 @@
     "attach_template_after_case_creation": "IMPLEMENTED_AND_TESTED",
     "existing_party_reuse": "IMPLEMENTED_AND_TESTED",
     "registered_external_login": "GOOGLE_EMAIL_REGISTERED_WITHOUT_CASE_ALLOWED_TESTED_MOCK_IDENTITY",
-    "maira_launcher": "SOURCE_IMPLEMENTED_BUILD_PENDING",
+    "maira_launcher": "PASS_GITHUB_ACTIONS_FRONTEND_RAILWAY_DEPLOY_SUCCESS",
     "maira_motion_accessibility": "PREFERS_REDUCED_MOTION_IMPLEMENTED"
   },
   "limitations": [
@@ -110,7 +110,7 @@
     "api": "/api/**",
     "web": "/web/**"
   },
-  "deploy_validation_source_commit": "42fbc0fa8ea36deef52432417e0a560937bf1944",
+  "deploy_validation_source_commit": "1199dc9819aa819a18434ee74f69434a39169721",
   "maira_brand": {
     "name": "MAIRA",
     "expansion": "Multi-tenant AI for Intelligent Review & Agreements",
