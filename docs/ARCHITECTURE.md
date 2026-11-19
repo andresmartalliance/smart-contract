@@ -193,3 +193,8 @@ Diseño light-premium de Smart: superficies casi blancas, azul profundo, acentos
 ### V6.5.6 — Resiliencia Gemini: PDF multimodal a lectura textual
 
 Ante 502/503/504 de generación inicial, la segunda solicitud puede ser exclusivamente textual, extraída por pypdf, con límite de dos llamadas total. La extracción es efímera; las dependencias de diagrama quedan provisionales y exige revisión. En ausencia de texto, se conserva un reintento multimodal. No hay alternancia automática de modelos. Pruebas simuladas aprobadas; inferencia real pendiente.
+
+
+### V6.5.7: Progreso real en MAIRA
+
+La API ofrece `/api/v1/maira/workflow-import/stream` (POST multipart bajo Google ID token + allowlist), emite NDJSON sobre StreamingResponse, comunica validación de archivo, preparación, Gemini, recuperación, compilación, vista previa o error. Los heartbeats no se interpretan como etapas completadas. La interfaz Vue dibuja un círculo con 4 hitos confirmados y órbita indeterminada mientras hay inferencia; no se estima el porcentaje interno del modelo. El resultado sólo permite borrador revisable. Ruta JSON original compatible. Tests simulados y compilación correctos; E2E navegador con Google/Gemini pendiente.

@@ -1,5 +1,13 @@
 # Smart Contract + MAIRA
 
+## V6.5.7 — Progreso circular en vivo para análisis con MAIRA
+
+- **Experiencia inspirada en NORA Interoperability:** círculo con cuatro hitos confirmados por el servidor y cronómetro real. No se simulan porcentajes del trabajo interno de Gemini ni se avanza con el reloj; mientras Gemini procesa, una órbita señala actividad sin inventar avance.
+- **Eventos:** el frontend consume `POST /api/v1/maira/workflow-import/stream` (NDJSON autenticado). Etapas: archivo recibido/validado, interpretación Gemini, compilación del workflow, vista previa lista. Si hay recuperación textual o reintento se informa expresamente. Heartbeat cada 8 segundos mantiene vivo el transporte pero no cuenta como progreso.
+- **Compatibilidad:** el endpoint JSON anterior se conserva. Google Sign-In/allowlist, claves, modelos, reglas de revisión, base de datos y publicación siguen intactos. No se almacenan trabajos ni documentos en el servidor.
+- **Validaciones:** GitHub Actions run 44590087950 **SUCCESS** (API tests y compilación frontend); Railway Development API y Web **SUCCESS**, Postgres online. Commit funcional `46cb94a8f6b5a544e33e2081ecda34d924a8f2ff`.
+- **Pendiente de aceptación:** comprobar el avance visible desde una sesión real de navegador con archivo PDF. No se garantiza que Gemini responda; el último intento real anterior a la UI terminó con timeout de 110 segundos. Sin E2E real, no certificar el ciclo completo.
+
 ## V6.5.6 — Recuperación documental frente a HTTP 503 persistente
 
 **Evidencia:** el 19 nov 2026, ~18:18Z, Gemini 3.6 Flash respondió 503 en dos intentos del mismo PDF. Railway API y su autenticación estaban saludables. Un reintento idéntico no resolvió la sobrecarga del proveedor.
@@ -10,7 +18,7 @@
 
 **Verificación:** pruebas de recuperación y del motor del backend aprobadas con respuestas Gemini simuladas; revisión del PDF original confirmó que posee capa textual en dos páginas. **La inferencia real de Gemini con la clave del usuario no se ha ejecutado exitosamente después del cambio**. Se requiere verificar ambos modos en la aplicación para afirmar que funciona. Si incluso una solicitud mínima de texto retorna 503, la indisponibilidad es del proveedor/modelo, no del parser.
 
-**V6.5.4 — Construcción de workflows desde evidencia documental · Development**
+**V6.5.7 — Progreso circular real durante importación documental · Development**
 
 Smart Contract es una plataforma SaaS multiempresa con motor declarativo de workflows de contratación, campos, políticas y modalidades configurables. La primera aplicación es contratación de red prestadora de salud, sin codificar PGP, cápita ni evento como flujos obligatorios. El workflow institucional de Famisanar aún no ha sido recibido y no forma parte de esta versión.
 
