@@ -1,8 +1,16 @@
 # Smart Contract + MAIRA
 
-**V6.5.2 — Diagnóstico de conexión Gemini y fallas externas · Development**
+**V6.5.3 — Modelo Gemini estable configurado · Development**
 
 Smart Contract es una plataforma SaaS multiempresa con motor declarativo de workflows de contratación, campos, políticas y modalidades configurables. La primera aplicación es contratación de red prestadora de salud, sin codificar PGP, cápita ni evento como flujos obligatorios. El workflow institucional de Famisanar aún no ha sido recibido y no forma parte de esta versión.
+
+## V6.5.3 — Reemplazo del modelo Gemini 2.5 Flash que retorna 404
+
+El usuario ejecutó la primera comprobación y Google devolvió **HTTP 404** para `gemini-2.5-flash`. Este es un fallo de acceso al modelo, no una falla de carga del archivo en Smart Contract. El modelo anterior era el default de la API; la cuenta/clave no dispone de generación con él. Google documenta como estable `gemini-3.6-flash`, compatible con PDF y salidas estructuradas.
+
+Acciones realizadas: (1) se estableció en el servicio **api** de Railway Development la variable `SMART_GEMINI_MODEL=gemini-3.6-flash`, preservando `SMART_GEMINI_API_KEY` y demás variables; (2) el default de `api/app/routers/maira.py` se actualizó a 3.6 Flash; (3) pruebas de conexión y análisis comparten `_gemini_model()`, por lo que utilizan el mismo modelo; (4) pruebas de regresión validan el default y el override, sin inferencias reales que consuman cuota ni almacenar documentos.
+
+**No confundir** configuración/despliegue con acceso efectivo: al no disponer de un ID token personal para ejecutar el endpoint desde herramientas, falta una verificación de inferencia real con la clave del proyecto. Próxima prueba: Hospital Smart → Crear proceso con Maira → Verificar conexión Gemini → Analizar el PDF si responde. Si 3.6 también devolviera 404, deberá examinarse el acceso del proyecto a modelos concretos en AI Studio; no cambiar la clave a ciegas.
 
 ## V6.5.2 — Diagnóstico de error de Gemini
 

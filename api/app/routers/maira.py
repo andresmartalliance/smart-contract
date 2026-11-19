@@ -223,7 +223,7 @@ def _parse_proposal(payload: Any) -> Proposal:
 
 
 def _gemini_model() -> str:
-    model = os.getenv("SMART_GEMINI_MODEL", "gemini-2.5-flash").strip()
+    model = os.getenv("SMART_GEMINI_MODEL", "gemini-3.6-flash").strip()
     if not re.fullmatch(r"[A-Za-z0-9._-]{2,80}", model):
         raise HTTPException(503, "Modelo de Gemini mal configurado. Revisa SMART_GEMINI_MODEL.")
     return model

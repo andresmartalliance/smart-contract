@@ -179,7 +179,7 @@ def test_gemini_connection_check_is_authenticated(testing,monkeypatch):
         response=client.post("/api/v1/maira/workflow-import/check-connection")
         assert response.status_code==200,response.text
         assert response.json()["connected"] is True
-        assert response.json()["model"]=="gemini-2.5-flash"
+        assert response.json()["model"]=="gemini-3.6-flash"
         assert captured["api_key"]=="dummy"
         assert captured["timeout"]<=20
         assert "PDF" not in str(captured["payload"])
@@ -203,3 +203,18 @@ def test_connection_check_reports_provider_failure_without_secret(testing,monkey
         assert "hidden" not in response.text
     finally:
         app.dependency_overrides.pop(maira._verify_identity,None)
+
+
+def test_model_env_override_is_honored_for_probe_and_document(monkeypatch):
+    from app.routers import maira
+    monkeypatch.setenv("SMART_GEMINI_MODEL","gemini-3.5-flash")
+    assert maira._gemini_model()=="gemini-3.5-flash"
+    monkeypatch.setenv("SMART_GEMINI_MODEL","gemini-3.6-flash/invalid")
+    with pytest.raises(HTTPException) as err:
+        maira._gemini_model()
+    assert err.value.status_code==503
+
+def test_current_model_is_not_retired_default(monkeypatch):
+    from app.routers import maira
+    monkeypatch.delenv("SMART_GEMINI_MODEL",raising=False)
+    assert maira._gemini_model()=="gemini-3.6-flash"

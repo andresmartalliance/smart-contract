@@ -1,8 +1,8 @@
 {
   "product": "smart-contract",
   "architecture": "5.0",
-  "package": "6.5.2-gemini-upstream-diagnostics",
-  "status": "V6_5_2_DIAGNOSTICS_DEPLOYED_PROBE_NOT_YET_EXECUTED",
+  "package": "6.5.3-gemini-model-3.6-flash",
+  "status": "V6_5_3_GEMINI_MODEL_CONFIGURED_AWAITING_AUTHENTICATED_INFERENCE",
   "repository_target": "andresmartalliance/smart-contract",
   "railway_project_id": "1f226324-580b-4b1c-b235-12c717d70af8",
   "railway_development_environment_id": "6e8d45ca-d6f2-448c-a48a-63e5a2ab1806",
@@ -32,7 +32,7 @@
     "maira_original_color": "PRESERVED_HOME_GRADIENT_#10223f_#153968_#164578",
     "maira_document_import": "READY_IF_API_STATUS_READY_BUT_MODEL_INFERENCE_NOT_VALIDATED",
     "google_login": "CLIENT_ID_CONFIGURED_USER_REPORTED_LOGIN_WORKING",
-    "gemini": "KEY_PRESENT_UPSTREAM_PROVIDER_STATUS_UNVERIFIED",
+    "gemini": "KEY_PRESENT_MODEL_GEMINI_3_6_FLASH_CONFIGURED_IN_RAILWAY_NOT_YET_INFERENCE_VERIFIED",
     "provenance": "SOURCE_STEP_EXCERPT_PAGE_CONFIDENCE_PRESERVED_IN_NODE",
     "proposal_replacement": "REQUIRES_SECOND_CONFIRMATION_AND_LOCAL_ROLLBACK",
     "favicon": "SVG_PNG_64_AND_SIDEBAR_IMPLEMENTED_RAILWAY_WEB_SUCCESS",
@@ -61,10 +61,10 @@
     "party_kind_context": "ADDED_AS_GEMINI_DOCUMENT_CONTEXT_WITHOUT_SENSITIVE_DETAILS",
     "legal_person_mismatch": "TESTED_REQUIRES_REVIEW_ON_ASPIRANTE_SOURCE",
     "preview_authorization": "TESTED_CONFIGURATOR_ONLY_SAVE_AND_INTERNAL_REVIEW",
-    "workflow_import_e2e": "FIRST_REAL_ATTEMPT_RETURNED_502_DETAILS_NOW_CLASSIFIED",
+    "workflow_import_e2e": "PENDING_RETRY_WITH_GEMINI_3_6_FLASH",
     "gemini_upstream_error": "REAL_UPLOAD_502_PREVIOUS_CODE_DISCARDED_PROVIDER_STATUS",
-    "gemini_diagnostics": "DEPLOYED_AUTHENTICATED_TEST_BUTTON_NOT_EXECUTED",
-    "gemini_model": "gemini-2.5-flash_DEFAULT_CONFIGURABLE",
+    "gemini_diagnostics": "AUTHENTICATED_USER_PROBE_RETURNED_404_ON_2_5_FLASH_NEW_MODEL_REQUIRES_TEST",
+    "gemini_model": "gemini-3.6-flash_RAILWAY_API_AND_CODE_DEFAULT",
     "gemini_document_import": "GEMINI_INFERENCE_NOT_YET_VALIDATED"
   },
   "limitations": [
@@ -104,7 +104,9 @@
     "No live PDF-to-workflow test has been performed in app",
     "Gemini key is present but validity, quota and first authentic PDF inference remain unverified",
     "Provider's precise HTTP status from the failed 17:11Z attempt was not logged and cannot be reconstructed",
-    "User-authenticated new connection check not executed yet"
+    "User-authenticated new connection check not executed yet",
+    "Gemini 3.6 Flash is configured but not yet verified with user's actual API key in an authenticated inference",
+    "No automatic fallback to higher priced models"
   ],
   "git_repository_access": "AUTHORIZED_PROJECT_ONLY_BY_POLICY",
   "source_of_truth": "andresmartalliance/smart-contract main; release Git SHA available from repository/CI; Drive master is context",
@@ -119,7 +121,7 @@
   },
   "github_source_commit": "main (see Railway deployment commit and Drive context)",
   "railway_source_connection": "CONNECTED_MAIN",
-  "release_notes": "Repaired collapsed upstream 502 error. Google HTTP status now safely categorized; Google-authenticated tiny generateContent probe with UI button. 58 backend tests PASS, Vue build PASS, Railway Web/API SUCCESS. Gemini credentials present but real inference status from Google still unknown until user runs probe.",
+  "release_notes": "Switched unavailable Gemini 2.5 Flash (verified HTTP 404 with user's key) to current stable Gemini 3.6 Flash in Railway Development API and code default; both smoke test and document analysis share model resolver. No key change or workflow logic changes. Authenticated inference remains unverified.",
   "base_source_commit": "d176b0fe39017c226c499eb0a4ae6cef13b93df5",
   "visual_design_version": "1.0",
   "watch_patterns": {

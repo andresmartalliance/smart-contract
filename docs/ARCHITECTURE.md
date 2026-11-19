@@ -1,4 +1,10 @@
-# Smart Contract V6.5.2 — Arquitectura integral y estado real
+# Smart Contract V6.5.3 — Arquitectura integral y estado real
+
+## V6.5.3 — Selección explícita de modelo Gemini operativo
+
+La prueba autenticada ejecutada por el usuario devolvió 404 para `gemini-2.5-flash`; este era el default de `_gemini_model`. El cambio a `gemini-3.6-flash` se aplica tanto en el fallback de código como en `SMART_GEMINI_MODEL` del servicio API Railway Development. Los endpoints `POST /workflow-import/check-connection` y `POST /workflow-import` comparten la configuración, sin duplicar modelo ni clave. Google AI Studio documenta 3.6 Flash como estable con capacidades PDF y salida JSON estructurada. No se hace fallback silencioso a un modelo más caro, no se crea un segundo servicio y no se altera la autenticación.
+
+La variable `SMART_GEMINI_API_KEY` continúa oculta y sin modificarse. El uso de inferencia real requiere el ID token Google del usuario autorizado; se debe confirmar éxito con la prueba del botón en el frontend. Una entrada de `models.list` no sería evidencia suficiente por sí sola de permiso de generación, ya que el recurso puede estar listado sin autorizar generateContent.
 
 ## V6.5.2 — Diagnóstico de inferencia Gemini
 
