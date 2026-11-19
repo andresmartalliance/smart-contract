@@ -119,6 +119,8 @@ const MAIRA_API=import.meta.env.VITE_SMART_API_URL||'https://api-development-18b
 const mairaImportOpen=ref(false)
 const mairaImportStatus=ref<MairaStatus|null>(null)
 const mairaImportBusy=ref(false)
+const mairaConnectionBusy=ref(false)
+const mairaConnectionResult=ref('')
 const mairaImportError=ref('')
 const mairaImportInfo=ref('')
 const mairaSourceFile=ref<File|null>(null)
@@ -393,6 +395,21 @@ function chooseMairaSource(event:Event){
  if(file&&(file.size>6*1024*1024||!/\.(pdf|png|jpe?g|txt)$/i.test(file.name))){
   mairaImportError.value='Formatos PDF, imagen o TXT, hasta 6 MB.';mairaSourceFile.value=null
  }else mairaSourceFile.value=file
+}
+async function checkMairaConnection(){
+ if(!mairaGoogleToken.value){mairaImportError.value='Debes iniciar sesión con Google para verificar la conexión.';return}
+ mairaConnectionBusy.value=true
+ mairaConnectionResult.value=''
+ mairaImportError.value=''
+ try{
+  const response=await fetch(MAIRA_API+'/api/v1/maira/workflow-import/check-connection',{
+   method:'POST',headers:{Authorization:'Bearer '+mairaGoogleToken.value},cache:'no-store'
+  })
+  const data=await response.json() as {connected?:boolean;model?:string;message?:string;detail?:string}
+  if(!response.ok)throw new Error(data.detail||'Error verificando Gemini ('+response.status+')')
+  mairaConnectionResult.value=(data.message||'Gemini conectado correctamente.')+' Modelo: '+(data.model||'configurado')
+ }catch(e){mairaImportError.value=e instanceof Error?e.message:'No se pudo verificar la conexión.'}
+ finally{mairaConnectionBusy.value=false}
 }
 async function analyzeMairaDocument(){
  if(!mairaImportStatus.value?.ready){mairaImportError.value='MAIRA no tiene Google y Gemini configurados.';return}
@@ -945,9 +962,15 @@ function simulateDraft(){
               </label>
               <div v-if="mairaSourceFile" class="maira-import-selected">{{mairaSourceFile.name}} · {{(mairaSourceFile.size/1024).toFixed(0)}} KB</div>
               <p class="maira-import-fine">PDF, imagen o TXT · Máximo 6 MB. Únicamente documentos sintéticos o autorizados. El archivo se envía a Gemini para su análisis y no se guarda en Smart Contract.</p>
-              <button type="button" class="primary-button" :disabled="!mairaImportStatus?.ready||!mairaGoogleToken||!mairaSourceFile||mairaImportBusy" @click="analyzeMairaDocument">
-                {{mairaImportBusy?'MAIRA está analizando…':'Analizar documento con MAIRA'}}
-              </button>
+              <div class="pilot-actions">
+                <button type="button" class="primary-button" :disabled="!mairaImportStatus?.ready||!mairaGoogleToken||!mairaSourceFile||mairaImportBusy" @click="analyzeMairaDocument">
+                  {{mairaImportBusy?'Maira está analizando…':'Analizar documento con Maira'}}
+                </button>
+                <button type="button" class="ghost-button" :disabled="!mairaImportStatus?.ready||!mairaGoogleToken||mairaConnectionBusy" @click="checkMairaConnection">
+                  {{mairaConnectionBusy?'Verificando…':'Verificar conexión Gemini'}}
+                </button>
+              </div>
+              <p v-if="mairaConnectionResult" class="maira-import-notice" role="status">{{mairaConnectionResult}}</p>
             </div>
             <div class="maira-import-card">
               <strong>2. Propuesta y vista previa</strong>
