@@ -1,8 +1,16 @@
 # Smart Contract + MAIRA
 
-**V6.5 — Vista previa de proceso por persona o empresa con Maira · Development**
+**V6.5.1 — Gemini configurado; prueba documental pendiente · Development**
 
 Smart Contract es una plataforma SaaS multiempresa con motor declarativo de workflows de contratación, campos, políticas y modalidades configurables. La primera aplicación es contratación de red prestadora de salud, sin codificar PGP, cápita ni evento como flujos obligatorios. El workflow institucional de Famisanar aún no ha sido recibido y no forma parte de esta versión.
+
+## V6.5.1 — Activación de Gemini y estado visual coherente
+
+El usuario agregó `SMART_GEMINI_API_KEY` directamente a las Variables del servicio **api** en Railway Development (no se copió a código ni a documentación). Verificación por conector Railway: `SMART_GEMINI_API_KEY`, `SMART_GOOGLE_CLIENT_ID` y `SMART_MAIRA_ALLOWED_EMAILS` presentes, valores ocultos; despliegue API SUCCESS, Postgres online. El backend `GET /api/v1/maira/workflow-import/status` determina readiness por presencia de la configuración; esto **no verifica la validez de la clave, permisos, cuota ni el análisis del archivo**.
+
+Se repararon los avisos obsoletos fijos en Resumen y Maira, sustituyéndolos por texto vinculado al estado del backend: «Gemini configurado · pendiente prueba» cuando la API informe ready, con acceso a Personas y empresas y actualización manual de estado. Sin credenciales, informa configuración pendiente. No se cambió el backend de análisis ni las políticas de seguridad. Commit UI `3b68670427bc35b319c8608f7115cc276260cd0d`, GitHub Actions run `44573188138` SUCCESS, despliegue Railway Web SUCCESS.
+
+**Criterio de prueba restante:** abrir Personas y empresas → Hospital Smart → Crear proceso con Maira → cargar el PDF original de 2 páginas → Analizar documento → revisar 23 pasos y responsabilidades, incluyendo notificaciones y firma → Guardar vista previa, reabrirla y revisarla. Solo con una solicitud auténtica se podrá afirmar que la conexión con Gemini funciona. El desarrollador no tiene un ID token Google del usuario; no simuló esa llamada. Los datos siguen siendo ficticios/autorizados.
 
 ## V6.5 — De documento a vista previa de Hospital Smart
 

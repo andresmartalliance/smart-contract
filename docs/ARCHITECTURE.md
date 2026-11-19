@@ -1,4 +1,12 @@
-# Smart Contract V6.5 — Arquitectura integral y estado real
+# Smart Contract V6.5.1 — Arquitectura integral y estado real
+
+## V6.5.1 — Estado de credenciales de Gemini y observabilidad UX
+
+Railway Development API contiene `SMART_GEMINI_API_KEY` según lectura de nombres con conector Railway. Se verificaron además `SMART_GOOGLE_CLIENT_ID` y `SMART_MAIRA_ALLOWED_EMAILS`. Los valores están redactados y **no se copiaron ni expusieron**. El deployment API más reciente tiene estado SUCCESS, replica online, sin fallas recientes ni trabajo pendiente. La interfaz obtiene `ready`, `gemini_enabled` y `google_enabled` desde `/api/v1/maira/workflow-import/status`; está programada para mostrar el estado veraz. La nueva pantalla de Resumen/Maira ya no dice «Próxima integración» cuando `ready` es true: muestra «Gemini configurado · pendiente prueba». El código del endpoint de análisis es el mismo, y la clave no se lee en el navegador.
+
+**Prueba NO ejecutada:** una inferencia autenticada a Gemini con el PDF de contratación. La presencia de variable no implica validez de API key ni modelo/cuota. El endpoint de importación requiere un Google ID token de cuenta permitida. La conexión de red hacia el endpoint público no pudo comprobarse desde el entorno externo de herramientas; la ejecución se debe verificar en la UI con la cuenta Google del administrador. No se usó documento real ni se generó propuesta artificial.
+
+GitHub commit frontend `3b68670427bc35b319c8608f7115cc276260cd0d`; GitHub Actions run `44573188138` PASS; Railway Web SUCCESS, backend API/Postgres ONLINE. No hay cambios en modelos ni migraciones. Este hito actualiza solo textos y enlaces de estado; preserva V6.5 completa.
 
 ## V6.5 — Proceso documental contextual a un tercero
 
