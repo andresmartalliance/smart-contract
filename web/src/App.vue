@@ -120,7 +120,7 @@ async function loadMairaImportStatus(){
   const resp=await fetch(MAIRA_API+'/api/v1/maira/workflow-import/status',{cache:'no-store'})
   if(!resp.ok)throw new Error('La API MAIRA no está disponible')
   mairaImportStatus.value=await resp.json() as MairaStatus
- }catch(e){mairaImportStatus.value=null;mairaImportError=e instanceof Error?e.message:'No se pudo consultar MAIRA'}
+ }catch(e){mairaImportStatus.value=null;mairaImportError.value=e instanceof Error?e.message:'No se pudo consultar MAIRA'}
 }
 async function initializeMairaGoogle(){
  if(!mairaImportOpen.value||!mairaImportStatus.value?.ready)return
@@ -135,7 +135,7 @@ async function initializeMairaGoogle(){
   google.initialize({client_id,callback:({credential})=>{mairaGoogleToken.value=credential;mairaImportInfo.value='Sesión Google validable. Puedes analizar el archivo seleccionado.'}})
   mairaGoogleMount.value.replaceChildren()
   google.renderButton(mairaGoogleMount.value,{type:'standard',theme:'outline',size:'large',text:'signin_with'})
- }catch(e){mairaImportError=e instanceof Error?e.message:'No se pudo activar Google'}
+ }catch(e){mairaImportError.value=e instanceof Error?e.message:'No se pudo activar Google'}
 }
 async function openMairaDocumentImport(){
  current.value='flujos';mairaOpen.value=false;mairaImportOpen.value=true
