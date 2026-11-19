@@ -218,3 +218,124 @@ def test_current_model_is_not_retired_default(monkeypatch):
     from app.routers import maira
     monkeypatch.delenv("SMART_GEMINI_MODEL",raising=False)
     assert maira._gemini_model()=="gemini-3.6-flash"
+
+
+def source_first_document(count=23):
+    steps=[]
+    for i in range(1,count+1):
+        step_number=str(i)
+        role="ASPIRANTE" if i%5==0 else "JURIDICO" if i%4==0 else "SISTEMA"
+        steps.append({"source_step":step_number,"label":f"Actividad {i}",
+          "source_excerpt":f"ACTIVIDAD ORIGINAL {i}",
+          "kind":"NOTIFICATION" if role=="SISTEMA" else "FORM",
+          "role":role,"page":1 if i<=11 else 2,"confidence":"alta",
+          "depends_on":[str(i-1)] if i>1 and i%3==0 else None})
+    return {"steps":steps,"questions":[],"observations":[]}
+
+
+def test_source_first_compiler_preserves_all_23_steps():
+    from app.routers.maira import _compile_source_extraction
+    proposal=_compile_source_extraction(source_first_document())
+    assert len(proposal.workflow.nodes)==25
+    assert len(proposal.source_map)==23
+    assert proposal.source_map[0].source_step=="1"
+    assert proposal.source_map[-1].source_step=="23"
+    assert all(s.source_excerpt.startswith("ACTIVIDAD ORIGINAL") for s in proposal.source_map)
+    assert proposal.workflow.metadata["draft"] is True
+    assert proposal.workflow.metadata["requires_review"] is True
+    assert proposal.workflow.metadata["inferred_dependency_count"]>0
+    assert any("Dependencias provisionales" in s for s in proposal.observations)
+    assert proposal.workflow.nodes[5].config["actor_side"]=="CONTRATANTE"
+    assert proposal.workflow.nodes[6].config["actor_side"]=="CONTRATISTA"
+    assert all(node.kind not in ("START","END") for node in proposal.workflow.nodes[1:-1])
+
+
+def test_compiler_rejects_ambiguous_or_unmapped_source_steps():
+    from app.routers.maira import _compile_source_extraction
+    payload=source_first_document(2)
+    payload["steps"][1]["source_step"]="1"
+    with pytest.raises(ValueError,match="repitió"):
+        _compile_source_extraction(payload)
+
+
+def test_compiler_does_not_invent_dependency_if_reference_missing():
+    from app.routers.maira import _compile_source_extraction
+    payload=source_first_document(2)
+    payload["steps"][1]["depends_on"]=["99"]
+    with pytest.raises(ValueError,match="inexistentes"):
+        _compile_source_extraction(payload)
+
+
+def test_approval_without_role_is_safe_manual_decision():
+    from app.routers.maira import _compile_source_extraction
+    payload=source_first_document(1)
+    payload["steps"][0]["kind"]="APPROVAL"
+    payload["steps"][0]["role"]=None
+    proposal=_compile_source_extraction(payload)
+    step=proposal.workflow.nodes[1]
+    assert step.kind=="HUMAN_DECISION"
+    assert "actor_side" not in step.config
+    assert any("falta responsable" in x for x in proposal.questions)
+
+
+def test_only_evidence_defined_roles_determine_participant_side():
+    from app.routers.maira import _compile_source_extraction
+    payload=source_first_document(2)
+    payload["steps"][0]["role"]="HOSPITAL SIN RESPONSABLE"
+    payload["steps"][1]["role"]="ASPIRANTE"
+    proposal=_compile_source_extraction(payload)
+    assert "actor_side" not in proposal.workflow.nodes[1].config
+    assert proposal.workflow.nodes[2].config["actor_side"]=="CONTRATISTA"
+    assert any("confirmar responsable" in x for x in proposal.questions)
+
+
+def test_source_first_import_endpoint_runs_without_model_graph(testing, monkeypatch):
+    import json
+    from app.main import app
+    from app.routers import maira
+    client,_=testing
+    monkeypatch.setenv("SMART_GEMINI_API_KEY","fake-key")
+    app.dependency_overrides[maira._verify_identity]=lambda:"admin@example.com"
+    captured={}
+    async def fake_inference(payload,api_key,model,timeout):
+        captured["text"]=payload["contents"][0]["parts"][0]["text"]
+        return {"candidates":[{"content":{"parts":[{"text":json.dumps(source_first_document(23))}]},"finishReason":"STOP"}]}
+    monkeypatch.setattr(maira,"_post_gemini",fake_inference)
+    try:
+        response=client.post("/api/v1/maira/workflow-import",
+            files={"file":("ciclo.pdf",b"%PDF-1.4 synthetic","application/pdf")},
+            data={"party_kind":"JURIDICA"})
+        assert response.status_code==200,response.text
+        data=response.json()
+        assert data["node_count"]==25
+        assert data["mapped_steps"]==23
+        assert data["status"]=="DRAFT_FOR_HUMAN_REVIEW"
+        assert data["workflow"]["metadata"]["requires_review"] is True
+        assert "persona jurídica" in " ".join(data["observations"]).lower()
+        assert "No se guardó" in data["notice"]
+        assert "No generes IDs técnicos" in captured["text"]
+    finally:
+        app.dependency_overrides.pop(maira._verify_identity,None)
+
+
+def test_source_first_partial_response_gives_actionable_error(testing,monkeypatch):
+    from app.main import app
+    from app.routers import maira
+    client,_=testing
+    monkeypatch.setenv("SMART_GEMINI_API_KEY","fake-key")
+    app.dependency_overrides[maira._verify_identity]=lambda:"admin@example.com"
+    async def truncated(*args,**kwargs):
+        return {"candidates":[{"finishReason":"MAX_TOKENS","content":{"parts":[{"text":'{"steps":['}]}}]}
+    monkeypatch.setattr(maira,"_post_gemini",truncated)
+    try:
+        r=client.post("/api/v1/maira/workflow-import",files={"file":("ciclo.pdf",b"%PDF-1.4 synthetic","application/pdf")})
+        assert r.status_code==422
+        assert "límite de respuesta" in r.json()["detail"]
+    finally:
+        app.dependency_overrides.pop(maira._verify_identity,None)
+
+
+def test_legacy_workflow_proposal_is_still_accepted():
+    # Existing pilot API previews continue using the original strict schema.
+    from app.routers.maira import _parse_proposal
+    assert _parse_proposal(valid_proposal()).workflow.nodes[1].id=="uno"
