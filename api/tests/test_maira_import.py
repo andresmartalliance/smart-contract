@@ -113,3 +113,29 @@ def test_session_requires_email_allowlist(testing, monkeypatch):
     monkeypatch.setenv("SMART_MAIRA_ALLOWED_EMAILS","pilot@example.com")
     response=client.get("/api/v1/maira/session",headers={"Authorization":"Bearer fake-token"})
     assert response.status_code == 401
+
+
+def test_persona_juridica_aspirante_mismatch_is_flagged(testing, monkeypatch):
+    from app.main import app
+    from app.routers import maira
+    client,_ = testing
+    monkeypatch.setenv("SMART_GEMINI_API_KEY","fake-test-key")
+    app.dependency_overrides[maira._verify_identity] = lambda: "admin@example.com"
+    captured={}
+    async def fake_gemini(data,suffix,filename,api_key,party_kind=None):
+        captured["kind"]=party_kind
+        payload=valid_proposal()
+        payload["workflow"]["nodes"][1]["label"]="Registro de personal aspirante"
+        payload["workflow"]["nodes"][1]["role"]="ASPIRANTE"
+        return maira._parse_proposal(payload)
+    monkeypatch.setattr(maira,"_call_gemini",fake_gemini)
+    try:
+        resp=client.post("/api/v1/maira/workflow-import",
+          files={"file":("flujo.pdf",b"%PDF-1.4 simulated","application/pdf")},
+          data={"party_kind":"JURIDICA"})
+        assert resp.status_code==200,resp.text
+        assert captured["kind"]=="JURIDICA"
+        assert any("persona jurídica" in x for x in resp.json()["observations"])
+        assert resp.json()["mapped_steps"]==1
+    finally:
+        app.dependency_overrides.pop(maira._verify_identity,None)
