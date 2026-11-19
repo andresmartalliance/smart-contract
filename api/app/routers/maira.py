@@ -148,6 +148,8 @@ Reglas estrictas de mapeo:
 - No transformes 'PAGE 2' ni líneas de flechas en actividades de contratación.
 - No adivines bifurcaciones. Conserva el orden visible; cuando no quede clara una flecha,
   elige una secuencia conservadora y explica la incertidumbre en questions.
+- Para config.actor_side: usa CONTRATISTA solo cuando el responsable se indique expresamente como ASPIRANTE, CONTRATISTA, PRESTADOR o PROVEEDOR; usa CONTRATANTE para JURIDICO, FINANCIERO, SUPERVISOR, SST, ADMINISTRADOR o SISTEMA. No confundas el ejecutor de una notificación con su destinatario. Si el responsable no es claro, omite actor_side y pide confirmación.
+- No inventes campos ni documentos específicos si el diagrama solo indica 'documentos'; en questions explica que falta el detalle solicitado.
 - No inventes condiciones 'when' ni clasificaciones legales. policy = OPTIONAL para
   pasos documentales; START y END pueden ser ORG_REQUIRED estructurales.
 - Nodos APPROVAL requieren un role no vacío; si el documento no dice responsable,
