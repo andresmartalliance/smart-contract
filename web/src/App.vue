@@ -1205,9 +1205,9 @@ function simulateDraft(){
         <div><strong>Asistencia contextual disponible</strong><small>Gemini aún no está conectado. No se envían documentos ni se ejecutan decisiones contractuales.</small></div>
       </div>
     </aside>
-    <button class="maira-launcher" type="button" aria-controls="maira-panel" :aria-expanded="mairaOpen" :aria-label="mairaOpen?'Cerrar MAIRA':'Abrir MAIRA'" @click="mairaOpen=!mairaOpen">
+    <button class="maira-launcher" type="button" aria-controls="maira-panel" :aria-expanded="mairaOpen" :aria-label="mairaOpen?'Cerrar Maira':'Abrir Maira'" @click="mairaOpen=!mairaOpen">
       <span class="maira-launcher-icon" aria-hidden="true"><span class="maira-launcher-spark">✦</span></span>
-      <span class="maira-launcher-label">MAIRA</span>
+      <span class="maira-launcher-label">Maira</span>
     </button>
   </div>
 </template>
