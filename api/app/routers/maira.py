@@ -50,6 +50,14 @@ def _configuration() -> tuple[str, list[str], str]:
     return client_id, allowed, key
 
 
+@router.get("/capabilities")
+def capabilities():
+    _, _, key = _configuration()
+    return {"agent": "MAIRA", "status": "NOT_CONFIGURED" if not key else "PILOT_DOCUMENT_ANALYSIS",
+            "planned": ["document_analysis", "workflow_proposal", "contract_drafting", "case_guidance"],
+            "executable_actions_enabled": False}
+
+
 @router.get("/workflow-import/status")
 def import_status():
     client_id, allowed, key = _configuration()
