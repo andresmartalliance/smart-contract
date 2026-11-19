@@ -151,3 +151,116 @@ def test_cannot_assign_institutional_approval_to_contractor(portal):
     wf["nodes"][2]["config"]={"actor_side":"CONTRATISTA"}
     result=portal.post("/api/v1/portal/workflows/publish",json={"workflow":wf})
     assert result.status_code==422 and "Institutional approvals" in result.text
+
+def create_party_record(client,name="Clínica Ficticia",email="clinica@example.com",kind="JURIDICA"):
+    as_user("alice@example.com")
+    result=client.post("/api/v1/portal/parties",json={"name":name,"email":email,"kind":kind})
+    assert result.status_code==201,result.text
+    return result.json()
+
+def test_can_register_person_or_company_without_workflow(portal):
+    create_pilot(portal)
+    record=create_party_record(portal,email=None)
+    assert record["case_count"]==0
+    assert record["email"] is None
+    assert portal.get("/api/v1/portal/workflows").json()==[]
+    rows=portal.get("/api/v1/portal/parties").json()
+    assert len(rows)==1 and rows[0]["name"]=="Clínica Ficticia"
+    assert portal.get("/api/v1/portal/cases").json()==[]
+
+def test_case_created_without_template_then_assigned_later(portal):
+    create_pilot(portal)
+    record=create_party_record(portal)
+    response=portal.post("/api/v1/portal/cases",json={
+        "title":"Borrador sin proceso","party_id":record["id"]
+    })
+    assert response.status_code==201,response.text
+    item=response.json()
+    assert item["state"]=="DRAFT"
+    assert item["workflow_version_id"] is None
+    assert item["party_id"]==record["id"]
+    assert not item["invited"]
+    detail=portal.get("/api/v1/portal/cases/"+item["id"])
+    assert detail.status_code==200 and detail.json()["tasks"]==[]
+    as_user("clinica@example.com")
+    assert portal.get("/api/v1/portal/my-cases").json()==[]
+    assert portal.get("/api/v1/portal/cases/"+item["id"]).status_code==404
+    as_user("alice@example.com")
+    template=portal.post("/api/v1/portal/workflows/publish",json={"workflow":sample_flow()})
+    assert template.status_code==201
+    bind=portal.post("/api/v1/portal/cases/"+item["id"]+"/workflow",
+                     json={"workflow_id":template.json()["id"]})
+    assert bind.status_code==200,bind.text
+    assert bind.json()["state"]=="IN_PROGRESS"
+    assert bind.json()["invited"]
+    assert bind.json()["workflow_version_id"]==template.json()["id"]
+    assert portal.post("/api/v1/portal/cases/"+item["id"]+"/workflow",
+                     json={"workflow_id":template.json()["id"]}).status_code==409
+    as_user("clinica@example.com")
+    assert len(portal.get("/api/v1/portal/my-cases").json())==1
+
+def test_reuse_same_company_in_multiple_cases(portal):
+    create_pilot(portal)
+    record=create_party_record(portal)
+    ids=[]
+    for n in (1,2):
+        r=portal.post("/api/v1/portal/cases",json={
+             "title":f"Expediente independiente {n}","party_id":record["id"]})
+        assert r.status_code==201
+        ids.append(r.json()["id"])
+    assert ids[0]!=ids[1]
+    records=portal.get("/api/v1/portal/parties").json()
+    assert len(records)==1 and records[0]["case_count"]==2
+
+def test_draft_without_contact_requires_email_before_invitation(portal):
+    create_pilot(portal)
+    record=create_party_record(portal,email=None)
+    case=portal.post("/api/v1/portal/cases",json={
+         "party_id":record["id"],"title":"Draft no contact"}).json()
+    template=portal.post("/api/v1/portal/workflows/publish",json={"workflow":sample_flow()}).json()
+    path="/api/v1/portal/cases/"+case["id"]+"/workflow"
+    fail=portal.post(path,json={"workflow_id":template["id"]})
+    assert fail.status_code==422 and "email" in fail.text
+    updated=portal.patch("/api/v1/portal/parties/"+record["id"],json={
+        "email":"clinica@example.com"})
+    assert updated.status_code==200
+    done=portal.post(path,json={"workflow_id":template["id"]})
+    assert done.status_code==200 and done.json()["invited"]
+
+def test_reject_duplicate_party_and_cross_tenant_party_access(portal,testing):
+    # The two-tenant testing fixture already has a member in tenant-b, but the
+    # pilot membership must never be allowed to associate tenant-b records.
+    create_pilot(portal)
+    record=create_party_record(portal)
+    duplicate=portal.post("/api/v1/portal/parties",json={
+       "name":"clínica ficticia","email":"CLINICA@EXAMPLE.COM","kind":"JURIDICA"})
+    assert duplicate.status_code==409
+    as_user("charlie")
+    assert portal.get("/api/v1/portal/parties").json()==[]
+    assert portal.post("/api/v1/portal/cases",json={
+      "title":"Attempt cross-tenant","party_id":record["id"]}).status_code==404
+    assert portal.patch("/api/v1/portal/parties/"+record["id"],
+      json={"email":"attacker@example.com"}).status_code==404
+
+def test_reject_cross_tenant_workflow_assignment(portal):
+    create_pilot(portal)
+    record=create_party_record(portal)
+    case=portal.post("/api/v1/portal/cases",json={
+      "title":"Draft no template","party_id":record["id"]}).json()
+    as_user("charlie")
+    wf=portal.post("/api/v1/portal/workflows/publish",json={"workflow":sample_flow()})
+    assert wf.status_code==201
+    as_user("alice@example.com")
+    bind=portal.post(f"/api/v1/portal/cases/{case['id']}/workflow",
+      json={"workflow_id":wf.json()["id"]})
+    assert bind.status_code==404
+    detail=portal.get(f"/api/v1/portal/cases/{case['id']}").json()
+    assert detail["case"]["state"]=="DRAFT"
+
+def test_cannot_mix_inline_and_existing_party(portal):
+    create_pilot(portal)
+    record=create_party_record(portal)
+    mixed=portal.post("/api/v1/portal/cases",json={
+       "title":"No duplicated subject","party_id":record["id"],
+       "party":{"name":"Other","kind":"NATURAL","email":"other@example.com"}})
+    assert mixed.status_code==422
