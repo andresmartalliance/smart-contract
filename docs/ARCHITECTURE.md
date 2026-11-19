@@ -1,4 +1,4 @@
-# Smart Contract V5.2 — Arquitectura integral y estado real
+# Smart Contract V5.3 — Arquitectura integral y estado real
 
 ## Objetivo de producto
 Plataforma SaaS multiempresa de workflows contractuales dinámicos, con bibliotecas de campos, bloques, políticas, reglas, cálculos y plantillas. Contratación de la red prestadora es el primer caso: no es una limitación de diseño. Las modalidades se registran como datos, nunca como condicionales de implementación codificados para evento, cápita, PGP u otra modalidad.
@@ -6,7 +6,7 @@ Plataforma SaaS multiempresa de workflows contractuales dinámicos, con bibliote
 ## Usuarios y separación de responsabilidades
 - **Configurador:** diseña y modifica flujos, define políticas y reglas, compara versiones y solicita publicación.
 - **Operador:** tramita expedientes y tareas con permisos granulares para Jurídica, Red, Financiera, Técnica, Actuarial y aprobadores.
-El frontend V5.2 es un editor local público y todavía NO aplica permisos de usuario; el backend sí exige JWT + membresía de tenant. No conectar el editor a operaciones reales sin identidad segura.
+El frontend V5.3 es un editor local público y todavía NO aplica permisos de usuario; el backend sí exige JWT + membresía de tenant. No conectar el editor a operaciones reales sin identidad segura.
 
 ## Multiempresa
 Cada institución se asocia a `tenant_id`, todos los endpoints actuales resuelven la membresía en el backend, y los registros se filtran por tenant. La capa definitiva requiere además RLS PostgreSQL, almacenamiento segregado, logs y jobs tenant-aware, pruebas adversariales de autorización y aislamiento del conocimiento de MAIRA. Los documentos, tarifas y manuales pertenecen al cliente y jamás se convierten automáticamente en biblioteca global.
@@ -30,7 +30,17 @@ Smart puede reutilizar componentes, esquemas y plantillas genéricas de su propi
 ## Infraestructura y continuidad
 GitHub privado `andresmartalliance/smart-contract` rama `main`, Railway `smart-contract` ambiente `development`, `api`, `web`, `Postgres`. El documento maestro de continuidad de Drive se actualiza **integralmente** tras cada paquete. Una release = mismo commit/código/reglas/API/frontend + pruebas + estado verificado. Evitar commits aislados y despliegues automáticos innecesarios. Los conectores de ChatGPT tienen permisos más amplios que estos recursos; operar exclusivamente dentro del proyecto conforme a la política documentada.
 
-## Estado de entrega V5.2
+## Diseño visual V5.3 (capa transversal)
+
+Diseño light-premium de Smart: superficies casi blancas, azul profundo, acentos cian/violeta discretos, jerarquía tipográfica, bordes y sombras ligeras. La identidad del producto se mantiene institucional, no videojuego.
+
+- Pantalla Resumen: hero ejecutivo, cuatro métricas provenientes exclusivamente del borrador local (etapas, activas, conexiones y pasos protegidos), proceso actual y estado de MAIRA.
+- Workflow Studio: bloques categorizados, nodos diferenciados por tipo en el canvas, panel de propiedades más legible, barra de acciones real (nuevo/importar/exportar), estados visuales y simulación.
+- MAIRA: identidad diferenciada y capacidades expresadas en futuro, sin botones que pretendan ejecutar Gemini.
+- Navegación: iconos vectoriales internos (sin librerías ni solicitudes externas), estado Development y layout responsive. Foco visible y ajuste de animaciones por preferencia de accesibilidad.
+- No se han incorporado funciones contractuales nuevas ni permisos especiales. Todo el guardado sigue siendo local en navegador; no se procesan documentos ni datos reales.
+
+## Estado de entrega V5.3
 **Incluye:** editor visual funcional con bloqueos locales, formularios configurables, responsables, conexiones condicionadas, validación, simulación, importación/exportación y recuperación local; backend validado con 14 pruebas de motor y aislamiento.
 **No incluye:** Google OAuth; escritura institucional desde navegador; publicación; RLS; integración Gemini; ejecución real de contratos; SIIFA/REPS; matriz de procesos de Famisanar; verificación jurídica de plantillas específicas.
 **Antes de prometer MVP:** construir sesión, controles backend/RLS, biblioteca persistente y versionada, publicación formal, expediente operativo y MAIRA; luego probar rutas institucionales reales.

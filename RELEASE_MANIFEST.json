@@ -1,15 +1,15 @@
 {
   "product": "smart-contract",
   "architecture": "5.0",
-  "package": "5.2-workflow-studio",
-  "status": "RAILWAY_DEV_WORKFLOW_STUDIO_DEPLOYED_DRAFT_ONLY",
+  "package": "5.3-futuristic-ui",
+  "status": "RAILWAY_DEV_PREMIUM_UI_DEPLOYED_LOCAL_DRAFT_ONLY",
   "repository_target": "andresmartalliance/smart-contract",
   "railway_project_id": "1f226324-580b-4b1c-b235-12c717d70af8",
   "railway_development_environment_id": "6e8d45ca-d6f2-448c-a48a-63e5a2ab1806",
   "google_drive_master_document_id": "1_7cuP7hS2nFZRZD33d9Svd1R8l334K2UTKak39Brxoo",
   "database_migration": "0001_baseline",
   "acceptance": {
-    "backend_tests": "14/14 PASS local Python",
+    "backend_tests": "14/14 PASS local Python on unchanged backend",
     "frontend_typescript_syntax": "PASS global TypeScript parser",
     "frontend_vue_build": "PASS_RAILWAY_VUE_TSC_VITE",
     "database_migration": "UNCHANGED_0001_BASELINE",
@@ -18,7 +18,10 @@
     "multi_tenant_operational": "NOT_READY_GOOGLE_OAUTH_AND_RLS_MISSING",
     "web_editor_typescript_build": "PASS_RAILWAY_VUE_TSC_VITE",
     "client_draft": "BROWSER_LOCALSTORAGE_ONLY",
-    "workflow_auth": "NOT_AVAILABLE_ON_FRONTEND"
+    "workflow_auth": "NOT_AVAILABLE_ON_FRONTEND",
+    "visual_design": "APPLIED_FRONTEND_ONLY",
+    "cross_browser_screenshots": "NOT_RUN",
+    "web_editor_persistence": "BROWSER_LOCAL_ONLY"
   },
   "limitations": [
     "Open Development frontend is for fictitious data only",
@@ -26,7 +29,9 @@
     "MAIRA Gemini not configured",
     "No real contract operations or customer data",
     "External HTTPS not independently verified",
-    "GitHub Actions results not independently verified"
+    "GitHub Actions results not independently verified",
+    "Browser screenshot/UI interaction tests not independently run",
+    "Design changes only: not an operational multi-tenant product"
   ],
   "git_repository_access": "AUTHORIZED_PROJECT_ONLY_BY_POLICY",
   "source_of_truth": "andresmartalliance/smart-contract main; release Git SHA available from repository/CI; Drive master is context",
@@ -41,6 +46,7 @@
   },
   "github_source_commit": "main (see Railway deployment commit and Drive context)",
   "railway_source_connection": "CONNECTED_MAIN",
-  "release_notes": "V5.2 editor visual, reglas, campos configurables, import/export, simulación local, autosave local; no multiempresa auth, no MAIRA.",
-  "base_source_commit": "13ca85e85aef1bb43cca2df67c9fd136c964b5ee"
+  "release_notes": "V5.3 light-premium futuristic design: sidebar, executive Resumen, styled Workflow Studio, MAIRA identity and honest empty states. V5.2 workflow capabilities preserved; no contract data or Gemini integration.",
+  "base_source_commit": "4a6bd04485ee749f133c9e3dd1c9f63e2a79204a",
+  "visual_design_version": "1.0"
 }

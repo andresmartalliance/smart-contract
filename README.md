@@ -1,10 +1,21 @@
 # Smart Contract + MAIRA
 
-**V5.2 — Workflow Studio editable · ambiente Development**
+**V5.3 — Diseño premium + Workflow Studio editable · ambiente Development**
 
 Smart Contract es una plataforma SaaS multiempresa con motor declarativo de workflows de contratación, campos, políticas y modalidades configurables. La primera aplicación es contratación de red prestadora de salud, sin codificar PGP, cápita ni evento como flujos obligatorios. El workflow institucional de Famisanar aún no ha sido recibido y no forma parte de esta versión.
 
-## Qué funciona en V5.2
+## Qué cambia en V5.3
+
+- Sistema visual renovado, claro y futurista, sin efectos decorativos excesivos: tipografía, navegación vectorial, superficies, gradientes limitados, tarjetas y componentes unificados.
+- Resumen convertido en centro de control: métricas estrictamente derivadas del borrador del navegador, acceso a Workflow Studio y estado real de MAIRA. No inventa contratos, proveedores, porcentajes ni tendencias.
+- Workflow Studio con nueva jerarquía visual, biblioteca de categorías, canvas limpio, nodos identificados visualmente por su función, propiedades y conexiones más legibles.
+- MAIRA tiene una pantalla de presentación propia, con cuatro capacidades planificadas, pero conserva la indicación clara de que Gemini aún NO está conectado.
+- Pantallas aún no operativas mantienen estados vacíos honestos, sin datos de demostración presentados como reales.
+- Diseño adaptable a pantallas medianas y móviles; foco visible y soporte de movimiento reducido.
+- La navegación inicia en Resumen y abre el mismo Workflow Studio funcional de V5.2, preservando su persistencia local y JSON.
+- No hay nuevas dependencias, cuentas ni servicios. No se alteraron esquemas de base de datos, API ni permisos.
+
+## Qué funciona en V5.3
 
 **Diseñador visual Vue 3 / Vue Flow:**
 
@@ -40,14 +51,14 @@ Smart Contract es una plataforma SaaS multiempresa con motor declarativo de work
 
 ## Verificación del paquete
 
-- Backend: desde `api/`, `python -m pytest -q` — **14 pruebas** locales exitosas antes de la entrega.
+- Backend: desde `api/`, `python -m pytest -q` — **14 pruebas** de backend superadas previamente; la capa visual conserva el mismo motor. El frontend V5.3 compila en Railway.
 - Frontend: desde `web/`, `npm install && npm run build` — debe verificarse en Railway; el entorno local no pudo instalar las dependencias de npm por conectividad.
 - Despliegue: GitHub hace despliegue automático de ambos servicios. Un solo commit consolidado por entrega para contener costos.
 - Una release solo se cierra tras verificar despliegues, resultado de build, APIs, riesgos, actualización integral de Drive y SHA final.
 
 ## Continuidad
 
-Repositorio privado: `andresmartalliance/smart-contract`. Proyecto Railway: `smart-contract` / `development`. Google Drive: carpeta `Smart Contract - Desarrollo y Continuidad`, documento `00 - SMART CONTRACT - CONTEXTO MAESTRO INTEGRAL - V5.1` (se actualiza al verificar el release).
+Repositorio privado: `andresmartalliance/smart-contract`. Proyecto Railway: `smart-contract` / `development`. Google Drive: carpeta `Smart Contract - Desarrollo y Continuidad`, documento `00 - SMART CONTRACT - CONTEXTO MAESTRO INTEGRAL - V5.3` (se actualiza al verificar el release).
 
 El usuario autorizó trabajar únicamente en este repositorio, proyecto Railway y carpeta Drive; esa limitación es una **política de ejecución** porque los conectores tienen alcance técnico más amplio. No modificar otros productos.
 
