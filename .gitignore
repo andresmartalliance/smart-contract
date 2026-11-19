@@ -1,0 +1,8 @@
+# Smart Contract initial repository
+__pycache__/
+*.py[cod]
+.venv/
+.env
+node_modules/
+dist/
+.pytest_cache/
