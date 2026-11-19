@@ -60,3 +60,39 @@ class AuditEvent(Base):
     object_id: Mapped[str] = mapped_column(String(36), nullable=False)
     payload: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, nullable=False)
+
+class ContractParty(Base):
+    __tablename__ = "contract_parties"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(String(36), ForeignKey("tenants.id"), nullable=False, index=True)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    name: Mapped[str] = mapped_column(String(250), nullable=False)
+    contact_email: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, nullable=False)
+
+class ContractCaseAccess(Base):
+    __tablename__ = "contract_case_access"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(String(36), ForeignKey("tenants.id"), nullable=False, index=True)
+    case_id: Mapped[str] = mapped_column(String(36), ForeignKey("contract_cases.id"), nullable=False, index=True)
+    party_id: Mapped[str] = mapped_column(String(36), ForeignKey("contract_parties.id"), nullable=False)
+    email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    __table_args__ = (UniqueConstraint("case_id","email",name="uq_case_invitee"),)
+
+class ContractTask(Base):
+    __tablename__ = "contract_tasks"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(String(36), ForeignKey("tenants.id"), nullable=False, index=True)
+    case_id: Mapped[str] = mapped_column(String(36), ForeignKey("contract_cases.id"), nullable=False, index=True)
+    node_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    label: Mapped[str] = mapped_column(String(250), nullable=False)
+    kind: Mapped[str] = mapped_column(String(40), nullable=False)
+    side: Mapped[str] = mapped_column(String(20), nullable=False)
+    state: Mapped[str] = mapped_column(String(20), nullable=False, default="WAITING")
+    fields: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    answer: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    note: Mapped[str] = mapped_column(String(2000), nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=now_utc)
+    __table_args__ = (UniqueConstraint("case_id","node_id",name="uq_case_task_node"),)

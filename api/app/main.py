@@ -1,7 +1,7 @@
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import workflows, maira
+from .routers import workflows, maira, portals
 
 app = FastAPI(title="Smart Contract API", version="0.1.0")
 origins = [x.strip() for x in os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",") if x.strip()]
@@ -14,3 +14,4 @@ def health():
 
 app.include_router(workflows.router)
 app.include_router(maira.router)
+app.include_router(portals.router)
