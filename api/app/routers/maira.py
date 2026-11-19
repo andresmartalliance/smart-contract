@@ -7,6 +7,7 @@ pilot path does not grant institutional membership or publication privileges.
 from __future__ import annotations
 
 import base64
+import asyncio
 import json
 import os
 import logging
@@ -394,27 +395,47 @@ def _provider_failure(code: int, body: Any) -> HTTPException:
 
 
 async def _post_gemini(request: dict[str, Any], api_key: str, model: str, timeout: float) -> dict[str, Any]:
-    try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
-                headers={"x-goog-api-key": api_key, "content-type": "application/json"},
-                json=request)
-    except httpx.TimeoutException:
-        logger.warning("Gemini generateContent timed out: model=%s", model)
-        raise HTTPException(504, "Gemini tardó demasiado en responder. Puedes repetir el análisis.") from None
-    except httpx.RequestError as exc:
-        logger.warning("Gemini generateContent transport error: type=%s", type(exc).__name__)
-        raise HTTPException(502, "No fue posible conectar con Gemini desde Railway. Verifica la conectividad del servicio API.") from None
-    try:
-        body = response.json()
-    except ValueError:
-        body = {}
-    if response.status_code >= 400:
-        raise _provider_failure(response.status_code, body)
-    if not isinstance(body, dict):
-        raise HTTPException(502, "Gemini devolvió una respuesta ilegible.")
-    return body
+    """One bounded retry for transient provider HTTP 502/503/504 errors.
+
+    This is intentionally not retried for quota (429), bad credentials, 4xx
+    validation failures, or network timeouts. Never record source documents
+    or provider response bodies in logs.
+    """
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        for attempt in (1, 2):
+            try:
+                response = await client.post(
+                    f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                    headers={"x-goog-api-key": api_key, "content-type": "application/json"},
+                    json=request)
+            except httpx.TimeoutException:
+                logger.warning("Gemini generateContent timed out: model=%s", model)
+                raise HTTPException(504, "Gemini tardó demasiado en responder. Puedes repetir el análisis.") from None
+            except httpx.RequestError as exc:
+                logger.warning("Gemini generateContent transport error: type=%s", type(exc).__name__)
+                raise HTTPException(502, "No fue posible conectar con Gemini desde Railway. Verifica la conectividad del servicio API.") from None
+
+            if response.status_code in (502, 503, 504) and attempt == 1:
+                logger.warning("Gemini transient error: HTTP=%s; retrying once", response.status_code)
+                await asyncio.sleep(2)
+                continue
+
+            try:
+                body = response.json()
+            except ValueError:
+                body = {}
+            if response.status_code >= 400:
+                failure = _provider_failure(response.status_code, body)
+                if response.status_code == 503 and attempt == 2:
+                    raise HTTPException(502,
+                        "Gemini sigue temporalmente indisponible (HTTP 503) después de un reintento automático. "
+                        "El documento no fue modificado; puedes volver a analizarlo.") from None
+                raise failure
+            if not isinstance(body, dict):
+                raise HTTPException(502, "Gemini devolvió una respuesta ilegible.")
+            return body
+
+    raise HTTPException(502, "No se obtuvo una respuesta válida de Gemini.")
 
 
 @router.post("/workflow-import/check-connection")
