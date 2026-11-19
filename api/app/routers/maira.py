@@ -58,11 +58,6 @@ def capabilities():
             "executable_actions_enabled": False}
 
 
-@router.get("/session")
-def current_pilot_session(email: str = Depends(_verify_identity)):
-    return {"email": email, "scope": "MAIRA_PILOT_ONLY", "tenant_access": False}
-
-
 @router.get("/workflow-import/status")
 def import_status():
     client_id, allowed, key = _configuration()
@@ -94,6 +89,11 @@ def _verify_identity(authorization: str | None = Header(default=None)) -> str:
     if str(claims.get("email_verified")).lower() != "true" or email not in allowed:
         raise HTTPException(403, "This account is not enabled for the MAIRA pilot")
     return email
+
+
+@router.get("/session")
+def current_pilot_session(email: str = Depends(_verify_identity)):
+    return {"email": email, "scope": "MAIRA_PILOT_ONLY", "tenant_access": False}
 
 
 def _validate_file(filename: str, data: bytes) -> tuple[str, bytes]:
