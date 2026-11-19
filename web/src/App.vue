@@ -88,6 +88,33 @@ const showCatalog = ref(true)
 type MairaStatus={ready:boolean;google_enabled:boolean;gemini_enabled:boolean;google_client_id:string|null;max_mb:number;extensions:string[]}
 type MairaMapping={source_step:string;source_excerpt:string;node_id:string;page:number|null;confidence:string}
 type MairaProposal={workflow:Workflow;source_map:MairaMapping[];questions:string[];observations:string[];node_count:number;mapped_steps:number;notice:string}
+type PartyProcessPreview = {id:string;party_id:string;filename:string;status:string;workflow:Workflow;source_map:MairaMapping[];questions:string[];observations:string[];created_at:string}
+type PreviewStage={id:string;step:string;label:string;role:string;kind:string;side:'CONTRATISTA'|'CONTRATANTE'|'REVISAR';source:string;page:number|null;confidence:string;dependencies:string[]}
+function previewStages(proposal:{workflow:Workflow;source_map:MairaMapping[]}):PreviewStage[]{
+ const nodes=new Map(proposal.workflow.nodes.map(n=>[n.id,n]))
+ const steps=new Map(proposal.source_map.map(m=>[m.node_id,m.source_step]))
+ return proposal.source_map.map(m=>{
+  const n=nodes.get(m.node_id)
+  const role=(n?.role||'Por definir').toUpperCase()
+  const side=n?.config?.actor_side==='CONTRATISTA'?'CONTRATISTA':
+    n?.config?.actor_side==='CONTRATANTE'?'CONTRATANTE':
+    ['ASPIRANTE','CONTRATISTA','PRESTADOR','PROVEEDOR'].includes(role)?'CONTRATISTA':
+    ['JURIDICO','JURÍDICO','SISTEMA','SUPERVISOR','FINANCIERO','SST','ADMINISTRADOR'].includes(role)?'CONTRATANTE':'REVISAR'
+  const dependencies=proposal.workflow.edges.filter(e=>e.target===m.node_id)
+    .map(e=>steps.get(e.source)||'Inicio')
+  return {id:m.node_id,step:m.source_step,label:n?.label||m.source_excerpt,
+    kind:n?.kind||'VALIDATION',role,side,source:m.source_excerpt,
+    page:m.page,confidence:m.confidence,dependencies}
+ })
+}
+function numericStepOrder(x:PreviewStage,y:PreviewStage){
+ const split=(s:string)=>s.split('.').map(v=>Number(v)||0)
+ const a=split(x.step),b=split(y.step)
+ for(let i=0;i<Math.max(a.length,b.length);i++){
+   if((a[i]||0)!==(b[i]||0))return(a[i]||0)-(b[i]||0)
+ }
+ return 0
+}
 const MAIRA_API=import.meta.env.VITE_SMART_API_URL||'https://api-development-18b59fbb.up.railway.app'
 const mairaImportOpen=ref(false)
 const mairaImportStatus=ref<MairaStatus|null>(null)
@@ -96,6 +123,15 @@ const mairaImportError=ref('')
 const mairaImportInfo=ref('')
 const mairaSourceFile=ref<File|null>(null)
 const mairaProposal=ref<MairaProposal|null>(null)
+const mairaTargetPartyId=ref('')
+const mairaTargetParty=computed(()=>partyRecords.value.find(x=>x.id===mairaTargetPartyId.value)||null)
+const mairaPreviewStages=computed(()=>mairaProposal.value?previewStages(mairaProposal.value).sort(numericStepOrder):[])
+const mairaPreviewSaving=ref(false)
+const partyPreview=ref<PartyProcessPreview|null>(null)
+const partyPreviewTarget=ref<PartyRecord|null>(null)
+const partyPreviewBusy=ref(false)
+const savedPreviewStages=computed(()=>partyPreview.value?previewStages(partyPreview.value).sort(numericStepOrder):[])
+
 const mairaApplyConfirm=ref(false)
 const loginGoogleMount=ref<HTMLElement|null>(null)
 const loginEmail=ref('')
@@ -345,7 +381,8 @@ async function loadMairaImportStatus(){
   mairaImportStatus.value=await resp.json() as MairaStatus
  }catch(e){mairaImportStatus.value=null;mairaImportError.value=e instanceof Error?e.message:'No se pudo consultar MAIRA'}
 }
-async function openMairaDocumentImport(){
+async function openMairaDocumentImport(partyId?:string){
+ mairaTargetPartyId.value=partyId||''
  current.value='flujos';mairaOpen.value=false;mairaImportOpen.value=true
  mairaImportError.value='';mairaImportInfo.value='';mairaProposal.value=null;mairaApplyConfirm.value=false
  await loadMairaImportStatus()
@@ -364,6 +401,7 @@ async function analyzeMairaDocument(){
  mairaImportBusy.value=true;mairaImportError.value='';mairaProposal.value=null;mairaApplyConfirm.value=false
  try{
   const data=new FormData();data.append('file',mairaSourceFile.value,mairaSourceFile.value.name)
+  if(mairaTargetParty.value)data.append('party_kind',mairaTargetParty.value.kind)
   const resp=await fetch(MAIRA_API+'/api/v1/maira/workflow-import',{method:'POST',headers:{Authorization:'Bearer '+mairaGoogleToken.value},body:data})
   const response=await resp.json() as Record<string,unknown>
   if(!resp.ok)throw new Error(typeof response.detail==='string'?response.detail:'MAIRA no pudo generar un flujo válido ('+resp.status+').')
@@ -371,6 +409,43 @@ async function analyzeMairaDocument(){
   mairaImportInfo.value='MAIRA generó una propuesta. Revisa los pasos antes de aplicarla.'
  }catch(e){mairaImportError.value=e instanceof Error?e.message:'Error de análisis'}
  finally{mairaImportBusy.value=false}
+}
+async function saveMairaPreview(){
+ if(!mairaProposal.value||!mairaTargetParty.value)return
+ mairaPreviewSaving.value=true;mairaImportError.value=''
+ try{
+  const id=mairaTargetParty.value.id
+  const preview=await portalRequest<PartyProcessPreview>('/parties/'+id+'/process-previews','POST',{
+    filename:mairaSourceFile.value?.name||'Documento analizado',
+    workflow:mairaProposal.value.workflow,
+    source_map:mairaProposal.value.source_map,
+    questions:mairaProposal.value.questions,
+    observations:mairaProposal.value.observations
+  })
+  partyPreview.value=preview
+  partyPreviewTarget.value=mairaTargetParty.value
+  mairaImportInfo.value='Vista previa guardada en '+mairaTargetParty.value.name+'. No se han activado tareas ni publicado el proceso.'
+ }catch(e){mairaImportError.value=e instanceof Error?e.message:'No se pudo guardar la vista previa'}
+ finally{mairaPreviewSaving.value=false}
+}
+async function viewPartyProcessPreview(party:PartyRecord){
+ partyPreviewTarget.value=party;partyPreview.value=null;partyPreviewBusy.value=true
+ portalError.value=''
+ try{
+  const items=await portalRequest<{id:string}[]>('/parties/'+party.id+'/process-previews')
+  if(!items.length){portalMessage.value='Todavía no hay vistas previas para '+party.name+'. Carga un documento con Maira.';return}
+  partyPreview.value=await portalRequest<PartyProcessPreview>('/parties/'+party.id+'/process-previews/'+items[0].id)
+ }catch(e){portalError.value=e instanceof Error?e.message:'No se pudo consultar la vista previa'}
+ finally{partyPreviewBusy.value=false}
+}
+function openReviewInDesigner(){
+ if(!partyPreview.value)return
+ try{
+  loadDefinition(partyPreview.value.workflow)
+  current.value='flujos'
+  mairaImportOpen.value=false
+  flowMessage.value='Propuesta en revisión para '+(partyPreviewTarget.value?.name||'tercero')+'. Revisa responsabilidades, requisitos y dependencias antes de publicar.'
+ }catch(e){portalError.value=e instanceof Error?e.message:'No se pudo abrir el diseñador'}
 }
 function applyMairaProposal(){
  if(!mairaProposal.value)return
@@ -852,7 +927,7 @@ function simulateDraft(){
 
         <div v-if="mairaImportOpen" class="maira-import-surface" role="region" aria-label="Crear flujo a partir de documento con MAIRA">
           <div class="maira-import-head">
-            <div><span class="eyebrow">MAIRA · DE DOCUMENTO A WORKFLOW</span><h3>Crear flujo con MAIRA</h3><p>Carga un diagrama, MAIRA identificará los pasos y propondrá un workflow editable. No sustituye la revisión jurídica.</p></div>
+            <div><span class="eyebrow">Maira · Documento a proceso</span><h3>Crear proceso con Maira</h3><p v-if="mairaTargetParty">Vista previa para <strong>{{mairaTargetParty.name}}</strong> · {{mairaTargetParty.kind==='JURIDICA'?'Persona jurídica':'Persona natural'}}</p><p>Carga el diagrama. Maira propondrá tareas, responsabilidades y dependencias para revisión; no se activa un contrato automáticamente.</p></div>
             <button type="button" class="ghost-button" @click="mairaImportOpen=false" aria-label="Cerrar creación con MAIRA">Cerrar ×</button>
           </div>
           <div class="maira-import-grid">
@@ -875,17 +950,33 @@ function simulateDraft(){
               </button>
             </div>
             <div class="maira-import-card">
-              <strong>2. Resultado de MAIRA</strong>
+              <strong>2. Propuesta y vista previa</strong>
               <div v-if="mairaImportError" class="maira-import-error" role="alert">{{mairaImportError}}</div>
               <div v-if="mairaImportInfo" class="maira-import-notice" role="status">{{mairaImportInfo}}</div>
               <template v-if="mairaProposal">
                 <div class="maira-import-metrics"><span><b>{{mairaProposal.node_count}}</b> nodos</span><span><b>{{mairaProposal.mapped_steps}}</b> pasos identificados</span><span><b>{{mairaProposal.questions.length}}</b> preguntas</span></div>
-                <div class="maira-import-mapping">
-                  <div v-for="(mapped,i) in mairaProposal.source_map.slice(0,80)" :key="i" class="maira-import-step"><strong>{{mapped.source_step}}</strong><span>{{mapped.source_excerpt}}<small>→ {{mapped.node_id}} · {{mapped.confidence}}{{mapped.page?' · pág. '+mapped.page:''}}</small></span></div>
+                <div class="maira-preview-card">
+                  <strong>Así se distribuirían las actividades {{mairaTargetParty?'para '+mairaTargetParty.name:''}}</strong>
+                  <p class="maira-import-fine">Las responsabilidades son una propuesta. No se inventan campos o documentos que no figuren en el diagrama.</p>
+                  <div class="maira-preview-summary">
+                    <span><b>{{mairaPreviewStages.filter(s=>s.side==='CONTRATISTA').length}}</b> Del contratista</span>
+                    <span><b>{{mairaPreviewStages.filter(s=>s.side==='CONTRATANTE').length}}</b> Del contratante</span>
+                    <span><b>{{mairaPreviewStages.filter(s=>s.side==='REVISAR').length}}</b> Por definir</span>
+                  </div>
+                  <div class="maira-preview-tasks">
+                    <div v-for="stage in mairaPreviewStages" :key="stage.id" class="maira-preview-task">
+                      <span class="maira-preview-number">{{stage.step}}</span>
+                      <div><strong>{{stage.label}}</strong><small>{{stage.role}} · {{stage.side==='CONTRATISTA'?'Hospital / contratista':stage.side==='CONTRATANTE'?'Entidad contratante':'Por asignar'}}</small><small>Origen: {{stage.source}}{{stage.page?' · Página '+stage.page:''}}</small><small>Depende de: {{stage.dependencies.join(', ')||'Inicio'}}</small></div>
+                    </div>
+                  </div>
+                  <p v-if="mairaTargetParty?.kind==='JURIDICA'&&mairaPreviewStages.some(s=>s.role==='ASPIRANTE')" class="maira-preview-alert">El documento identifica actividades de un aspirante. Antes de asignarlas a una empresa, valida si aplican al hospital o a un representante autorizado.</p>
                 </div>
                 <div v-if="mairaProposal.questions.length"><strong>Dudas que requieren revisión</strong><p v-for="(question,i) in mairaProposal.questions" :key="i">• {{question}}</p></div>
                 <div v-if="mairaProposal.observations.length"><strong>Observaciones</strong><p v-for="(item,i) in mairaProposal.observations" :key="i">• {{item}}</p></div>
-                <button type="button" class="primary-button" @click="applyMairaProposal">{{mairaApplyConfirm?'Confirmar reemplazo del borrador':'Aplicar propuesta al diseñador'}}</button>
+                <div class="pilot-actions">
+                  <button v-if="mairaTargetParty" type="button" class="primary-button" :disabled="mairaPreviewSaving" @click="saveMairaPreview">{{mairaPreviewSaving?'Guardando…':'Guardar vista previa en '+mairaTargetParty.name}}</button>
+                  <button type="button" class="ghost-button" @click="applyMairaProposal">{{mairaApplyConfirm?'Confirmar reemplazo del borrador':'Revisar en diseñador'}}</button>
+                </div>
                 <p class="maira-import-fine">Las etapas originales conservarán su número y cita en Propiedades. Antes de aplicar puedes usar «Exportar JSON» para respaldar el borrador actual.</p>
               </template>
               <p v-else class="maira-import-fine">MAIRA mostrará aquí el mapeo de pasos originales a etapas, dependencias, dudas y observaciones. Nada se aplica sin tu revisión.</p>
@@ -1060,13 +1151,46 @@ function simulateDraft(){
           <div v-if="!filteredParties.length" class="pilot-empty">{{partyRecords.length?'No hay resultados para esta búsqueda.':'Todavía no hay personas o empresas registradas.'}}</div>
           <div v-for="party in filteredParties" :key="party.id" class="pilot-party-item">
             <div class="pilot-party-meta"><strong>{{party.name}}</strong><small>{{party.kind==='JURIDICA'?'Persona jurídica':'Persona natural'}} · {{party.email||'Correo pendiente'}} · {{party.case_count}} expediente(s)</small></div>
-            <div class="pilot-actions"><button class="ghost-button" @click="editingPartyId=party.id;editingPartyEmail=party.email||''">Editar contacto</button><button class="primary-button" @click="selectPartyForContract(party)">Crear expediente</button></div>
+            <div class="pilot-actions">
+              <button class="ghost-button" @click="editingPartyId=party.id;editingPartyEmail=party.email||''">Editar contacto</button>
+              <button class="ghost-button" @click="viewPartyProcessPreview(party)">Vista previa</button>
+              <button class="ghost-button" @click="openMairaDocumentImport(party.id)">Crear proceso con Maira</button>
+              <button class="primary-button" @click="selectPartyForContract(party)">Crear expediente</button>
+            </div>
             <div v-if="editingPartyId===party.id" class="pilot-edit-contact">
               <label>Correo de contacto<input v-model="editingPartyEmail" type="email" maxlength="255" placeholder="persona@ejemplo.com"/></label>
               <button class="primary-button" :disabled="portalPartySaving" @click="savePartyEmail(party.id)">Guardar contacto</button>
               <button class="ghost-button" @click="editingPartyId=''">Cancelar</button>
             </div>
           </div>
+        </div>
+                <div v-if="partyPreviewTarget&&partyPreview" class="pilot-panel party-process-preview">
+          <div class="pilot-detail-top">
+            <div><span class="eyebrow">VISTA PREVIA · NO PUBLICADA</span><h3>{{partyPreviewTarget.name}}</h3>
+              <p>Proceso interpretado: {{partyPreview.workflow.name}} · {{partyPreview.source_steps||partyPreview.source_map.length}} actividades</p></div>
+            <button type="button" class="ghost-button" @click="partyPreview=null;partyPreviewTarget=null">Cerrar</button>
+          </div>
+          <p class="pilot-notice">Esta es una simulación de responsabilidades. El prestador no recibe estas tareas hasta que un administrador apruebe y active una plantilla en un expediente.</p>
+          <div class="maira-preview-summary">
+            <span><b>{{savedPreviewStages.filter(s=>s.side==='CONTRATISTA').length}}</b> Actividades del prestador</span>
+            <span><b>{{savedPreviewStages.filter(s=>s.side==='CONTRATANTE').length}}</b> Actividades internas</span>
+            <span><b>{{savedPreviewStages.filter(s=>s.side==='REVISAR').length}}</b> Por clasificar</span>
+          </div>
+          <div class="maira-preview-task-grid">
+            <div class="maira-preview-card">
+              <strong>Así lo vería {{partyPreviewTarget.name}}</strong>
+              <p v-if="!savedPreviewStages.some(s=>s.side==='CONTRATISTA')" class="pilot-muted">Todavía no hay actividades asignadas al prestador. El responsable debe confirmarse.</p>
+              <div v-for="s in savedPreviewStages.filter(x=>x.side==='CONTRATISTA')" :key="s.id" class="maira-preview-task"><span class="maira-preview-number">{{s.step}}</span><div><strong>{{s.label}}</strong><small>{{s.source}} · {{s.role}}</small><small>Depende de: {{s.dependencies.join(', ')||'Inicio'}}</small></div></div>
+            </div>
+            <div class="maira-preview-card">
+              <strong>Actividades del contratante y pendientes</strong>
+              <div v-for="s in savedPreviewStages.filter(x=>x.side!=='CONTRATISTA')" :key="s.id" class="maira-preview-task"><span class="maira-preview-number">{{s.step}}</span><div><strong>{{s.label}}</strong><small>{{s.role}} · {{s.side==='REVISAR'?'Responsable por confirmar':'Gestión interna'}}</small></div></div>
+            </div>
+          </div>
+          <div v-if="partyPreview.questions.length||partyPreview.observations.length" class="maira-preview-alert"><strong>Revisiones pendientes</strong>
+            <p v-for="(q,i) in [...partyPreview.questions,...partyPreview.observations]" :key="i">{{q}}</p>
+          </div>
+          <div class="pilot-actions"><button type="button" class="primary-button" @click="openReviewInDesigner">Revisar y adaptar en Workflow Studio</button><button type="button" class="ghost-button" @click="partyPreview=null;partyPreviewTarget=null">Volver al directorio</button></div>
         </div>
       </section>
       <section v-else-if="current==='contrataciones'&&(hasInstitution||portalSession?.can_setup)" class="contract-space">
