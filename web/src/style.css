@@ -413,3 +413,37 @@ nav button.active .nav-icon{stroke:#236ed3;transform:scale(1.03)}
 .party-process-preview .eyebrow{font-size:10px;color:#5491b5}
 .party-process-preview .maira-preview-card{align-content:start;max-height:550px;overflow:auto}
 @media(max-width:840px){.maira-preview-task-grid{grid-template-columns:1fr}.maira-preview-card{padding:13px}}
+
+/* V6.5.7 — Circular, confirmed-progress view consistent with NORA */
+.maira-live{width:100%;border:1px solid #d7e5f4;background:#f8fbfe;border-radius:16px;padding:18px;display:grid;gap:15px}
+.maira-live-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.maira-live-head strong{font-size:14px;color:#234465}
+.maira-live-head span{font-size:11px;color:#7c8ea5;font-variant-numeric:tabular-nums}
+.maira-live-main{display:flex;align-items:center;gap:20px}
+.maira-progress-circle{width:120px;height:120px;display:grid;place-items:center;flex:0 0 120px;position:relative}
+.maira-progress-circle svg{width:120px;height:120px;transform:rotate(-90deg);overflow:visible}
+.maira-circle-track,.maira-circle-fill,.maira-circle-activity{fill:none;stroke-width:8.5;stroke-linecap:round}
+.maira-circle-track{stroke:#e4edf6}
+.maira-circle-fill{stroke:#438cb8;transition:stroke-dashoffset .55s ease}
+.maira-progress-circle.finished .maira-circle-fill{stroke:#398977}
+.maira-progress-circle.failed .maira-circle-fill{stroke:#bd6970}
+.maira-circle-activity{stroke:#248ec4;stroke-dasharray:4 304;transform-origin:60px 60px;animation:maira-circle-spin 2.2s linear infinite}
+.maira-circle-number{position:absolute;inset:0;display:flex;justify-content:center;align-items:center;flex-direction:column;gap:3px;pointer-events:none}
+.maira-circle-number strong{font-size:29px;line-height:1;color:#244969;font-weight:750;letter-spacing:-1px;font-variant-numeric:tabular-nums}
+.maira-circle-number span{color:#8097ac;font-size:10px}
+.maira-live-description{min-width:0;display:grid;gap:8px}
+.maira-live-description strong{color:#284d70;font-size:15px;line-height:1.4}
+.maira-live-description small{color:#7a8fa7;font-size:11px;line-height:1.5}
+.maira-live-milestones{display:grid;gap:8px}
+.maira-live-milestones>div{display:grid;grid-template-columns:25px minmax(0,1fr) auto;align-items:center;gap:9px;color:#8395aa}
+.maira-live-milestones>div>span{width:23px;height:23px;border-radius:50%;background:#e4edf5;display:grid;place-items:center;font-size:11px;font-weight:750}
+.maira-live-milestones strong{font-size:11px;font-weight:620}
+.maira-live-milestones small{font-size:10px}
+.maira-live-milestones>div.complete{color:#3b7785}
+.maira-live-milestones>div.complete>span{background:#478f86;color:white}
+.maira-live-milestones>div.current{color:#255984}
+.maira-live-milestones>div.current>span{background:#d3e9fa;color:#297ba7}
+.maira-import-card .maira-live-recovery{border-top:1px solid #dce9f4;padding-top:10px;color:#4b7596;font-size:11px}
+@keyframes maira-circle-spin{to{transform:rotate(360deg)}}
+@media(max-width:650px){.maira-live-main{gap:13px}.maira-progress-circle,.maira-progress-circle svg{width:96px;height:96px}.maira-progress-circle{flex-basis:96px}.maira-circle-number strong{font-size:24px}}
+@media(prefers-reduced-motion:reduce){.maira-circle-activity{animation:none}.maira-circle-fill{transition:none}}

@@ -8,16 +8,18 @@ from __future__ import annotations
 
 import base64
 import asyncio
+from contextlib import suppress
 import io
 import json
 import os
 import logging
 import re
 from pathlib import PurePath
-from typing import Any, Literal
+from typing import Any, Awaitable, Callable, Literal
 
 import httpx
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 from google.auth.transport.requests import Request as GoogleRequest
 from google.oauth2 import id_token
 from pydantic import BaseModel, Field, ValidationError
@@ -28,6 +30,7 @@ from ..workflow.validator import WorkflowInvalid, topological_order
 router = APIRouter(prefix="/api/v1/maira", tags=["maira"])
 logger = logging.getLogger("smart_contract.maira")
 MAX_FILE_BYTES = 6 * 1024 * 1024
+ProgressCallback = Callable[[str, str], Awaitable[None]]
 ALLOWED_EXT = {".pdf", ".png", ".jpg", ".jpeg", ".txt"}
 MIMES = {".pdf": "application/pdf", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
 
@@ -396,7 +399,8 @@ def _provider_failure(code: int, body: Any) -> HTTPException:
 
 
 async def _post_gemini(request: dict[str, Any], api_key: str, model: str, timeout: float,
-                       fallback_request: dict[str, Any] | None = None) -> dict[str, Any]:
+                       fallback_request: dict[str, Any] | None = None,
+                       progress: ProgressCallback | None = None) -> dict[str, Any]:
     """Maximum two calls: normal transient retry, or lower-weight text request.
 
     An extractable PDF can supply a different request for attempt two.
@@ -421,6 +425,10 @@ async def _post_gemini(request: dict[str, Any], api_key: str, model: str, timeou
             if response.status_code in (502, 503, 504) and attempt == 1:
                 logger.warning("Gemini transient error: HTTP=%s; recovery=%s",
                                response.status_code, "TEXT_ONLY" if fallback_request else "RETRY")
+                if progress:
+                    await progress("RECUPERACION" if fallback_request else "REINTENTO",
+                        "Gemini no procesó el PDF; probando el texto extraído." if fallback_request
+                        else "Gemini no respondió; realizando un último intento.")
                 await asyncio.sleep(2)
                 continue
 
@@ -495,7 +503,8 @@ TEXT_FALLBACK_NOTICE = (
 
 
 async def _call_gemini(data: bytes, suffix: str, filename: str, api_key: str,
-                       party_kind: str | None = None) -> Proposal:
+                       party_kind: str | None = None,
+                       progress: ProgressCallback | None = None) -> Proposal:
     context = (
         "\n\nContexto de la solicitud (no forma parte del documento): el destinatario registrado "
         "es una " + ("PERSONA JURIDICA" if party_kind=="JURIDICA" else "PERSONA NATURAL")
@@ -513,6 +522,8 @@ async def _call_gemini(data: bytes, suffix: str, filename: str, api_key: str,
     req = {"contents": [{"role": "user", "parts": parts}],
            "generationConfig": {"responseMimeType": "application/json", "temperature": 0.1, "maxOutputTokens": 24000}}
     fallback_req = None
+    if progress:
+        await progress("PREPARACION", "Preparando la lectura del documento.")
     if suffix == ".pdf":
         extracted_text = _pdf_text_for_fallback(data)
         if extracted_text:
@@ -533,12 +544,23 @@ async def _call_gemini(data: bytes, suffix: str, filename: str, api_key: str,
                 "generationConfig": {"responseMimeType": "application/json",
                                      "temperature": 0.1, "maxOutputTokens": 10000},
             }
+    if progress:
+        await progress("GEMINI", "Gemini está interpretando las actividades.")
     if fallback_req:
-        response_json = await _post_gemini(req, api_key, model, timeout=110.0,
-                                          fallback_request=fallback_req)
+        if progress:
+            response_json = await _post_gemini(req, api_key, model, timeout=110.0,
+                                              fallback_request=fallback_req, progress=progress)
+        else:
+            response_json = await _post_gemini(req, api_key, model, timeout=110.0,
+                                              fallback_request=fallback_req)
     else:
-        response_json = await _post_gemini(req, api_key, model, timeout=110.0)
+        if progress:
+            response_json = await _post_gemini(req, api_key, model, timeout=110.0, progress=progress)
+        else:
+            response_json = await _post_gemini(req, api_key, model, timeout=110.0)
     text_fallback_used = bool(response_json.get("_maira_fallback_used"))
+    if progress:
+        await progress("COMPILACION", "Gemini respondió. Verificando actividades y dependencias.")
     candidates = response_json.get("candidates") or []
     if not isinstance(candidates,list) or not candidates:
         raise HTTPException(422, "Gemini no devolvió una propuesta. Verifica el documento y vuelve a analizar.")
@@ -580,11 +602,24 @@ async def _call_gemini(data: bytes, suffix: str, filename: str, api_key: str,
     return result
 
 
+def _document_result(result: Proposal, name: str, party_kind: str | None) -> dict[str, Any]:
+    if party_kind == "JURIDICA":
+        source = " ".join(n.label + " " + str(n.role or "") for n in result.workflow.nodes).lower()
+        if any(word in source for word in ("aspirante", "personal a contratar")):
+            alert = "El diagrama menciona aspirantes o personal; revisar pertinencia para persona jurídica antes de asignarle tareas."
+            if alert not in result.observations:
+                result.observations.append(alert)
+    return {"status": "DRAFT_FOR_HUMAN_REVIEW", "filename": name,
+            "node_count": len(result.workflow.nodes), "mapped_steps": len(result.source_map),
+            **result.model_dump(mode="json"),
+            "notice": "Propuesta generada por Gemini. Revisar todas las etapas y reglas antes de publicar. No se guardó el documento ni el flujo en el servidor."}
+
+
 @router.post("/workflow-import")
 async def interpret_workflow_document(
     file: UploadFile = File(...),
-    party_kind: Literal["NATURAL","JURIDICA"] | None = Form(default=None),
-    email: str = Depends(_verify_identity)
+    party_kind: Literal["NATURAL", "JURIDICA"] | None = Form(default=None),
+    email: str = Depends(_verify_identity),
 ):
     _, _, key = _configuration()
     if not key:
@@ -593,13 +628,63 @@ async def interpret_workflow_document(
     content = await file.read(MAX_FILE_BYTES + 1)
     suffix, safe_data = _validate_file(name, content)
     result = await _call_gemini(safe_data, suffix, name, key, party_kind)
-    if party_kind=="JURIDICA":
-        source=" ".join(n.label+" "+str(n.role or "") for n in result.workflow.nodes).lower()
-        if any(word in source for word in ("aspirante","personal a contratar")):
-            alert="El diagrama menciona aspirantes o personal; revisar pertinencia para persona jurídica antes de asignarle tareas."
-            if alert not in result.observations:
-                result.observations.append(alert)
-    return {"status": "DRAFT_FOR_HUMAN_REVIEW", "filename": name,
-            "node_count": len(result.workflow.nodes), "mapped_steps": len(result.source_map),
-            **result.model_dump(mode="json"),
-            "notice": "Propuesta generada por Gemini. Revisar todas las etapas y reglas antes de publicar. No se guardó el documento ni el flujo en el servidor."}
+    return _document_result(result, name, party_kind)
+
+
+@router.post("/workflow-import/stream")
+async def interpret_workflow_document_stream(
+    file: UploadFile = File(...),
+    party_kind: Literal["NATURAL", "JURIDICA"] | None = Form(default=None),
+    email: str = Depends(_verify_identity),
+):
+    """Incremental NDJSON: explicit server milestones; heartbeat is not progress."""
+    _, _, key = _configuration()
+    if not key:
+        raise HTTPException(503, "Gemini no está configurado.")
+    name = PurePath((file.filename or "document").replace("\\", "/")).name[:100]
+    raw = await file.read(MAX_FILE_BYTES + 1)
+    suffix, safe_data = _validate_file(name, raw)
+
+    async def events():
+        queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+
+        async def notify(phase: str, label: str) -> None:
+            await queue.put({"event": "progress", "phase": phase, "label": label})
+
+        async def execute() -> None:
+            try:
+                await notify("VALIDADO", "Archivo recibido y formato validado.")
+                proposal = await _call_gemini(safe_data, suffix, name, key, party_kind,
+                                              progress=notify)
+                await notify("FINALIZANDO", "Workflow construido. Preparando vista previa.")
+                await queue.put({"event": "done", "result": _document_result(proposal, name, party_kind)})
+            except HTTPException as error:
+                await queue.put({"event": "error", "status": error.status_code,
+                                 "message": str(error.detail)[:700]})
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.error("MAIRA progress stream failed: type=%s", type(exc).__name__)
+                await queue.put({"event": "error", "status": 500,
+                                 "message": "El análisis no pudo completarse. No se aplicaron cambios."})
+
+        worker = asyncio.create_task(execute())
+        try:
+            while True:
+                try:
+                    message = await asyncio.wait_for(queue.get(), timeout=8.0)
+                except asyncio.TimeoutError:
+                    yield '{"event":"heartbeat"}\n'
+                    continue
+                yield json.dumps(message, ensure_ascii=False) + "\n"
+                if message["event"] in ("done", "error"):
+                    break
+        finally:
+            if not worker.done():
+                worker.cancel()
+            with suppress(asyncio.CancelledError):
+                await worker
+
+    return StreamingResponse(events(), media_type="application/x-ndjson",
+                             headers={"Cache-Control": "no-cache, no-transform",
+                                      "X-Accel-Buffering": "no"})

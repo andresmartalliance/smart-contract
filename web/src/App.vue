@@ -119,6 +119,36 @@ const MAIRA_API=import.meta.env.VITE_SMART_API_URL||'https://api-development-18b
 const mairaImportOpen=ref(false)
 const mairaImportStatus=ref<MairaStatus|null>(null)
 const mairaImportBusy=ref(false)
+type MairaStreamEvent={event:'progress'|'heartbeat'|'done'|'error';phase?:string;label?:string;message?:string;result?:MairaProposal}
+type MairaProgressLine={phase:string;label:string}
+const mairaLivePhase=ref('')
+const mairaLiveLabel=ref('')
+const mairaLiveHistory=ref<MairaProgressLine[]>([])
+const mairaSeconds=ref(0)
+let mairaTimer:ReturnType<typeof setInterval>|null=null
+const mairaStages=['Documento validado','Lectura de Gemini completada','Workflow construido','Vista previa disponible']
+const mairaConfirmed=computed(()=>{
+ if(mairaLivePhase.value==='TERMINADO')return 4
+ if(mairaLiveHistory.value.some(x=>x.phase==='FINALIZANDO'))return 3
+ if(mairaLiveHistory.value.some(x=>x.phase==='COMPILACION'))return 2
+ if(mairaLiveHistory.value.some(x=>x.phase==='VALIDADO'))return 1
+ return 0
+})
+const mairaRingLength=2*Math.PI*49
+const mairaRingOffset=computed(()=>mairaRingLength*(1-mairaConfirmed.value/4))
+function mairaClockDisplay(s:number){return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')}
+function mairaProgress(phase:string,label:string){
+ if(mairaLivePhase.value===phase&&mairaLiveLabel.value===label)return
+ mairaLivePhase.value=phase;mairaLiveLabel.value=label
+ mairaLiveHistory.value=[...mairaLiveHistory.value,{phase,label}].slice(-12)
+}
+function startMairaClock(){
+ if(mairaTimer!==null)clearInterval(mairaTimer)
+ const start=Date.now();mairaSeconds.value=0
+ mairaTimer=setInterval(()=>{mairaSeconds.value=Math.floor((Date.now()-start)/1000)},1000)
+}
+function stopMairaClock(){if(mairaTimer!==null){clearInterval(mairaTimer);mairaTimer=null}}
+
 const mairaConnectionBusy=ref(false)
 const mairaConnectionResult=ref('')
 const mairaImportError=ref('')
@@ -387,11 +417,13 @@ async function openMairaDocumentImport(partyId?:string){
  mairaTargetPartyId.value=partyId||''
  current.value='flujos';mairaOpen.value=false;mairaImportOpen.value=true
  mairaImportError.value='';mairaImportInfo.value='';mairaProposal.value=null;mairaApplyConfirm.value=false
+ mairaLivePhase.value='';mairaLiveLabel.value='';mairaLiveHistory.value=[];mairaSeconds.value=0
  await loadMairaImportStatus()
 }
 function chooseMairaSource(event:Event){
  const target=event.target as HTMLInputElement, file=target.files?.[0]||null
  mairaImportError.value='';mairaProposal.value=null;mairaApplyConfirm.value=false
+ mairaLivePhase.value='';mairaLiveLabel.value='';mairaLiveHistory.value=[]
  if(file&&(file.size>6*1024*1024||!/\.(pdf|png|jpe?g|txt)$/i.test(file.name))){
   mairaImportError.value='Formatos PDF, imagen o TXT, hasta 6 MB.';mairaSourceFile.value=null
  }else mairaSourceFile.value=file
@@ -413,19 +445,51 @@ async function checkMairaConnection(){
 }
 async function analyzeMairaDocument(){
  if(!mairaImportStatus.value?.ready){mairaImportError.value='MAIRA no tiene Google y Gemini configurados.';return}
- if(!mairaGoogleToken.value){mairaImportError.value='Inicia sesión en Google para continuar.';return}
+ if(!mairaGoogleToken.value){mairaImportError.value='Inicia sesión con Google para continuar.';return}
  if(!mairaSourceFile.value){mairaImportError.value='Selecciona un documento para analizar.';return}
- mairaImportBusy.value=true;mairaImportError.value='';mairaProposal.value=null;mairaApplyConfirm.value=false
+ mairaImportBusy.value=true;mairaImportError.value='';mairaImportInfo.value='';mairaProposal.value=null;mairaApplyConfirm.value=false
+ mairaLiveHistory.value=[];mairaProgress('ENVIANDO','Enviando documento a MAIRA.')
+ startMairaClock()
+ let resultReceived=false
  try{
   const data=new FormData();data.append('file',mairaSourceFile.value,mairaSourceFile.value.name)
   if(mairaTargetParty.value)data.append('party_kind',mairaTargetParty.value.kind)
-  const resp=await fetch(MAIRA_API+'/api/v1/maira/workflow-import',{method:'POST',headers:{Authorization:'Bearer '+mairaGoogleToken.value},body:data})
-  const response=await resp.json() as Record<string,unknown>
-  if(!resp.ok)throw new Error(typeof response.detail==='string'?response.detail:'MAIRA no pudo generar un flujo válido ('+resp.status+').')
-  mairaProposal.value=response as unknown as MairaProposal
-  mairaImportInfo.value='MAIRA generó una propuesta. Revisa los pasos antes de aplicarla.'
- }catch(e){mairaImportError.value=e instanceof Error?e.message:'Error de análisis'}
- finally{mairaImportBusy.value=false}
+  const response=await fetch(MAIRA_API+'/api/v1/maira/workflow-import/stream',{
+    method:'POST',headers:{Authorization:'Bearer '+mairaGoogleToken.value},body:data
+  })
+  if(!response.ok){
+   const body=await response.json().catch(()=>({detail:'No se pudo iniciar el análisis.'})) as {detail?:string}
+   throw new Error(body.detail||'No se pudo iniciar el análisis ('+response.status+').')
+  }
+  if(!response.body)throw new Error('El servidor no proporcionó seguimiento del análisis.')
+  const reader=response.body.getReader()
+  const decoder=new TextDecoder()
+  let pending=''
+  const handleLine=(line:string)=>{
+   if(!line.trim())return
+   const event=JSON.parse(line) as MairaStreamEvent
+   if(event.event==='progress'&&event.phase&&event.label)mairaProgress(event.phase,event.label)
+   if(event.event==='done'&&event.result){
+    mairaProposal.value=event.result;resultReceived=true
+    mairaProgress('TERMINADO','Propuesta lista: '+event.result.mapped_steps+' actividades identificadas.')
+    mairaImportInfo.value='MAIRA generó una propuesta. Revisa los pasos antes de aplicarla.'
+   }
+   if(event.event==='error')throw new Error(event.message||'MAIRA no pudo completar el análisis.')
+  }
+  while(true){
+   const {done,value}=await reader.read()
+   if(done)break
+   pending+=decoder.decode(value,{stream:true})
+   let pos=pending.indexOf('\n')
+   while(pos!==-1){handleLine(pending.slice(0,pos));pending=pending.slice(pos+1);pos=pending.indexOf('\n')}
+  }
+  pending+=decoder.decode()
+  if(pending.trim())handleLine(pending)
+  if(!resultReceived)throw new Error('El análisis terminó sin propuesta. No se aplicaron cambios.')
+ }catch(e){
+  mairaImportError.value=e instanceof Error?e.message:'Error de análisis'
+  mairaProgress('ERROR','El análisis no pudo finalizar. No se aplicaron cambios.')
+ }finally{stopMairaClock();mairaImportBusy.value=false}
 }
 async function saveMairaPreview(){
  if(!mairaProposal.value||!mairaTargetParty.value)return
@@ -958,7 +1022,7 @@ function simulateDraft(){
               </div>
               <p class="maira-import-fine">Cuenta verificada: <strong>{{loginEmail}}</strong>. El análisis del documento usa esta sesión autorizada.</p>
               <label class="maira-file-label">Seleccionar diagrama de flujo
-                <input type="file" accept=".pdf,.png,.jpg,.jpeg,.txt,application/pdf,image/png,image/jpeg,text/plain" @change="chooseMairaSource"/>
+                <input type="file" :disabled="mairaImportBusy" accept=".pdf,.png,.jpg,.jpeg,.txt,application/pdf,image/png,image/jpeg,text/plain" @change="chooseMairaSource"/>
               </label>
               <div v-if="mairaSourceFile" class="maira-import-selected">{{mairaSourceFile.name}} · {{(mairaSourceFile.size/1024).toFixed(0)}} KB</div>
               <p class="maira-import-fine">PDF, imagen o TXT · Máximo 6 MB. Únicamente documentos sintéticos o autorizados. El archivo se envía a Gemini para su análisis y no se guarda en Smart Contract.</p>
@@ -966,7 +1030,7 @@ function simulateDraft(){
                 <button type="button" class="primary-button" :disabled="!mairaImportStatus?.ready||!mairaGoogleToken||!mairaSourceFile||mairaImportBusy" @click="analyzeMairaDocument">
                   {{mairaImportBusy?'Maira está analizando…':'Analizar documento con Maira'}}
                 </button>
-                <button type="button" class="ghost-button" :disabled="!mairaImportStatus?.ready||!mairaGoogleToken||mairaConnectionBusy" @click="checkMairaConnection">
+                <button type="button" class="ghost-button" :disabled="!mairaImportStatus?.ready||!mairaGoogleToken||mairaConnectionBusy||mairaImportBusy" @click="checkMairaConnection">
                   {{mairaConnectionBusy?'Verificando…':'Verificar conexión Gemini'}}
                 </button>
               </div>
@@ -974,6 +1038,33 @@ function simulateDraft(){
             </div>
             <div class="maira-import-card">
               <strong>2. Propuesta y vista previa</strong>
+              <section v-if="mairaLiveHistory.length" class="maira-live" role="status" aria-live="polite">
+                <div class="maira-live-head"><strong>Avance del análisis</strong><span>{{mairaClockDisplay(mairaSeconds)}} transcurridos</span></div>
+                <div class="maira-live-main">
+                  <div class="maira-progress-circle" :class="{'finished':mairaLivePhase==='TERMINADO','failed':mairaLivePhase==='ERROR'}"
+                       role="progressbar" :aria-valuenow="mairaConfirmed" aria-valuemin="0" aria-valuemax="4" aria-label="Hitos confirmados del análisis">
+                    <svg viewBox="0 0 120 120" aria-hidden="true">
+                      <circle class="maira-circle-track" cx="60" cy="60" r="49"/>
+                      <circle class="maira-circle-fill" cx="60" cy="60" r="49" :stroke-dasharray="mairaRingLength" :stroke-dashoffset="mairaRingOffset"/>
+                      <circle v-if="mairaImportBusy" class="maira-circle-activity" cx="60" cy="60" r="49"/>
+                    </svg>
+                    <div class="maira-circle-number"><strong>{{mairaConfirmed}}/4</strong><span>hitos</span></div>
+                  </div>
+                  <div class="maira-live-description"><strong>{{mairaLiveLabel}}</strong>
+                    <small>{{mairaImportBusy?'Procesando con seguimiento en vivo':'Último estado confirmado'}}</small>
+                    <small v-if="mairaImportBusy">Solo avanza al terminar una etapa. Gemini no informa porcentajes internos.</small>
+                  </div>
+                </div>
+                <div class="maira-live-milestones">
+                  <div v-for="(stage,i) in mairaStages" :key="i" :class="{'complete':i<mairaConfirmed,'current':i===mairaConfirmed&&mairaImportBusy}">
+                    <span>{{i<mairaConfirmed?'✓':i+1}}</span><strong>{{stage}}</strong>
+                    <small>{{i<mairaConfirmed?'Confirmado':i===mairaConfirmed&&mairaImportBusy?'En curso':'Pendiente'}}</small>
+                  </div>
+                </div>
+                <p v-if="mairaLiveHistory.some(x=>x.phase==='RECUPERACION'||x.phase==='REINTENTO')" class="maira-live-recovery">
+                  {{mairaLiveHistory.filter(x=>x.phase==='RECUPERACION'||x.phase==='REINTENTO').slice(-1)[0]?.label}}
+                </p>
+              </section>
               <div v-if="mairaImportError" class="maira-import-error" role="alert">{{mairaImportError}}</div>
               <div v-if="mairaImportInfo" class="maira-import-notice" role="status">{{mairaImportInfo}}</div>
               <template v-if="mairaProposal">
