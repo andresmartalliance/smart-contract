@@ -126,7 +126,9 @@ const mairaLiveLabel=ref('')
 const mairaLiveHistory=ref<MairaProgressLine[]>([])
 const mairaSeconds=ref(0)
 let mairaTimer:ReturnType<typeof setInterval>|null=null
-const mairaStages=['Documento validado','Lectura de Gemini completada','Workflow construido','Vista previa disponible']
+const mairaStages=computed(()=>mairaSourceOnly.value?
+ ['Documento validado','Texto identificado','Borrador documental organizado','Vista previa disponible']:
+ ['Documento validado','Lectura de Gemini completada','Workflow construido','Vista previa disponible'])
 const mairaConfirmed=computed(()=>{
  if(mairaLivePhase.value==='TERMINADO')return 4
  if(mairaLiveHistory.value.some(x=>x.phase==='FINALIZANDO'))return 3
@@ -152,6 +154,7 @@ function stopMairaClock(){if(mairaTimer!==null){clearInterval(mairaTimer);mairaT
 const mairaConnectionBusy=ref(false)
 const mairaConnectionResult=ref('')
 const mairaModelChoice=ref('')
+const mairaSourceOnly=ref(false)
 const mairaImportError=ref('')
 const mairaImportInfo=ref('')
 const mairaSourceFile=ref<File|null>(null)
@@ -418,13 +421,13 @@ async function openMairaDocumentImport(partyId?:string){
  mairaTargetPartyId.value=partyId||''
  current.value='flujos';mairaOpen.value=false;mairaImportOpen.value=true
  mairaImportError.value='';mairaImportInfo.value='';mairaProposal.value=null;mairaApplyConfirm.value=false
- mairaLivePhase.value='';mairaLiveLabel.value='';mairaLiveHistory.value=[];mairaSeconds.value=0
+ mairaLivePhase.value='';mairaLiveLabel.value='';mairaLiveHistory.value=[];mairaSeconds.value=0;mairaSourceOnly.value=false
  await loadMairaImportStatus()
 }
 function chooseMairaSource(event:Event){
  const target=event.target as HTMLInputElement, file=target.files?.[0]||null
  mairaImportError.value='';mairaProposal.value=null;mairaApplyConfirm.value=false
- mairaLivePhase.value='';mairaLiveLabel.value='';mairaLiveHistory.value=[]
+ mairaLivePhase.value='';mairaLiveLabel.value='';mairaLiveHistory.value=[];mairaSourceOnly.value=false
  if(file&&(file.size>6*1024*1024||!/\.(pdf|png|jpe?g|txt)$/i.test(file.name))){
   mairaImportError.value='Formatos PDF, imagen o TXT, hasta 6 MB.';mairaSourceFile.value=null
  }else mairaSourceFile.value=file
@@ -464,6 +467,7 @@ async function analyzeMairaDocument(){
  if(!mairaGoogleToken.value){mairaImportError.value='Inicia sesión con Google para continuar.';return}
  if(!mairaSourceFile.value){mairaImportError.value='Selecciona un documento para analizar.';return}
  mairaImportBusy.value=true;mairaImportError.value='';mairaImportInfo.value='';mairaProposal.value=null;mairaApplyConfirm.value=false
+ mairaSourceOnly.value=false
  mairaLiveHistory.value=[];mairaProgress('ENVIANDO','Enviando documento a MAIRA.')
  startMairaClock()
  let resultReceived=false
@@ -508,6 +512,38 @@ async function analyzeMairaDocument(){
   mairaProgress('ERROR','El análisis no pudo finalizar. No se aplicaron cambios.')
  }finally{stopMairaClock();mairaImportBusy.value=false}
 }
+
+async function extractMairaPdfWithoutGemini(){
+ if(!mairaImportStatus.value?.ready){mairaImportError.value='Verifica tu sesión de Smart Contract.';return}
+ if(!mairaGoogleToken.value){mairaImportError.value='Debes iniciar sesión con Google.';return}
+ if(!mairaSourceFile.value||!/\.pdf$/i.test(mairaSourceFile.value.name)){
+  mairaImportError.value='Selecciona un PDF con texto seleccionable.';return
+ }
+ mairaImportBusy.value=true
+ mairaImportError.value='';mairaImportInfo.value='';mairaProposal.value=null;mairaApplyConfirm.value=false
+ mairaSourceOnly.value=true
+ mairaLiveHistory.value=[];mairaProgress('ENVIANDO','Extrayendo pasos del PDF sin Gemini.')
+ startMairaClock()
+ try{
+  const data=new FormData()
+  data.append('file',mairaSourceFile.value,mairaSourceFile.value.name)
+  if(mairaTargetParty.value)data.append('party_kind',mairaTargetParty.value.kind)
+  const response=await fetch(MAIRA_API+'/api/v1/maira/workflow-import/source-preview',{
+   method:'POST',headers:{Authorization:'Bearer '+mairaGoogleToken.value},body:data
+  })
+  const result=await response.json() as MairaProposal & {detail?:string;analysis_method?:string}
+  if(!response.ok)throw new Error(result.detail||'No se pudo recuperar el texto del PDF.')
+  if(result.analysis_method!=='PDF_TEXT_ONLY'||!result.workflow||!Array.isArray(result.source_map))
+   throw new Error('No se recibió una vista documental válida.')
+  mairaProposal.value=result
+  mairaProgress('TERMINADO','Vista documental lista: '+result.mapped_steps+' actividades recuperadas.')
+  mairaImportInfo.value='Extracción sin Gemini. Revisa cuidadosamente responsables, numeración y flechas antes de guardar.'
+ }catch(e){
+  mairaImportError.value=e instanceof Error?e.message:'No fue posible recuperar el PDF.'
+  mairaProgress('ERROR','No se pudo completar la extracción local. No se aplicaron cambios.')
+ }finally{stopMairaClock();mairaImportBusy.value=false}
+}
+
 async function saveMairaPreview(){
  if(!mairaProposal.value||!mairaTargetParty.value)return
  mairaPreviewSaving.value=true;mairaImportError.value=''
@@ -1050,8 +1086,11 @@ function simulateDraft(){
                 <button type="button" class="ghost-button" :disabled="!mairaImportStatus?.ready||!mairaGoogleToken||mairaConnectionBusy||mairaImportBusy" @click="checkMairaConnection">
                   {{mairaConnectionBusy?'Diagnosticando…':'Diagnosticar modelos Gemini'}}
                 </button>
+                <button type="button" class="ghost-button" :disabled="!mairaImportStatus?.ready||!mairaGoogleToken||!mairaSourceFile||!(/\.pdf$/i.test(mairaSourceFile.name))||mairaImportBusy||mairaConnectionBusy"
+                        @click="extractMairaPdfWithoutGemini">Extraer pasos sin Gemini</button>
               </div>
               <p v-if="mairaConnectionResult" class="maira-import-notice" role="status">{{mairaConnectionResult}}</p>
+              <p class="maira-import-fine">La extracción sin Gemini recupera texto numerado, no interpreta flechas ni comprueba reglas. Requiere revisión humana.</p>
             </div>
             <div class="maira-import-card">
               <strong>2. Propuesta y vista previa</strong>

@@ -1,8 +1,8 @@
 {
   "product": "smart-contract",
   "architecture": "5.0",
-  "package": "6.5.7-maira-live-circular-progress",
-  "status": "V6_5_7_STREAMING_MILESTONES_DEPLOYED_BROWSER_REAL_E2E_PENDING",
+  "package": "6.5.9-maira-source-only-preview",
+  "status": "V6_5_9_AUTHENTICATED_PDF_TEXT_PREVIEW_NO_GEMINI",
   "repository_target": "andresmartalliance/smart-contract",
   "railway_project_id": "1f226324-580b-4b1c-b235-12c717d70af8",
   "railway_development_environment_id": "6e8d45ca-d6f2-448c-a48a-63e5a2ab1806",
@@ -74,7 +74,9 @@
     "maira_live_progress": "NDJSON_SERVER_EVENTS_WITH_NORA_STYLE_RING_AND_4_CONFIRMED_MILESTONES",
     "maira_live_progress_ci": "API_TESTS_AND_WEB_BUILD_PASS_GITHUB_ACTIONS_44590087950",
     "maira_live_progress_railway": "DEVELOPMENT_API_AND_WEB_SUCCESS",
-    "maira_browser_progress_e2e": "NOT_VERIFIED_IN_REAL_BROWSER"
+    "maira_browser_progress_e2e": "NOT_VERIFIED_IN_REAL_BROWSER",
+    "maira_source_only": "AUTHENTICATED_PDF_LAYOUT_EXTRACTION_REVIEW_ONLY_NO_MODEL_CALL",
+    "maira_source_only_e2e": "AWAITING_USER_BROWSER_CONFIRMATION"
   },
   "limitations": [
     "Open Development frontend is for fictitious data only",
@@ -133,7 +135,7 @@
   },
   "github_source_commit": "main (see Railway deployment commit and Drive context)",
   "railway_source_connection": "CONNECTED_MAIN",
-  "release_notes": "V6.5.7: NORA-style circular visual of 4 server-confirmed milestones; authenticated NDJSON progress stream, recovery event, elapsed real clock and heartbeat; no fictitious Gemini percentage; original JSON endpoint unchanged. CI 44590087950 and Railway API/Web SUCCESS. Browser E2E and real Gemini PDF inference pending.",
+  "release_notes": "## V6.5.9 — Vista documental sin Gemini ante indisponibilidad\n\nLa API ofrece una alternativa explícita y autenticada: `POST /api/v1/maira/workflow-import/source-preview`. Para PDF con texto seleccionable, reconstruye posiciones de cajas numeradas a partir de la capa de texto con `pypdf`, extrayendo etiquetas y roles por proximidad, sin ejecutar ni llamar a un modelo. Ordena las actividades por número y crea dependencias **provisionales**, sin atribuir lectura de flechas a la máquina. Mantiene la evidencia textual y la página; la revisión humana es obligatoria. No se activa contrato ni se guarda el PDF. El usuario elige `Extraer pasos sin Gemini` en el mismo formulario si la API de Gemini no responde. No añade ambientes ni dependencias.\n\n**Motivo:** 19 nov 2026: Gemini 3.6 y Gemini 3.8 agotaron ambas el timeout de 15 s en diagnóstico mínimo (Railway `/api/v1/maira/workflow-import/diagnose-models`). DNS de Google resuelve, la salida HTTPS desde Railway no muestra bloqueos explícitos; no se puede afirmar aún que el proveedor sea la única causa.\n\n**Límites:** solo detecta diagramas con p",
   "base_source_commit": "d176b0fe39017c226c499eb0a4ae6cef13b93df5",
   "visual_design_version": "1.0",
   "watch_patterns": {

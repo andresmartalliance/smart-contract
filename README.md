@@ -1,5 +1,13 @@
 # Smart Contract + MAIRA
 
+## V6.5.9 — Vista documental sin Gemini ante indisponibilidad
+
+La API ofrece una alternativa explícita y autenticada: `POST /api/v1/maira/workflow-import/source-preview`. Para PDF con texto seleccionable, reconstruye posiciones de cajas numeradas a partir de la capa de texto con `pypdf`, extrayendo etiquetas y roles por proximidad, sin ejecutar ni llamar a un modelo. Ordena las actividades por número y crea dependencias **provisionales**, sin atribuir lectura de flechas a la máquina. Mantiene la evidencia textual y la página; la revisión humana es obligatoria. No se activa contrato ni se guarda el PDF. El usuario elige `Extraer pasos sin Gemini` en el mismo formulario si la API de Gemini no responde. No añade ambientes ni dependencias.
+
+**Motivo:** 19 nov 2026: Gemini 3.6 y Gemini 3.8 agotaron ambas el timeout de 15 s en diagnóstico mínimo (Railway `/api/v1/maira/workflow-import/diagnose-models`). DNS de Google resuelve, la salida HTTPS desde Railway no muestra bloqueos explícitos; no se puede afirmar aún que el proveedor sea la única causa.
+
+**Límites:** solo detecta diagramas con pasos numéricos y texto posicionado, no gráficos escaneados; el último renglón asociado a cada caja se interpreta provisionalmente como responsable, y las conexiones no se comprueban. La vista es un rescate estructural, **no análisis de IA**. La extracción no sustituye la revisión contractual. El método es genérico, no codifica los 23 pasos de este PDF.
+
 ## V6.5.7 — Progreso circular en vivo para análisis con MAIRA
 
 - **Experiencia inspirada en NORA Interoperability:** círculo con cuatro hitos confirmados por el servidor y cronómetro real. No se simulan porcentajes del trabajo interno de Gemini ni se avanza con el reloj; mientras Gemini procesa, una órbita señala actividad sin inventar avance.

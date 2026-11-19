@@ -686,6 +686,137 @@ async def interpret_workflow_document(
     return _document_result(result, name, party_kind)
 
 
+
+_STEP_MARKER = re.compile(r"^[0-9]{1,3}(?:\.[0-9]{1,2})?$")
+
+
+def _numbered_pdf_steps(data: bytes) -> list[dict[str, Any]]:
+    """Recover numbered text boxes from a vector PDF, without invoking an LLM.
+
+    PDF text positions are correlated conservatively with nearby numbered
+    markers. This is a text-only, source-first DRAFT, never verified arrows.
+    No document-specific roles, modalities or step counts are hardcoded.
+    """
+    from pypdf import PdfReader
+
+    try:
+        reader = PdfReader(io.BytesIO(data), strict=False)
+        if not 1 <= len(reader.pages) <= 12:
+            raise ValueError("Solo se admiten diagramas PDF de hasta 12 páginas para recuperación local.")
+        all_steps = []
+        for page_number, page in enumerate(reader.pages, start=1):
+            spans = []
+
+            def visitor(text, cm, tm, _font, size):
+                value = " ".join(text.split()).strip()
+                if not value or len(value) > 240 or not (6 <= size <= 26):
+                    return
+                # Apply the complete PDF current transformation matrix; a PDF
+                # may invert the vertical axis or scale text independently.
+                x = cm[0] * tm[4] + cm[2] * tm[5] + cm[4]
+                y = cm[1] * tm[4] + cm[3] * tm[5] + cm[5]
+                spans.append({"text": value, "x": x * 768 / max(float(page.mediabox.width), 1),
+                              "y": y * 576 / max(float(page.mediabox.height), 1),
+                              "size": size})
+
+            page.extract_text(visitor_text=visitor)
+            if len(spans) > 2800:
+                raise ValueError("Diagrama demasiado complejo para recuperar sus pasos sin IA.")
+            markers = [part for part in spans if _STEP_MARKER.fullmatch(part["text"])
+                       and 9 <= part["size"] <= 22]
+            if len(markers) > 120:
+                raise ValueError("Demasiadas referencias numéricas para reconocer los pasos de forma fiable.")
+            grouped: list[list[tuple[float, float, str]]] = [[] for _ in markers]
+            marker_ids = {id(marker) for marker in markers}
+            for part in spans:
+                if id(part) in marker_ids or part["size"] > 21:
+                    continue
+                options = []
+                for index, marker in enumerate(markers):
+                    delta_y = marker["y"] - part["y"]
+                    delta_x = part["x"] - marker["x"]
+                    if 0 < delta_y < 110 and abs(delta_x) < 100:
+                        options.append((abs(delta_x) + delta_y * 0.08, index, delta_y))
+                if options:
+                    _, index, distance = min(options)
+                    grouped[index].append((distance, part["x"], part["text"]))
+            for marker, items in zip(markers, grouped):
+                # Without an explicit label AND a separate responsible line,
+                # do not create a speculative contract activity.
+                if len(items) < 2:
+                    continue
+                ordered = sorted(items, key=lambda t: (round(t[0] / 3), t[1]))
+                title = " ".join(text for _, _, text in ordered[:-1]).strip()
+                role = ordered[-1][2].strip()
+                if not title or len(title) < 5 or len(role) > 130:
+                    continue
+                upper = title.upper()
+                if upper.startswith(("CORREO", "NOTIFICACI", "AVISO")):
+                    kind = "NOTIFICATION"
+                elif upper.startswith("FIRMA"):
+                    kind = "SIGNATURE"
+                elif upper.startswith("APROBACI"):
+                    kind = "APPROVAL"
+                elif upper.startswith("SOLICITUD"):
+                    kind = "DOCUMENT_REQUEST"
+                else:
+                    kind = "VALIDATION"
+                all_steps.append({
+                    "source_step": marker["text"], "label": title,
+                    "source_excerpt": title, "role": role, "kind": kind,
+                    "page": page_number, "confidence": "baja",
+                    "depends_on": None,
+                })
+        if len(all_steps) < 2:
+            raise ValueError("No se identificaron suficientes pasos numerados y responsables. Usa un PDF con texto seleccionable o revisa el diagrama manualmente.")
+        source_numbers = [part["source_step"] for part in all_steps]
+        if len(set(source_numbers)) != len(source_numbers):
+            raise ValueError("Hay pasos con numeración repetida. El borrador requiere revisión manual.")
+        all_steps.sort(key=lambda part: tuple(int(v) for v in part["source_step"].split(".")))
+        return all_steps
+    except ValueError:
+        raise
+    except Exception:
+        raise ValueError("No se pudo leer la estructura textual de este PDF. No se crearon actividades.") from None
+
+
+@router.post("/workflow-import/source-preview")
+async def local_pdf_source_preview(
+    file: UploadFile = File(...),
+    party_kind: Literal["NATURAL", "JURIDICA"] | None = Form(default=None),
+    email: str = Depends(_verify_identity),
+):
+    """Fast, no-Gemini draft from PDF text coordinates; no persistence or activation."""
+    name = PurePath((file.filename or "document").replace("\\", "/")).name[:100]
+    data = await file.read(MAX_FILE_BYTES + 1)
+    suffix, validated = _validate_file(name, data)
+    if suffix != ".pdf":
+        raise HTTPException(415, "La extracción documental sin Gemini solo admite PDF con texto seleccionable.")
+    try:
+        steps = _numbered_pdf_steps(validated)
+        proposal = _compile_source_extraction({
+            "steps": steps,
+            "questions": [
+                "Confirmar cada responsable: se recuperó por proximidad visual al texto de la actividad.",
+                "Confirmar todas las flechas y dependencias directamente en el PDF original.",
+                "Confirmar el tipo de cada actividad y su pertinencia contractual antes de aplicarla.",
+            ],
+            "observations": [
+                "Vista documental sin Gemini: se identificaron actividades numeradas mediante la capa textual del PDF.",
+                "NO es una interpretación de IA. El orden es por numeración; no se comprobaron flechas, rutas condicionales ni decisiones.",
+                "No se guardó el PDF ni se activó ningún proceso.",
+            ],
+        })
+    except ValueError as error:
+        raise HTTPException(422, str(error)[:460]) from None
+    result = _document_result(proposal, name, party_kind)
+    result["analysis_method"] = "PDF_TEXT_ONLY"
+    result["notice"] = ("Vista documental de revisión, generada sin Gemini. "
+                        "Las conexiones y responsables requieren verificación humana. "
+                        "No se guardaron archivos ni se activaron tareas.")
+    return result
+
+
 @router.post("/workflow-import/stream")
 async def interpret_workflow_document_stream(
     file: UploadFile = File(...),
