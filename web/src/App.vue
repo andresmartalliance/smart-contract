@@ -11,7 +11,7 @@ type Condition = {field:string;op:'eq'|'neq'|'gt'|'gte'|'lt'|'lte'|'in'|'exists'
 type FieldType = 'text'|'number'|'date'|'currency'|'boolean'|'select'
 type WorkField = {key:string;label:string;type:FieldType;required:boolean}
 type ExecutionMode = 'MANUAL'|'AI_ASSISTED'|'API'|'RPA'
-type WorkNode = {id:string;label:string;kind:Kind;policy:Policy;enabled:boolean;role:string|null;when?:Condition|null;config:{position?:{x:number;y:number};instructions?:string;execution_mode?:ExecutionMode;fields?:WorkField[]}}
+type WorkNode = {id:string;label:string;kind:Kind;policy:Policy;enabled:boolean;role:string|null;when?:Condition|null;config:{position?:{x:number;y:number};instructions?:string;execution_mode?:ExecutionMode;fields?:WorkField[];source_step?:string;source_excerpt?:string;source_page?:number|null;source_confidence?:string}}
 type WorkEdge = {source:string;target:string;when?:Condition|null}
 type Workflow = {key: string; name: string; modality_key: string | null; nodes: WorkNode[]; edges: WorkEdge[]; metadata: Record<string, unknown>}
 
@@ -93,6 +93,7 @@ const mairaImportError=ref('')
 const mairaImportInfo=ref('')
 const mairaSourceFile=ref<File|null>(null)
 const mairaProposal=ref<MairaProposal|null>(null)
+const mairaApplyConfirm=ref(false)
 const mairaGoogleMount=ref<HTMLElement|null>(null)
 const mairaGoogleToken=ref('')
 let mairaGoogleScript:Promise<void>|null=null
@@ -123,7 +124,7 @@ async function loadMairaImportStatus(){
  }catch(e){mairaImportStatus.value=null;mairaImportError.value=e instanceof Error?e.message:'No se pudo consultar MAIRA'}
 }
 async function initializeMairaGoogle(){
- if(!mairaImportOpen.value||!mairaImportStatus.value?.ready)return
+ if(!mairaImportOpen.value||!mairaImportStatus.value?.google_enabled)return
  await nextTick()
  if(!mairaGoogleMount.value)return
  try{
@@ -132,20 +133,20 @@ async function initializeMairaGoogle(){
   if(!client_id)throw new Error('No hay cliente Google configurado')
   const google=googleIdentity()
   if(!google)throw new Error('Google Sign-In no disponible')
-  google.initialize({client_id,callback:({credential})=>{mairaGoogleToken.value=credential;mairaImportInfo.value='Sesión Google validable. Puedes analizar el archivo seleccionado.'}})
+  google.initialize({client_id,callback:({credential})=>{mairaGoogleToken.value=credential;mairaImportInfo.value='Credencial Google recibida. El servidor validará tu cuenta cuando envíes el documento.'}})
   mairaGoogleMount.value.replaceChildren()
   google.renderButton(mairaGoogleMount.value,{type:'standard',theme:'outline',size:'large',text:'signin_with'})
  }catch(e){mairaImportError.value=e instanceof Error?e.message:'No se pudo activar Google'}
 }
 async function openMairaDocumentImport(){
  current.value='flujos';mairaOpen.value=false;mairaImportOpen.value=true
- mairaImportError.value='';mairaImportInfo.value='';mairaProposal.value=null
+ mairaImportError.value='';mairaImportInfo.value='';mairaProposal.value=null;mairaApplyConfirm.value=false
  await loadMairaImportStatus()
  await initializeMairaGoogle()
 }
 function chooseMairaSource(event:Event){
  const target=event.target as HTMLInputElement, file=target.files?.[0]||null
- mairaImportError.value='';mairaProposal.value=null
+ mairaImportError.value='';mairaProposal.value=null;mairaApplyConfirm.value=false
  if(file&&(file.size>6*1024*1024||!/\.(pdf|png|jpe?g|txt)$/i.test(file.name))){
   mairaImportError.value='Formatos PDF, imagen o TXT, hasta 6 MB.';mairaSourceFile.value=null
  }else mairaSourceFile.value=file
@@ -154,7 +155,7 @@ async function analyzeMairaDocument(){
  if(!mairaImportStatus.value?.ready){mairaImportError.value='MAIRA no tiene Google y Gemini configurados.';return}
  if(!mairaGoogleToken.value){mairaImportError.value='Inicia sesión en Google para continuar.';return}
  if(!mairaSourceFile.value){mairaImportError.value='Selecciona un documento para analizar.';return}
- mairaImportBusy.value=true;mairaImportError.value='';mairaProposal.value=null
+ mairaImportBusy.value=true;mairaImportError.value='';mairaProposal.value=null;mairaApplyConfirm.value=false
  try{
   const data=new FormData();data.append('file',mairaSourceFile.value,mairaSourceFile.value.name)
   const resp=await fetch(MAIRA_API+'/api/v1/maira/workflow-import',{method:'POST',headers:{Authorization:'Bearer '+mairaGoogleToken.value},body:data})
@@ -167,16 +168,26 @@ async function analyzeMairaDocument(){
 }
 function applyMairaProposal(){
  if(!mairaProposal.value)return
+ if(!mairaApplyConfirm.value){
+  mairaApplyConfirm.value=true
+  mairaImportInfo.value='Esta acción sustituirá el borrador actual en este navegador. Puedes exportarlo antes de continuar.'
+  return
+ }
+ const previous=definition()
  try{
   loadDefinition(mairaProposal.value.workflow)
   const valid=validateDraft()
   if(!valid)throw new Error(errors.value.slice(0,3).join('; '))
-  flowMessage.value='Propuesta MAIRA importada como borrador LOCAL. Revisa todas las etapas antes de publicar.'
+  flowMessage.value='Propuesta MAIRA importada como borrador LOCAL. Revisa las etapas y su origen antes de publicar.'
   mairaImportOpen.value=false
   mairaImportInfo.value=''
- }catch(e){mairaImportError.value=e instanceof Error?e.message:'No se pudo aplicar la propuesta'}
+ }catch(e){
+  loadDefinition(previous)
+  mairaImportError.value=e instanceof Error?e.message:'No se pudo aplicar la propuesta'
+  mairaApplyConfirm.value=false
+ }
 }
-watch(mairaImportOpen,open=>{if(!open){mairaSourceFile.value=null;mairaGoogleToken.value='';mairaProposal.value=null}})
+watch(mairaImportOpen,open=>{if(!open){mairaSourceFile.value=null;mairaGoogleToken.value='';mairaProposal.value=null;mairaApplyConfirm.value=false}})
 
 const nodes = shallowRef<Node[]>([])
 const edges = shallowRef<Edge[]>([])
@@ -461,7 +472,11 @@ function loadDefinition(parsed:Partial<Workflow>){
    const y=typeof position?.y==='number'&&Number.isFinite(position.y)?position.y:i*130
    const n=nodeInfo(raw.id,raw.kind,raw.label,x,y,raw.role||null,raw.policy);if(!raw.enabled)n.class='node-disabled'
    const mode=raw.config?.execution_mode
-   n.data={label:raw.label,kind:raw.kind,role:raw.role||null,policy:raw.policy,enabled:raw.enabled,when:safeCondition(raw.when),config:{position:{x,y},instructions:String(raw.config?.instructions||'').slice(0,5000),execution_mode:executionModes.some(x=>x.value===mode)?mode:'MANUAL',fields}}
+   n.data={label:raw.label,kind:raw.kind,role:raw.role||null,policy:raw.policy,enabled:raw.enabled,when:safeCondition(raw.when),config:{position:{x,y},instructions:String(raw.config?.instructions||'').slice(0,5000),execution_mode:executionModes.some(x=>x.value===mode)?mode:'MANUAL',fields,
+     source_step:typeof raw.config?.source_step==='string'?raw.config.source_step.slice(0,40):undefined,
+     source_excerpt:typeof raw.config?.source_excerpt==='string'?raw.config.source_excerpt.slice(0,650):undefined,
+     source_page:typeof raw.config?.source_page==='number'?raw.config.source_page:null,
+     source_confidence:typeof raw.config?.source_confidence==='string'?raw.config.source_confidence.slice(0,25):undefined}}
    return n
  })
  const parsedEdges:Edge[]=parsed.edges.map((e,i)=>{
@@ -605,7 +620,7 @@ function simulateDraft(){
                 <strong>{{!mairaImportStatus.google_enabled?'Google Sign-In':''}}{{!mairaImportStatus.google_enabled&&!mairaImportStatus.gemini_enabled?' y ':''}}{{!mairaImportStatus.gemini_enabled?'Gemini':''}}</strong>
                 en Smart Contract. No se permite enviar archivos sin autorización.
               </div>
-              <template v-if="mairaImportStatus?.ready">
+              <template v-if="mairaImportStatus?.google_enabled">
                 <div ref="mairaGoogleMount" class="maira-google-login"></div>
                 <p class="maira-import-fine">{{mairaGoogleToken?'Identidad Google recibida; será verificada por el servidor.':'Ingresa con una cuenta habilitada para la prueba.'}}</p>
               </template>
@@ -629,7 +644,8 @@ function simulateDraft(){
                 </div>
                 <div v-if="mairaProposal.questions.length"><strong>Dudas que requieren revisión</strong><p v-for="(question,i) in mairaProposal.questions" :key="i">• {{question}}</p></div>
                 <div v-if="mairaProposal.observations.length"><strong>Observaciones</strong><p v-for="(item,i) in mairaProposal.observations" :key="i">• {{item}}</p></div>
-                <button type="button" class="primary-button" @click="applyMairaProposal">Aplicar propuesta al diseñador</button>
+                <button type="button" class="primary-button" @click="applyMairaProposal">{{mairaApplyConfirm?'Confirmar reemplazo del borrador':'Aplicar propuesta al diseñador'}}</button>
+                <p class="maira-import-fine">Las etapas originales conservarán su número y cita en Propiedades. Antes de aplicar puedes usar «Exportar JSON» para respaldar el borrador actual.</p>
               </template>
               <p v-else class="maira-import-fine">MAIRA mostrará aquí el mapeo de pasos originales a etapas, dependencias, dudas y observaciones. Nada se aplica sin tu revisión.</p>
             </div>
@@ -662,6 +678,11 @@ function simulateDraft(){
             <div class="panel-title"><strong>Propiedades</strong><span class="inspector-icon">⚙</span></div>
             <template v-if="selectedData">
               <p class="panel-caption">{{stageLabel}}</p>
+              <div v-if="selectedData.config?.source_step" class="maira-source-evidence">
+                <strong>Origen del documento · Paso {{selectedData.config.source_step}}</strong>
+                <p>{{selectedData.config.source_excerpt||'Sin cita disponible'}}</p>
+                <span>Fuente MAIRA{{selectedData.config.source_page?' · Página '+selectedData.config.source_page:''}}{{selectedData.config.source_confidence?' · Confianza '+selectedData.config.source_confidence:''}} · Revisión humana requerida</span>
+              </div>
               <label class="inspector-field">Nombre de la etapa<input :value="selectedData.label" maxlength="200" @input="editNode('label',($event.target as HTMLInputElement).value)" /></label>
               <label class="inspector-field">Tipo de componente<input :value="blocks.find(b=>b.kind===selectedData?.kind)?.title||selectedData.kind" disabled /></label>
               <label class="inspector-field">Responsable<input list="roles-contrato" :value="selectedData.role||''" placeholder="Selecciona o escribe otro rol" maxlength="120" @input="editNode('role',($event.target as HTMLInputElement).value)"/><datalist id="roles-contrato"><option v-for="role in roles" :key="role" :value="role" /></datalist></label>

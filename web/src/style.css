@@ -312,3 +312,9 @@ nav button.active .nav-icon{stroke:#236ed3;transform:scale(1.03)}
 .maira-import-step{display:flex;align-items:flex-start;gap:12px;padding:9px 12px;border-bottom:1px solid #edf2f7}.maira-import-step strong{font-size:12px;color:#174f7d;min-width:36px}.maira-import-step span{font-size:11px;color:#38556e}.maira-import-step small{display:block;color:#7b94a8;margin-top:3px}
 @media(max-width:1000px){.maira-import-grid{grid-template-columns:1fr}}
 @media(max-width:650px){.maira-import-head{flex-direction:column}.maira-import-surface{padding:13px}.maira-import-card{padding:14px}}
+
+/* MAIRA V6.1 — evidence carried to the edited workflow */
+.maira-source-evidence{padding:12px 14px;background:#eef6ff;border:1px solid #cddff1;border-radius:12px;margin-bottom:12px}
+.maira-source-evidence strong{font-size:12px;color:#1c5788;line-height:1.45}
+.maira-source-evidence p{font-size:12px;line-height:1.6;color:#365d7e;margin:7px 0}
+.maira-source-evidence span{font-size:10px;color:#658ca8}

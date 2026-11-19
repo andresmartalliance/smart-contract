@@ -69,3 +69,34 @@ def test_import_route_not_public_when_google_not_configured(testing, monkeypatch
     monkeypatch.delenv("SMART_GOOGLE_CLIENT_ID",raising=False)
     response=client.post('/api/v1/maira/workflow-import',files={'file':('flow.pdf',b'%PDF-1.4 fake','application/pdf')})
     assert response.status_code==503
+
+def test_source_mapping_provenance_attached_to_workflow_nodes():
+    proposal = _parse_proposal(valid_proposal())
+    node = next(n for n in proposal.workflow.nodes if n.id == "uno")
+    assert node.config["source_step"] == "2.1"
+    assert node.config["source_excerpt"] == "CORREO CON DOCUMENTOS"
+    assert node.config["source_page"] == 1
+    assert node.config["source_confidence"] == "alta"
+
+
+def test_conflicting_source_mapping_is_rejected():
+    raw = valid_proposal()
+    raw["workflow"]["nodes"][1]["config"] = {"source_step":"4.5"}
+    with pytest.raises(ValueError,match="evidence conflicts"):
+        _parse_proposal(raw)
+
+
+def test_duplicate_source_step_mapping_is_rejected():
+    raw = valid_proposal()
+    raw["workflow"]["nodes"].insert(2,{"id":"dos","kind":"NOTIFICATION","label":"Otro correo"})
+    raw["workflow"]["edges"]=[{"source":"i","target":"uno"},{"source":"uno","target":"dos"},{"source":"dos","target":"f"}]
+    raw["source_map"].append({"source_step":"2.1","node_id":"dos","source_excerpt":"OTRO CORREO"})
+    with pytest.raises(ValueError,match="repeated a source step"):
+        _parse_proposal(raw)
+
+
+def test_node_cannot_map_to_two_different_steps():
+    raw = valid_proposal()
+    raw["source_map"].append({"source_step":"2.2","node_id":"uno","source_excerpt":"AVISO AUTOMATICO"})
+    with pytest.raises(ValueError,match="one node to multiple"):
+        _parse_proposal(raw)

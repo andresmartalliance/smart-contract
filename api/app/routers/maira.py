@@ -177,8 +177,24 @@ def _parse_proposal(payload: Any) -> Proposal:
     unreferenced = [x.id for x in workflow.nodes if x.kind not in ("START", "END") and x.id not in mapped_ids]
     if unreferenced:
         raise ValueError("MAIRA generated unmapped steps: " + ", ".join(unreferenced[:8]))
-    if len({(x.source_step, x.node_id) for x in proposed.source_map}) != len(proposed.source_map):
-        raise ValueError("MAIRA repeated source mapping entries")
+    # One auditable source step maps to one workflow stage; fail closed on ambiguity.
+    source_steps = [x.source_step.strip() for x in proposed.source_map]
+    mapped_node_ids = [x.node_id for x in proposed.source_map]
+    if len(source_steps) != len(set(source_steps)):
+        raise ValueError("MAIRA repeated a source step in multiple nodes")
+    if len(mapped_node_ids) != len(set(mapped_node_ids)):
+        raise ValueError("MAIRA mapped one node to multiple source steps")
+    for source in proposed.source_map:
+        node = by_id[source.node_id]
+        original_key = node.config.get("source_step")
+        if original_key is not None and original_key != source.source_step:
+            raise ValueError("MAIRA source-step evidence conflicts with node metadata")
+        node.config.update({
+            "source_step": source.source_step,
+            "source_excerpt": source.source_excerpt,
+            "source_page": source.page,
+            "source_confidence": source.confidence,
+        })
     # Compose a clear layout; no model-controlled browser code or external coordinates.
     levels: dict[str, int] = {}
     for node_id in ordering:
