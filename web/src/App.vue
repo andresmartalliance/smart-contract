@@ -1041,6 +1041,34 @@ function simulateDraft(){
         <div class="status-panel"><div><strong>Workflow Studio ya disponible</strong><p>Mientras MAIRA se integra, puedes diseñar y simular procesos manualmente.</p></div><button class="ghost-button" @click="current='flujos'">Abrir Studio ↗</button></div>
       </section>
 
+      <section v-else-if="current==='personas'&&hasInstitution" class="contract-space">
+        <div class="contract-hero"><div><span class="eyebrow">SMART CONTRACT · DIRECTORIO</span><h2>Personas y empresas</h2><p>Registra contratistas, proveedores y prestadores una sola vez. Los contratos y las plantillas se vinculan después.</p></div><button class="ghost-button" @click="refreshPortal">Actualizar</button></div>
+        <div class="pilot-notice">Registrar una persona o empresa no crea una cuenta Google ni concede acceso. Los permisos se habilitan por expediente, al activar un proceso.</div>
+        <div v-if="portalError" class="pilot-error" role="alert">{{portalError}}</div><div v-if="portalMessage" class="pilot-success" role="status">{{portalMessage}}</div>
+        <div class="pilot-panel">
+          <h3>Registrar persona o empresa</h3><p>No necesitas una plantilla ni un expediente para registrar a alguien.</p>
+          <div class="pilot-form-grid">
+            <label>Nombre o razón social<input v-model="partyName" maxlength="250" placeholder="Ej. Hospital de demostración" /></label>
+            <label>Tipo de persona<select v-model="partyKind"><option value="JURIDICA">Persona jurídica</option><option value="NATURAL">Persona natural</option></select></label>
+            <label>Correo de contacto <span class="pilot-optional">opcional por ahora</span><input v-model="partyEmail" type="email" maxlength="255" placeholder="contacto@ejemplo.com" /></label>
+          </div>
+          <div class="pilot-actions"><button class="primary-button" :disabled="portalPartySaving||partyName.trim().length<2" @click="registerParty">Guardar registro</button></div>
+          <p class="pilot-muted">Necesitarás un correo autorizado para habilitar un workflow e invitar al usuario. Utiliza exclusivamente datos ficticios en el piloto.</p>
+        </div>
+        <div class="pilot-panel">
+          <div class="pilot-directory-header"><h3>Registros <span class="pilot-count">{{partyRecords.length}}</span></h3><input v-model="partySearch" type="search" placeholder="Buscar persona o empresa" aria-label="Buscar persona o empresa"/></div>
+          <div v-if="!filteredParties.length" class="pilot-empty">{{partyRecords.length?'No hay resultados para esta búsqueda.':'Todavía no hay personas o empresas registradas.'}}</div>
+          <div v-for="party in filteredParties" :key="party.id" class="pilot-party-item">
+            <div class="pilot-party-meta"><strong>{{party.name}}</strong><small>{{party.kind==='JURIDICA'?'Persona jurídica':'Persona natural'}} · {{party.email||'Correo pendiente'}} · {{party.case_count}} expediente(s)</small></div>
+            <div class="pilot-actions"><button class="ghost-button" @click="editingPartyId=party.id;editingPartyEmail=party.email||''">Editar contacto</button><button class="primary-button" @click="selectPartyForContract(party)">Crear expediente</button></div>
+            <div v-if="editingPartyId===party.id" class="pilot-edit-contact">
+              <label>Correo de contacto<input v-model="editingPartyEmail" type="email" maxlength="255" placeholder="persona@ejemplo.com"/></label>
+              <button class="primary-button" :disabled="portalPartySaving" @click="savePartyEmail(party.id)">Guardar contacto</button>
+              <button class="ghost-button" @click="editingPartyId=''">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      </section>
       <section v-else-if="current==='contrataciones'&&(hasInstitution||portalSession?.can_setup)" class="contract-space">
         <div class="contract-hero"><div><span class="eyebrow">SMART CONTRACT · PILOTO</span><h2>Gestión Contractual</h2><p>Publica una plantilla de prueba, invita a una persona o empresa y gestiona las actividades desde aquí.</p></div><button class="ghost-button" @click="refreshPortal">Actualizar</button></div>
         <div class="pilot-notice">Ambiente de evaluación con datos sintéticos. No admite documentos confidenciales, firma válida ni contratación productiva.</div>
@@ -1053,23 +1081,26 @@ function simulateDraft(){
         </div>
         <template v-else>
           <div class="pilot-panel">
-            <h3>Nueva contratación</h3><p>Cada contratación utiliza una versión publicada de un workflow. Las tareas se asignan según el ejecutor configurado en cada etapa.</p>
+            <h3>Nueva contratación</h3><p>Selecciona una persona o empresa registrada. Puedes abrir un expediente y asociar la plantilla cuando esté lista.</p>
+            <div v-if="!partyRecords.length" class="pilot-empty">Primero registra una persona natural o jurídica. <button class="primary-button" @click="current='personas'">Registrar persona o empresa</button></div>
             <div class="pilot-form-grid">
-              <label>Plantilla publicada<select v-model="selectedWorkflowId"><option value="">Selecciona plantilla</option><option v-for="tpl in templates" :key="tpl.id" :value="tpl.id">{{tpl.name}} · v{{tpl.version}}</option></select></label>
-              <label>Nombre del expediente<input v-model="newCaseTitle" maxlength="250" placeholder="Contrato de prueba"/></label>
-              <label>Nombre de la persona o empresa<input v-model="newPartyName" maxlength="250" placeholder="Contratista ficticio"/></label>
-              <label>Correo invitado<input v-model="newPartyEmail" type="email" placeholder="segundo-correo@gmail.com"/></label>
-              <label>Tipo<select v-model="newPartyKind"><option value="JURIDICA">Persona jurídica</option><option value="NATURAL">Persona natural</option></select></label>
+              <label>Persona o empresa registrada<select v-model="selectedPartyId"><option value="">Selecciona un registro</option><option v-for="p in partyRecords" :key="p.id" :value="p.id">{{p.name}} · {{p.kind==='JURIDICA'?'Jurídica':'Natural'}}</option></select></label>
+              <label>Nombre del expediente<input v-model="newCaseTitle" maxlength="250" placeholder="Ej. Contratación de servicios"/></label>
+              <label>Plantilla <span class="pilot-optional">opcional</span><select v-model="selectedWorkflowId"><option value="">Sin plantilla: asociar más adelante</option><option v-for="tpl in templates" :key="tpl.id" :value="tpl.id">{{tpl.name}} · versión {{tpl.version}}</option></select></label>
             </div>
-            <div class="pilot-actions"><button class="primary-button" :disabled="portalBusy||!selectedWorkflowId||!newCaseTitle||!newPartyName||!newPartyEmail" @click="createPilotCase">Crear expediente y habilitar acceso</button><button class="ghost-button" @click="current='flujos'">Diseñar plantilla</button></div>
-            <p v-if="!templates.length" class="pilot-muted">No hay plantillas publicadas. Entra a Flujos, asigna quién ejecuta cada etapa y pulsa «Publicar plantilla de prueba».</p>
+            <p v-if="selectedParty" class="pilot-muted">{{selectedParty.name}} · {{selectedParty.email||'Sin correo de contacto'}}. {{selectedWorkflowId?'El proceso se activa con esta plantilla y necesita correo de contacto.':'El expediente permanecerá en borrador hasta asociar una plantilla.'}}</p>
+            <div class="pilot-actions">
+              <button class="primary-button" :disabled="portalBusy||!selectedPartyId||newCaseTitle.trim().length<3||(!!selectedWorkflowId&&!selectedParty?.email)" @click="createPilotCase">{{selectedWorkflowId?'Crear expediente e iniciar proceso':'Crear expediente sin plantilla'}}</button>
+              <button class="ghost-button" @click="current='personas'">Personas y empresas</button><button class="ghost-button" @click="current='flujos'">Diseñar plantilla</button>
+            </div>
+            <p v-if="!templates.length" class="pilot-muted">No hay plantillas publicadas. Esto no impide registrar personas ni abrir expedientes en borrador.</p>
           </div>
           <div class="pilot-panel">
             <h3>Expedientes de la institución <span class="pilot-count">{{internalCases.length}}</span></h3>
             <div v-if="!internalCases.length" class="pilot-empty">Aún no existen expedientes. Crea uno con información ficticia.</div>
             <button v-for="caseItem in internalCases" :key="caseItem.id" class="pilot-case-row" @click="openCase(caseItem.id)">
               <span><strong>{{caseItem.title}}</strong><small>{{caseItem.party_name}} · {{caseItem.party_email}}</small></span>
-              <span>{{caseItem.completed}}/{{caseItem.total}} · {{caseItem.state==='COMPLETED'?'Finalizado':'En trámite'}}</span>
+              <span>{{caseItem.workflow_version_id?caseItem.completed+'/'+caseItem.total:'Sin plantilla'}} · {{caseItem.state==='DRAFT'?'Borrador':caseItem.state==='COMPLETED'?'Finalizado':'En trámite'}}</span>
             </button>
           </div>
         </template>
@@ -1084,7 +1115,7 @@ function simulateDraft(){
           <p v-if="!myCases.length" class="pilot-muted">No tienes invitaciones asignadas. Deben invitarte desde Gestión Contractual usando exactamente este correo: {{loginEmail}}.</p>
           <button v-for="caseItem in myCases" :key="caseItem.id" class="pilot-case-row" @click="openCase(caseItem.id)">
             <span><strong>{{caseItem.title}}</strong><small>Contratación: {{caseItem.party_name}}</small></span>
-            <span>{{caseItem.completed}}/{{caseItem.total}} · {{caseItem.state==='COMPLETED'?'Finalizado':'En trámite'}}</span>
+            <span>{{caseItem.workflow_version_id?caseItem.completed+'/'+caseItem.total:'Sin plantilla'}} · {{caseItem.state==='DRAFT'?'Borrador':caseItem.state==='COMPLETED'?'Finalizado':'En trámite'}}</span>
           </button>
         </div>
       </section>
@@ -1102,7 +1133,18 @@ function simulateDraft(){
       <section v-if="activeCase&&(current==='contrataciones'||current==='prestadores')" class="contract-case-detail">
         <div class="pilot-detail-top"><div><span class="eyebrow">EXPEDIENTE DE PRUEBA · {{activeCase.side}}</span><h3>{{activeCase.case.title}}</h3><p>{{activeCase.case.party_name}} · {{activeCase.case.completed}} de {{activeCase.case.total}} actividades completadas</p></div><button class="ghost-button" @click="activeCase=null">Cerrar detalle</button></div>
         <div class="pilot-progress"><div :style="{width:activeCase.case.total?Math.round(100*activeCase.case.completed/activeCase.case.total)+'%':'0%'}"></div></div>
-        <button v-if="activeCase.side==='CONTRATANTE'" class="ghost-button" @click="inviteLink">Copiar enlace para el contratista</button>
+        <div v-if="activeCase.side==='CONTRATANTE'&&!activeCase.case.workflow_version_id" class="pilot-draft-attach">
+          <strong>Expediente en borrador · Sin plantilla</strong>
+          <p>La persona o empresa ya está registrada, pero todavía no hay tareas ni acceso al expediente. Asocia un proceso cuando lo tengas listo.</p>
+          <div class="pilot-form-grid"><label>Plantilla publicada<select v-model="draftWorkflowId"><option value="">Selecciona una plantilla</option><option v-for="tpl in templates" :key="tpl.id" :value="tpl.id">{{tpl.name}} · versión {{tpl.version}}</option></select></label></div>
+          <div class="pilot-actions">
+            <button class="primary-button" :disabled="portalBusy||!draftWorkflowId||!activeCase.case.party_email" @click="attachWorkflowToCase">Asociar plantilla e iniciar proceso</button>
+            <button class="ghost-button" @click="current='flujos'">Crear nueva plantilla</button>
+            <button v-if="!activeCase.case.party_email" class="ghost-button" @click="current='personas'">Completar correo</button>
+          </div>
+          <p v-if="!templates.length" class="pilot-muted">Publica una nueva plantilla desde Flujos y vuelve aquí para asociarla.</p>
+        </div>
+        <button v-if="activeCase.side==='CONTRATANTE'&&activeCase.case.invited" class="ghost-button" @click="inviteLink">Copiar enlace para el contratista</button>
         <div class="pilot-task-list">
           <div v-for="task in activeCase.tasks" :key="task.id" class="pilot-task">
             <div class="pilot-task-head"><strong>{{task.label}}</strong><span class="pilot-task-status">{{task.state==='COMPLETED'?'Completada':task.state==='PENDING'?'Pendiente':task.state==='RETURNED'?'Devuelta':'En espera'}}</span></div>
