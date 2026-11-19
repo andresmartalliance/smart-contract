@@ -1096,10 +1096,10 @@ function simulateDraft(){
             <button class="dashboard-link" @click="current='flujos'">Continuar configurando <span aria-hidden="true">↗</span></button>
           </div>
           <div class="dashboard-panel">
-            <div class="dashboard-panel-head"><div><h3>MAIRA Intelligence</h3><p class="panel-lead">Tu futura asistente para la contratación.</p></div><span class="status-pill">PRÓXIMA INTEGRACIÓN</span></div>
+            <div class="dashboard-panel-head"><div><h3>Maira Intelligence</h3><p class="panel-lead">Asistente de inteligencia contractual.</p></div><span class="status-pill">{{mairaImportStatus?.ready?'GEMINI CONFIGURADO':mairaImportStatus?'CONFIGURACIÓN PENDIENTE':'VERIFICANDO'}}</span></div>
             <div class="intelligence-status"><div class="intelligence-glyph">✧</div><div><strong>MAIRA · Contract Intelligence Agent</strong><small>Multi-tenant AI for Intelligent Review &amp; Agreements</small></div></div>
-            <p class="status-line">MAIRA todavía no está conectada a Gemini. El estudio visual está disponible; la generación de flujos con IA requiere el siguiente hito funcional.</p>
-            <button class="dashboard-link" @click="current='maira'">Explorar el diseño de MAIRA <span aria-hidden="true">↗</span></button>
+            <p class="status-line">{{mairaImportStatus?.ready?'Gemini está configurado en Smart Contract. Falta comprobar la primera interpretación real de un documento.':'La interpretación de documentos requiere configurar Gemini en la API. Puedes continuar diseñando flujos manualmente.'}}</p>
+            <button class="dashboard-link" @click="current=mairaImportStatus?.ready?'personas':'maira'">{{mairaImportStatus?.ready?'Crear proceso con Maira desde Personas y empresas':'Revisar Maira'}} <span aria-hidden="true">↗</span></button>
           </div>
         </div>
       </section>
@@ -1119,17 +1119,17 @@ function simulateDraft(){
             <h2>MAIRA</h2>
             <p class="maira-full-name">Multi-tenant AI for Intelligent Review &amp; Agreements</p>
             <p class="maira-es-meaning">Inteligencia artificial multiempresa para revisión inteligente y acuerdos contractuales.</p>
-            <p class="maira-introduction">MAIRA está diseñada para interpretar necesidades, revisar documentación y proponer flujos configurables. La conexión con Gemini todavía no está habilitada.</p>
-            <span class="status-pill">INTEGRACIÓN CON GEMINI PENDIENTE</span>
+            <p class="maira-introduction">{{mairaImportStatus?.ready?'Maira puede recibir documentos para generar propuestas de workflows. La primera solicitud a Gemini sigue pendiente de verificación.':'Maira prepara propuestas de workflows a partir de documentos. Para analizarlos, primero debe habilitarse Gemini en la API.'}}</p>
+            <span class="status-pill">{{mairaImportStatus?.ready?'GEMINI CONFIGURADO · PENDIENTE PRUEBA':mairaImportStatus?'GEMINI NO CONFIGURADO':'COMPROBANDO CONFIGURACIÓN'}}</span>
           </div>
         </div>
-        <div class="overview-heading"><div><h3>Capacidades de MAIRA</h3><p>Funciones previstas, no disponibles todavía para ejecutar sobre expedientes.</p></div></div>
+        <div class="overview-heading"><div><h3>Capacidades de Maira</h3><p>El análisis documental propone flujos para revisión humana; no ejecuta contratos ni firmas.</p></div></div>
         <div class="capability-grid">
           <div v-for="(cap,i) in [{name:'Comprender',desc:'Interpretar manuales, necesidades y documentos.'},{name:'Configurar',desc:'Proponer bloques, campos y reglas de procesos.'},{name:'Analizar',desc:'Identificar inconsistencias y controles pendientes.'},{name:'Acompañar',desc:'Guiar la ejecución contractual paso a paso.'}]" :key="cap.name" class="capability-card">
             <span class="number">0{{i+1}}</span><h3>{{cap.name}}</h3><p>{{cap.desc}}</p>
           </div>
         </div>
-        <div class="status-panel"><div><strong>Workflow Studio ya disponible</strong><p>Mientras MAIRA se integra, puedes diseñar y simular procesos manualmente.</p></div><button class="ghost-button" @click="current='flujos'">Abrir Studio ↗</button></div>
+        <div class="status-panel"><div><strong>{{mairaImportStatus?.ready?'Preparado para analizar el primer documento':'Workflow Studio disponible'}}</strong><p>{{mairaImportStatus?.ready?'Selecciona Hospital Smart en Personas y empresas y pulsa Crear proceso con Maira. El resultado requerirá validación antes de publicar.':'Puedes diseñar flujos manualmente mientras se configura Gemini.'}}</p></div><div class="pilot-actions"><button class="ghost-button" @click="loadMairaImportStatus">Actualizar estado</button><button class="ghost-button" @click="current=mairaImportStatus?.ready?'personas':'flujos'">{{mairaImportStatus?.ready?'Ir a Personas y empresas':'Abrir Studio'}} ↗</button></div></div>
       </section>
 
       <section v-else-if="current==='personas'&&hasInstitution" class="contract-space">
