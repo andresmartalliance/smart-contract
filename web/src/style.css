@@ -336,3 +336,37 @@ nav button.active .nav-icon{stroke:#236ed3;transform:scale(1.03)}
 .logout-button{background:#fff;border:1px solid #d9e3f1;border-radius:10px;color:#526b85;font-size:12px;font-weight:650;padding:8px 13px}
 .logout-button:hover{background:#eef5ff}
 @media(max-width:650px){.login-panel{padding:40px 24px;width:min(100%,420px);min-height:320px}.login-panel h1{font-size:26px}.login-logo{width:150px}}
+
+/* V6.3 - dual portal pilot. Uses established Smart Contract design tokens. */
+.contract-space{display:grid;gap:19px;max-width:1320px}
+.contract-hero{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:27px 30px;background:linear-gradient(114deg,#10223f,#153968 70%,#164578);border-radius:22px;border:1px solid #264e82;color:white}
+.contract-hero .eyebrow{font-size:11px;letter-spacing:.14em;color:#b3dbff}
+.contract-hero h2{color:#fff;font-size:clamp(24px,2vw,33px);margin:7px 0 8px;letter-spacing:-.03em}
+.contract-hero p{font-size:13px;line-height:1.6;color:#d0e0f3;max-width:740px}
+.contract-hero .ghost-button{background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.2);color:#fff}
+.pilot-notice{font-size:12px;line-height:1.5;color:#5a728d;background:#edf5ff;border:1px solid #d3e3f7;border-radius:12px;padding:12px 16px}
+.pilot-error,.pilot-success{font-size:12px;padding:12px 16px;border-radius:12px;line-height:1.6}
+.pilot-error{border:1px solid #ffcdca;color:#973c39;background:#fff1f0}
+.pilot-success{border:1px solid #c4e3d7;color:#216b58;background:#f0fbf6}
+.pilot-panel{padding:26px 30px;border-radius:21px;background:#fff;border:1px solid #dfe8f3;box-shadow:0 6px 22px rgba(32,74,123,.035);display:grid;gap:14px}
+.pilot-panel h3{font-size:19px;color:#1a3557;margin:0;letter-spacing:-.025em}
+.pilot-panel p{font-size:12px;color:#6c8299;line-height:1.6;margin:0}
+.pilot-panel label,.pilot-field label{display:grid;gap:7px;font-size:12px;font-weight:600;color:#345574}
+.pilot-panel input,.pilot-panel select,.pilot-field input,.pilot-field textarea,.pilot-return input{min-width:0;width:100%;background:white;border:1px solid #d6e3f0;border-radius:10px;padding:11px 12px;font-size:13px;color:#1e405e}
+.pilot-panel input:focus,.pilot-panel select:focus,.pilot-field input:focus,.pilot-field textarea:focus{outline:2px solid #b3d5fc;outline-offset:1px}
+.pilot-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.pilot-actions{display:flex;flex-wrap:wrap;gap:10px}
+.pilot-muted{font-size:12px!important;color:#7a8fa4!important;line-height:1.55}
+.pilot-count{font-size:12px;font-weight:600;color:#3674b0;border:1px solid #d8e7f5;background:#eff6ff;padding:4px 8px;border-radius:20px}
+.pilot-empty{border:1px dashed #d4e1ef;border-radius:12px;padding:22px;color:#748aa1;font-size:13px}
+.pilot-case-row{width:100%;border:1px solid #e2ebf4;border-radius:13px;background:#fafcfe;display:flex;justify-content:space-between;gap:15px;align-items:center;text-align:left;padding:15px 17px;color:#315370;font-size:12px}
+.pilot-case-row:hover{background:#f1f7ff;border-color:#bdd4f0}
+.pilot-case-row span:first-child{display:grid;gap:4px}.pilot-case-row strong{color:#244660;font-size:13px}.pilot-case-row small{color:#8298ac;font-size:11px}
+.contract-case-detail{margin-top:20px;max-width:1320px;background:#fff;border:1px solid #dfe8f3;border-radius:21px;padding:25px 30px;display:grid;gap:17px}
+.pilot-detail-top{display:flex;align-items:center;justify-content:space-between;gap:12px}.pilot-detail-top h3{margin:7px 0;font-size:19px;color:#22415f}.pilot-detail-top p{color:#72879c;font-size:12px}.pilot-detail-top .eyebrow{font-size:10px}
+.pilot-progress{height:8px;border-radius:10px;background:#e8f1fb;overflow:hidden}.pilot-progress>div{height:100%;background:#377ec8;border-radius:10px}
+.pilot-task-list{display:grid;gap:13px}.pilot-task{border:1px solid #dce9f5;background:#fcfdff;border-radius:15px;padding:17px;display:grid;gap:12px}
+.pilot-task-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.pilot-task-head strong{color:#264562;font-size:14px}.pilot-task-status{font-size:11px;color:#2b659b;background:#e9f3ff;padding:5px 10px;border-radius:15px}
+.pilot-task-note{font-size:12px;color:#7a5a41;background:#fff7ee;padding:10px 12px;border:1px solid #f7e4cf;border-radius:10px}
+.pilot-field{max-width:640px}.pilot-return{display:flex;gap:11px;flex-wrap:wrap}.pilot-return input{flex:1;min-width:170px}
+@media(max-width:770px){.contract-hero,.pilot-detail-top{flex-direction:column;align-items:flex-start}.pilot-form-grid{grid-template-columns:1fr}.pilot-panel,.contract-case-detail{padding:18px}.pilot-case-row{flex-direction:column;align-items:flex-start}}

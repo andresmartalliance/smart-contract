@@ -27,7 +27,7 @@ const menu: { key: Screen; title: string; glyph: string }[] = [
   { key:'configuracion',title:'Configuración',glyph:'⚙' }
 ]
 const screenTitle = computed(() => menu.find(m => m.key === current.value)?.title ?? '')
-const visibleMenu = computed(() => hasInstitution.value ? menu : menu.filter(m=>m.key==='prestadores'||m.key==='maira'))
+const visibleMenu = computed(() => hasInstitution.value || portalSession.value?.can_setup ? menu : menu.filter(m=>m.key==='prestadores'||m.key==='maira'))
 const iconPaths: Record<Screen,string[]> = {
   resumen: ['M3 3h8v8H3z','M13 3h8v8h-8z','M3 13h8v8H3z','M13 13h8v8h-8z'],
   contrataciones: ['M8 3h9l4 4v14H8z','M17 3v5h5','M11 12h7','M11 16h7','M4 7v14'],
@@ -206,12 +206,9 @@ async function returnPortalTask(task:ContractTaskView){
  finally{portalBusy.value=false}
 }
 function inviteLink(){
- GenUI_copy_stub()
-}
-function GenUI_copy_stub(){
  const url=window.location.origin+'/?view=mi-contratacion'
- void navigator.clipboard?.writeText(url)
- portalMessage.value='Enlace de acceso copiado. El invitado debe entrar con el correo registrado y, en Google Testing, estar autorizado como usuario de prueba.'
+ if(!navigator.clipboard){portalMessage.value='Comparte esta dirección con el invitado: '+url;return}
+ void navigator.clipboard.writeText(url).then(()=>{portalMessage.value='Enlace copiado. El invitado debe usar el correo registrado en Google Testing.'}).catch(()=>{portalMessage.value='Comparte esta dirección con el invitado: '+url})
 }
 
 const loginToken=ref('')
