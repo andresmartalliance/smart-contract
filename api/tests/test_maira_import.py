@@ -139,3 +139,67 @@ def test_persona_juridica_aspirante_mismatch_is_flagged(testing, monkeypatch):
         assert resp.json()["mapped_steps"]==1
     finally:
         app.dependency_overrides.pop(maira._verify_identity,None)
+
+
+@pytest.mark.parametrize("status,payload,expected", [
+    (400, {"error":{"status":"INVALID_ARGUMENT","message":"invalid parameter"}},"parámetros"),
+    (400, {"error":{"status":"INVALID_ARGUMENT","message":"API key not valid: SECRET_NOT_FOR_USERS"}},"clave API"),
+    (403, {"error":{"status":"PERMISSION_DENIED","message":"private details"}},"negó acceso"),
+    (404, {"error":{"status":"NOT_FOUND","message":"private details"}},"modelo"),
+    (429, {"error":{"status":"RESOURCE_EXHAUSTED","message":"billing details"}},"cuota"),
+    (503, {"error":{"status":"UNAVAILABLE","message":"private details"}},"indisponible")
+])
+def test_provider_error_classifies_without_exposing_upstream(status,payload,expected):
+    from app.routers.maira import _provider_failure
+    exception=_provider_failure(status,payload)
+    assert exception.status_code==502
+    assert expected in exception.detail
+    assert "SECRET_NOT_FOR_USERS" not in exception.detail
+    assert "private details" not in exception.detail
+
+def test_gemini_connection_check_is_authenticated(testing,monkeypatch):
+    from app.main import app
+    from app.routers import maira
+    client,_=testing
+    monkeypatch.setenv("SMART_GEMINI_API_KEY","dummy")
+    monkeypatch.setenv("SMART_GOOGLE_CLIENT_ID","mock-client")
+    monkeypatch.setenv("SMART_MAIRA_ALLOWED_EMAILS","allowed@example.com")
+    no_token=client.post("/api/v1/maira/workflow-import/check-connection")
+    assert no_token.status_code==401
+    app.dependency_overrides[maira._verify_identity]=lambda:"allowed@example.com"
+    captured={}
+    async def fake_request(payload,api_key,model,timeout):
+        captured["api_key"]=api_key
+        captured["model"]=model
+        captured["timeout"]=timeout
+        captured["payload"]=payload
+        return {"candidates":[{"content":{"parts":[{"text":"OK"}]}}]}
+    monkeypatch.setattr(maira,"_post_gemini",fake_request)
+    try:
+        response=client.post("/api/v1/maira/workflow-import/check-connection")
+        assert response.status_code==200,response.text
+        assert response.json()["connected"] is True
+        assert response.json()["model"]=="gemini-2.5-flash"
+        assert captured["api_key"]=="dummy"
+        assert captured["timeout"]<=20
+        assert "PDF" not in str(captured["payload"])
+        assert "dummy" not in response.text
+    finally:
+        app.dependency_overrides.pop(maira._verify_identity,None)
+
+def test_connection_check_reports_provider_failure_without_secret(testing,monkeypatch):
+    from app.main import app
+    from app.routers import maira
+    client,_=testing
+    monkeypatch.setenv("SMART_GEMINI_API_KEY","hidden")
+    app.dependency_overrides[maira._verify_identity]=lambda:"allowed@example.com"
+    async def fake_error(*args,**kwargs):
+        raise maira._provider_failure(403,{"error":{"status":"PERMISSION_DENIED","message":"hidden key"}})
+    monkeypatch.setattr(maira,"_post_gemini",fake_error)
+    try:
+        response=client.post("/api/v1/maira/workflow-import/check-connection")
+        assert response.status_code==502
+        assert "negó acceso" in response.json()["detail"]
+        assert "hidden" not in response.text
+    finally:
+        app.dependency_overrides.pop(maira._verify_identity,None)
