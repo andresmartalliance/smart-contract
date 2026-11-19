@@ -1,4 +1,4 @@
-# Smart Contract V5.4 — Arquitectura integral y estado real
+# Smart Contract V5.5 — Arquitectura integral y estado real
 
 ## Objetivo de producto
 Plataforma SaaS multiempresa de workflows contractuales dinámicos, con bibliotecas de campos, bloques, políticas, reglas, cálculos y plantillas. Contratación de la red prestadora es el primer caso: no es una limitación de diseño. Las modalidades se registran como datos, nunca como condicionales de implementación codificados para evento, cápita, PGP u otra modalidad.
@@ -6,7 +6,7 @@ Plataforma SaaS multiempresa de workflows contractuales dinámicos, con bibliote
 ## Usuarios y separación de responsabilidades
 - **Configurador:** diseña y modifica flujos, define políticas y reglas, compara versiones y solicita publicación.
 - **Operador:** tramita expedientes y tareas con permisos granulares para Jurídica, Red, Financiera, Técnica, Actuarial y aprobadores.
-El frontend V5.3 es un editor local público y todavía NO aplica permisos de usuario; el backend sí exige JWT + membresía de tenant. No conectar el editor a operaciones reales sin identidad segura.
+El frontend V5.5 es un editor local público y todavía NO aplica permisos de usuario; el backend sí exige JWT + membresía de tenant. No conectar el editor a operaciones reales sin identidad segura.
 
 ## Multiempresa
 Cada institución se asocia a `tenant_id`, todos los endpoints actuales resuelven la membresía en el backend, y los registros se filtran por tenant. La capa definitiva requiere además RLS PostgreSQL, almacenamiento segregado, logs y jobs tenant-aware, pruebas adversariales de autorización y aislamiento del conocimiento de MAIRA. Los documentos, tarifas y manuales pertenecen al cliente y jamás se convierten automáticamente en biblioteca global.
@@ -30,6 +30,16 @@ Smart puede reutilizar componentes, esquemas y plantillas genéricas de su propi
 ## Infraestructura y continuidad
 GitHub privado `andresmartalliance/smart-contract` rama `main`, Railway `smart-contract` ambiente `development`, `api`, `web`, `Postgres`. El documento maestro de continuidad de Drive se actualiza **integralmente** tras cada paquete. Una release = mismo commit/código/reglas/API/frontend + pruebas + estado verificado. Evitar commits aislados y despliegues automáticos innecesarios. Los conectores de ChatGPT tienen permisos más amplios que estos recursos; operar exclusivamente dentro del proyecto conforme a la política documentada.
 
+## Identidad del agente MAIRA — V5.5
+
+**MAIRA** es un acrónimo de marca: **Multi-tenant AI for Intelligent Review & Agreements**. El descriptor oficial es **Contract Intelligence Agent** y su explicación en español es **Inteligencia artificial multiempresa para revisión inteligente y acuerdos contractuales**.
+
+La identidad visual retoma el lenguaje de NORA como referencia de agente, pero mantiene la paleta propia de Smart Contract: azul profundo y cian. La pantalla principal presenta un emblema MAIRA con círculos concéntricos, el acrónimo completo en inglés y su explicación en español; también se muestran en el panel flotante global y el bloque MAIRA del Resumen. Se conservaron los controles de contexto/acciones locales de V5.4, sin nuevas dependencias ni backend.
+
+El acrónimo no supone que exista una IA activa: Gemini sigue sin conectarse; la interfaz lo indica de forma explícita. No existen inferencias de IA, revisión automatizada de contratos ni conocimiento multiempresa compartido. La separación de conocimiento y los permisos por tenant siguen siendo requisitos pendientes para el uso institucional.
+
+**Verificación:** frontend Vue-tsc + Vite compiló y se desplegó en Railway sobre commit de código `877c27498b25b7110b7822c3ee3758b6dbdf4b3b`; web/API/Postgres figuran online y sin alertas. API omitió despliegue por watch patterns. No hubo pruebas E2E visuales independientes; la captura de referencia NORA es una guía estética, no un recurso externo incrustado.
+
 ## MAIRA contextual y persistente V5.4
 
 MAIRA aparece mediante un botón flotante persistente en todo el producto, sin interferir con navegación ni con el Workflow Studio. Un panel a la derecha muestra el módulo actual, el flujo y la etapa seleccionada cuando aplica, métricas locales del borrador y acciones disponibles.
@@ -50,7 +60,7 @@ Diseño light-premium de Smart: superficies casi blancas, azul profundo, acentos
 - Navegación: iconos vectoriales internos (sin librerías ni solicitudes externas), estado Development y layout responsive. Foco visible y ajuste de animaciones por preferencia de accesibilidad.
 - No se han incorporado funciones contractuales nuevas ni permisos especiales. Todo el guardado sigue siendo local en navegador; no se procesan documentos ni datos reales.
 
-## Estado de entrega V5.4
+## Estado de entrega V5.5
 **Incluye:** editor visual funcional con bloqueos locales, formularios configurables, responsables, conexiones condicionadas, validación, simulación, importación/exportación y recuperación local; backend validado con 14 pruebas de motor y aislamiento.
 **No incluye:** Google OAuth; escritura institucional desde navegador; publicación; RLS; integración Gemini; ejecución real de contratos; SIIFA/REPS; matriz de procesos de Famisanar; verificación jurídica de plantillas específicas.
 **Antes de prometer MVP:** construir sesión, controles backend/RLS, biblioteca persistente y versionada, publicación formal, expediente operativo y MAIRA; luego probar rutas institucionales reales.

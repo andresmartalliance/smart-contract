@@ -2,7 +2,7 @@
   "product": "smart-contract",
   "architecture": "5.0",
   "package": "5.5-maira-brand-identity",
-  "status": "RAILWAY_BUILD_PENDING_BRAND_IDENTITY",
+  "status": "RAILWAY_DEV_MAIRA_BRAND_DEPLOYED_NOT_GEMINI",
   "repository_target": "andresmartalliance/smart-contract",
   "railway_project_id": "1f226324-580b-4b1c-b235-12c717d70af8",
   "railway_development_environment_id": "6e8d45ca-d6f2-448c-a48a-63e5a2ab1806",
@@ -14,7 +14,7 @@
     "frontend_vue_build": "PASS_RAILWAY_VUE_TSC_VITE",
     "database_migration": "UNCHANGED_0001_BASELINE",
     "workflow_editor_persistence": "BROWSER_LOCAL_ONLY",
-    "railway_smoke": "RAILWAY_API_AND_WEB_SUCCESS_POSTGRES_ONLINE",
+    "railway_smoke": "RAILWAY_WEB_DEPLOY_SUCCESS_API_POSTGRES_ONLINE",
     "multi_tenant_operational": "NOT_READY_GOOGLE_OAUTH_AND_RLS_MISSING",
     "web_editor_typescript_build": "PASS_RAILWAY_VUE_TSC_VITE",
     "client_draft": "BROWSER_LOCALSTORAGE_ONLY",
@@ -26,7 +26,7 @@
     "maira_context": "UI_READS_CURRENT_MODULE_AND_SELECTED_WORKFLOW_NODE",
     "maira_ai": "NOT_CONNECTED",
     "maira_ui_browser": "NOT_AUTOMATED_BROWSER_TESTED",
-    "maira_brand": "SOURCE_UPDATED_BUILD_PENDING",
+    "maira_brand": "PASS_RAILWAY_VUE_TSC_VITE_AND_WEB_DEPLOY",
     "visual_screenshot": "NOT_TESTED_IN_BROWSER"
   },
   "limitations": [
@@ -38,7 +38,9 @@
     "GitHub Actions results not independently verified",
     "Browser screenshot/UI interaction tests not independently run",
     "Design changes only: not an operational multi-tenant product",
-    "MAIRA actions limited to existing local editor; no Gemini connection or institutional data"
+    "MAIRA actions limited to existing local editor; no Gemini connection or institutional data",
+    "MAIRA branding only; not a live Gemini assistant",
+    "No independent browser visual screenshot verification of V5.5"
   ],
   "git_repository_access": "AUTHORIZED_PROJECT_ONLY_BY_POLICY",
   "source_of_truth": "andresmartalliance/smart-contract main; release Git SHA available from repository/CI; Drive master is context",
@@ -60,7 +62,7 @@
     "api": "/api/**",
     "web": "/web/**"
   },
-  "deploy_validation_source_commit": "d176b0fe39017c226c499eb0a4ae6cef13b93df5",
+  "deploy_validation_source_commit": "877c27498b25b7110b7822c3ee3758b6dbdf4b3b",
   "maira_brand": {
     "name": "MAIRA",
     "expansion": "Multi-tenant AI for Intelligent Review & Agreements",
