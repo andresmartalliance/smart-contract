@@ -44,7 +44,8 @@ class ContractCase(Base):
     __tablename__ = "contract_cases"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     tenant_id: Mapped[str] = mapped_column(String(36), ForeignKey("tenants.id"), nullable=False, index=True)
-    workflow_version_id: Mapped[str] = mapped_column(String(36), ForeignKey("workflow_versions.id"), nullable=False)
+    workflow_version_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("workflow_versions.id"), nullable=True)
+    party_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("contract_parties.id"), nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(250), nullable=False)
     state: Mapped[str] = mapped_column(String(32), nullable=False, default="DRAFT")
     case_data: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
@@ -67,7 +68,7 @@ class ContractParty(Base):
     tenant_id: Mapped[str] = mapped_column(String(36), ForeignKey("tenants.id"), nullable=False, index=True)
     kind: Mapped[str] = mapped_column(String(20), nullable=False)
     name: Mapped[str] = mapped_column(String(250), nullable=False)
-    contact_email: Mapped[str] = mapped_column(String(255), nullable=False)
+    contact_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, nullable=False)
 
 class ContractCaseAccess(Base):

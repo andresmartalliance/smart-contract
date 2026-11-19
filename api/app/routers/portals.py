@@ -197,51 +197,150 @@ def publish(input:PublishInput,email:str=Depends(verify_google_email),db:Session
     return {"id":w.id,"version":w.version,"status":w.status,"pilot":True}
 
 class PartyInput(BaseModel):
-    name:str=Field(min_length=2,max_length=250)
-    email:EmailStr
-    kind:Literal["NATURAL","JURIDICA"]
+    name: str = Field(min_length=2,max_length=250)
+    email: EmailStr | None = None
+    kind: Literal["NATURAL","JURIDICA"]
+
+class PartyUpdate(BaseModel):
+    name: str | None = Field(default=None,min_length=2,max_length=250)
+    email: EmailStr | None = None
+
+def _party_record(db: Session, tenant_id: str, party_id: str) -> ContractParty:
+    party=db.scalar(select(ContractParty).where(
+       ContractParty.id==party_id,ContractParty.tenant_id==tenant_id))
+    if not party: raise HTTPException(404,"Person or company not found")
+    return party
+
+def _party_summary(db: Session, party: ContractParty) -> dict[str, Any]:
+    total=db.scalar(select(func.count(ContractCase.id)).where(
+       ContractCase.tenant_id==party.tenant_id,ContractCase.party_id==party.id)) or 0
+    return {"id":party.id,"name":party.name,"kind":party.kind,
+            "email":party.contact_email,"case_count":total}
+
+@router.get("/parties")
+def parties(email: str=Depends(verify_google_email),db: Session=Depends(get_session)):
+    m=_operator(db,email)
+    rows=db.scalars(select(ContractParty).where(ContractParty.tenant_id==m.tenant_id)
+       .order_by(ContractParty.created_at.desc())).all()
+    return [_party_summary(db,x) for x in rows]
+
+@router.post("/parties",status_code=201)
+def create_party(body: PartyInput,email: str=Depends(verify_google_email),db: Session=Depends(get_session)):
+    m=_operator(db,email)
+    name=body.name.strip()
+    if len(name)<2:raise HTTPException(422,"Name is required")
+    e=str(body.email).strip().lower() if body.email else None
+    dup=db.scalar(select(ContractParty).where(ContractParty.tenant_id==m.tenant_id,
+       func.lower(ContractParty.name)==name.lower(),ContractParty.kind==body.kind,
+       ContractParty.contact_email==e))
+    if dup:raise HTTPException(409,{"message":"This record already exists","id":dup.id})
+    party=ContractParty(tenant_id=m.tenant_id,name=name,kind=body.kind,contact_email=e)
+    db.add(party);db.flush()
+    _event(db,m.tenant_id,email,"PARTY_CREATED",party.id,{"kind":party.kind})
+    db.commit()
+    return _party_summary(db,party)
+
+@router.patch("/parties/{party_id}")
+def update_party(party_id: str,body: PartyUpdate,email: str=Depends(verify_google_email),
+                 db: Session=Depends(get_session)):
+    m=_operator(db,email)
+    party=_party_record(db,m.tenant_id,party_id)
+    fields=body.model_fields_set
+    if "name" in fields:
+        if not body.name or len(body.name.strip())<2:raise HTTPException(422,"Invalid name")
+        party.name=body.name.strip()
+    if "email" in fields:
+        party.contact_email=str(body.email).strip().lower() if body.email else None
+    _event(db,m.tenant_id,email,"PARTY_UPDATED",party.id,{"changed":sorted(fields)})
+    db.commit()
+    return _party_summary(db,party)
 
 class CaseInput(BaseModel):
-    workflow_id:str
-    title:str=Field(min_length=3,max_length=250)
-    party:PartyInput
+    workflow_id: str | None = None
+    party_id: str | None = None
+    title: str = Field(min_length=3,max_length=250)
+    party: PartyInput | None = None  # Supports legacy V6.3 request shape.
+
+class AttachWorkflowInput(BaseModel):
+    workflow_id: str = Field(min_length=1)
+
+def _published_workflow(db: Session, tenant_id: str, workflow_id: str) -> WorkflowVersion:
+    w=db.scalar(select(WorkflowVersion).where(WorkflowVersion.id==workflow_id,
+          WorkflowVersion.tenant_id==tenant_id,WorkflowVersion.status=="PUBLISHED"))
+    if not w: raise HTTPException(404,"Published template not found")
+    return w
+
+def _bind_workflow(db: Session, c: ContractCase, w: WorkflowVersion, party: ContractParty, actor: str):
+    if c.workflow_version_id or db.scalar(select(ContractTask.id).where(
+        ContractTask.case_id==c.id,ContractTask.tenant_id==c.tenant_id)):
+        raise HTTPException(409,"This case already has a workflow")
+    if not party.contact_email:
+        raise HTTPException(422,"Add an authorized contact email to the person or company before activating a workflow")
+    wf=WorkflowDefinition.model_validate(w.definition)
+    c.workflow_version_id=w.id
+    db.add(ContractCaseAccess(tenant_id=c.tenant_id,case_id=c.id,party_id=party.id,
+              email=party.contact_email))
+    for n in wf.nodes:
+        side=n.config.get("actor_side")
+        if side not in ("CONTRATANTE","CONTRATISTA"):
+            side="CONTRATISTA" if (n.role or "").upper() in (
+               "CONTRATISTA","PRESTADOR","PROVEEDOR","ASPIRANTE") else "CONTRATANTE"
+        db.add(ContractTask(tenant_id=c.tenant_id,case_id=c.id,node_id=n.id,
+             label=n.label[:250],kind=n.kind,side=side,fields=n.config.get("fields",[])))
+    db.flush();_sync(db,c)
+    _event(db,c.tenant_id,actor,"WORKFLOW_ASSIGNED",c.id,
+       {"workflow_id":w.id,"party_id":party.id,"invited":True})
 
 def _case_summary(db:Session,c:ContractCase,include_email:bool=True):
-    a=db.scalar(select(ContractCaseAccess).where(ContractCaseAccess.case_id==c.id))
-    party=db.get(ContractParty,a.party_id) if a else None
-    tasks=db.scalars(select(ContractTask).where(ContractTask.case_id==c.id)).all()
-    result={"id":c.id,"title":c.title,"state":c.state,"workflow_version_id":c.workflow_version_id,
+    a=db.scalar(select(ContractCaseAccess).where(
+       ContractCaseAccess.case_id==c.id,ContractCaseAccess.tenant_id==c.tenant_id))
+    party=db.get(ContractParty,c.party_id or (a.party_id if a else None)) if (c.party_id or a) else None
+    tasks=db.scalars(select(ContractTask).where(ContractTask.case_id==c.id,
+       ContractTask.tenant_id==c.tenant_id)).all()
+    result={"id":c.id,"title":c.title,"state":c.state,
+            "workflow_version_id":c.workflow_version_id,"party_id":party.id if party else None,
             "party_name":party.name if party else None,
+            "invited":bool(a and a.active),
             "total":len([t for t in tasks if t.kind not in ("START","END")]),
             "completed":len([t for t in tasks if t.kind not in ("START","END") and t.state=="COMPLETED"])}
-    if include_email:result["party_email"]=a.email if a else None
+    if include_email:result["party_email"]=a.email if a else (party.contact_email if party else None)
     return result
 
 @router.post("/cases",status_code=201)
 def create_case(body:CaseInput,email:str=Depends(verify_google_email),db:Session=Depends(get_session)):
     m=_operator(db,email)
-    w=db.scalar(select(WorkflowVersion).where(WorkflowVersion.id==body.workflow_id,
-                   WorkflowVersion.tenant_id==m.tenant_id,WorkflowVersion.status=="PUBLISHED"))
-    if not w:raise HTTPException(404,"Published template not found")
-    wf=WorkflowDefinition.model_validate(w.definition)
-    # Only pilot sample data. No file attachments, legally binding signatures or external execution.
-    party=ContractParty(tenant_id=m.tenant_id,name=body.party.name,kind=body.party.kind,
-       contact_email=str(body.party.email).lower())
-    db.add(party);db.flush()
-    c=ContractCase(tenant_id=m.tenant_id,workflow_version_id=w.id,title=body.title,
-       state="DRAFT",case_data={"pilot":True})
+    if bool(body.party_id)==bool(body.party):
+        raise HTTPException(422,"Choose exactly one existing person/company or provide a new record")
+    if body.party_id:
+        party=_party_record(db,m.tenant_id,body.party_id)
+    else:
+        assert body.party is not None
+        party=ContractParty(tenant_id=m.tenant_id,name=body.party.name.strip(),
+             kind=body.party.kind,contact_email=str(body.party.email).lower() if body.party.email else None)
+        db.add(party);db.flush()
+    w=_published_workflow(db,m.tenant_id,body.workflow_id) if body.workflow_id else None
+    if w and not party.contact_email:
+        raise HTTPException(422,"Add the contact email before activating the workflow")
+    c=ContractCase(tenant_id=m.tenant_id,party_id=party.id,
+       workflow_version_id=None,title=body.title.strip(),state="DRAFT",case_data={"pilot":True})
     db.add(c);db.flush()
-    db.add(ContractCaseAccess(tenant_id=m.tenant_id,case_id=c.id,party_id=party.id,
-       email=party.contact_email))
-    for n in wf.nodes:
-        side=n.config.get("actor_side")
-        if side not in ("CONTRATANTE","CONTRATISTA"):
-            side = "CONTRATISTA" if (n.role or "").upper() in (
-                "CONTRATISTA","PRESTADOR","PROVEEDOR","ASPIRANTE") else "CONTRATANTE"
-        db.add(ContractTask(tenant_id=m.tenant_id,case_id=c.id,node_id=n.id,
-            label=n.label[:250],kind=n.kind,side=side,fields=n.config.get("fields",[])))
-    db.flush();_sync(db,c)
-    _event(db,m.tenant_id,email,"PILOT_CASE_CREATED",c.id,{"workflow_id":w.id,"party_id":party.id})
+    if w:_bind_workflow(db,c,w,party,email)
+    _event(db,m.tenant_id,email,"PILOT_CASE_CREATED",c.id,
+       {"party_id":party.id,"workflow_id":w.id if w else None,"draft":w is None})
+    db.commit()
+    return _case_summary(db,c)
+
+@router.post("/cases/{case_id}/workflow")
+def assign_case_workflow(case_id:str,body:AttachWorkflowInput,
+              email:str=Depends(verify_google_email),db:Session=Depends(get_session)):
+    m=_operator(db,email)
+    c=_case_for_internal(db,case_id,m)
+    if c.workflow_version_id or c.state!="DRAFT":
+        raise HTTPException(409,"Only draft cases without a template can be assigned")
+    if not c.party_id:raise HTTPException(409,"Case has no registered person/company")
+    party=_party_record(db,m.tenant_id,c.party_id)
+    w=_published_workflow(db,m.tenant_id,body.workflow_id)
+    _bind_workflow(db,c,w,party,email)
     db.commit()
     return _case_summary(db,c)
 
@@ -268,12 +367,16 @@ def detail(case_id:str,email:str=Depends(verify_google_email),db:Session=Depends
     if not internal:_case_for_external(db,case_id,email)
     tasks=db.scalars(select(ContractTask).where(ContractTask.case_id==c.id,
            ContractTask.tenant_id==c.tenant_id)).all()
-    wf=_get_workflow(db,c)
-    order=topological_order(wf)
+    if c.workflow_version_id:
+        wf=_get_workflow(db,c)
+        order=topological_order(wf)
+    else:
+        order=[]
     lookup={t.node_id:t for t in tasks}
     return {"case":_case_summary(db,c,include_email=internal),
        "side":"CONTRATANTE" if internal else "CONTRATISTA",
-       "tasks":[_task_payload(lookup[n],external=not internal) for n in order if internal or lookup[n].side=="CONTRATISTA"]}
+       "tasks":[_task_payload(lookup[n],external=not internal) for n in order
+                if n in lookup and (internal or lookup[n].side=="CONTRATISTA")]}
 
 class TaskAnswer(BaseModel):
     data:dict[str,Any]=Field(default_factory=dict)
