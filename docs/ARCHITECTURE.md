@@ -1,4 +1,4 @@
-# Smart Contract V5.3 — Arquitectura integral y estado real
+# Smart Contract V5.4 — Arquitectura integral y estado real
 
 ## Objetivo de producto
 Plataforma SaaS multiempresa de workflows contractuales dinámicos, con bibliotecas de campos, bloques, políticas, reglas, cálculos y plantillas. Contratación de la red prestadora es el primer caso: no es una limitación de diseño. Las modalidades se registran como datos, nunca como condicionales de implementación codificados para evento, cápita, PGP u otra modalidad.
@@ -30,6 +30,16 @@ Smart puede reutilizar componentes, esquemas y plantillas genéricas de su propi
 ## Infraestructura y continuidad
 GitHub privado `andresmartalliance/smart-contract` rama `main`, Railway `smart-contract` ambiente `development`, `api`, `web`, `Postgres`. El documento maestro de continuidad de Drive se actualiza **integralmente** tras cada paquete. Una release = mismo commit/código/reglas/API/frontend + pruebas + estado verificado. Evitar commits aislados y despliegues automáticos innecesarios. Los conectores de ChatGPT tienen permisos más amplios que estos recursos; operar exclusivamente dentro del proyecto conforme a la política documentada.
 
+## MAIRA contextual y persistente V5.4
+
+MAIRA aparece mediante un botón flotante persistente en todo el producto, sin interferir con navegación ni con el Workflow Studio. Un panel a la derecha muestra el módulo actual, el flujo y la etapa seleccionada cuando aplica, métricas locales del borrador y acciones disponibles.
+
+Las acciones expuestas en V5.4 invocan las funciones existentes del editor local (validar, simular, insertar aprobación, exportar JSON y navegar); **no** usan IA generativa ni escriben en el servidor. El panel muestra Gemini no conectado y tampoco ejecuta contratos, aprobaciones institucionales o acceso a documentos.
+
+La futura integración con Gemini utilizará herramientas backend con autorización tenant, auditoría y publicación humana. El panel es el punto de entrada global a ese agente, no un sustituto de la política de permisos.
+
+Los servicios Railway ahora utilizan watch patterns /web/** y /api/** para evitar despliegues automáticos por modificaciones documentales y por cambios del otro servicio. Son ajustes de despliegue, no separación de la base ni infraestructura adicional.
+
 ## Diseño visual V5.3 (capa transversal)
 
 Diseño light-premium de Smart: superficies casi blancas, azul profundo, acentos cian/violeta discretos, jerarquía tipográfica, bordes y sombras ligeras. La identidad del producto se mantiene institucional, no videojuego.
@@ -40,7 +50,7 @@ Diseño light-premium de Smart: superficies casi blancas, azul profundo, acentos
 - Navegación: iconos vectoriales internos (sin librerías ni solicitudes externas), estado Development y layout responsive. Foco visible y ajuste de animaciones por preferencia de accesibilidad.
 - No se han incorporado funciones contractuales nuevas ni permisos especiales. Todo el guardado sigue siendo local en navegador; no se procesan documentos ni datos reales.
 
-## Estado de entrega V5.3
+## Estado de entrega V5.4
 **Incluye:** editor visual funcional con bloqueos locales, formularios configurables, responsables, conexiones condicionadas, validación, simulación, importación/exportación y recuperación local; backend validado con 14 pruebas de motor y aislamiento.
 **No incluye:** Google OAuth; escritura institucional desde navegador; publicación; RLS; integración Gemini; ejecución real de contratos; SIIFA/REPS; matriz de procesos de Famisanar; verificación jurídica de plantillas específicas.
 **Antes de prometer MVP:** construir sesión, controles backend/RLS, biblioteca persistente y versionada, publicación formal, expediente operativo y MAIRA; luego probar rutas institucionales reales.

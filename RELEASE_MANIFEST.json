@@ -2,7 +2,7 @@
   "product": "smart-contract",
   "architecture": "5.0",
   "package": "5.4-maira-global-dock",
-  "status": "PENDING_RAILWAY_VALIDATION",
+  "status": "RAILWAY_DEV_MAIRA_CONTEXTUAL_DOCK_DEPLOYED_NOT_GEMINI",
   "repository_target": "andresmartalliance/smart-contract",
   "railway_project_id": "1f226324-580b-4b1c-b235-12c717d70af8",
   "railway_development_environment_id": "6e8d45ca-d6f2-448c-a48a-63e5a2ab1806",
@@ -14,7 +14,7 @@
     "frontend_vue_build": "PASS_RAILWAY_VUE_TSC_VITE",
     "database_migration": "UNCHANGED_0001_BASELINE",
     "workflow_editor_persistence": "BROWSER_LOCAL_ONLY",
-    "railway_smoke": "RAILWAY_SERVICES_HEALTHY_EXTERNAL_HTTPS_UNVERIFIED",
+    "railway_smoke": "RAILWAY_API_AND_WEB_SUCCESS_POSTGRES_ONLINE",
     "multi_tenant_operational": "NOT_READY_GOOGLE_OAUTH_AND_RLS_MISSING",
     "web_editor_typescript_build": "PASS_RAILWAY_VUE_TSC_VITE",
     "client_draft": "BROWSER_LOCALSTORAGE_ONLY",
@@ -22,9 +22,10 @@
     "visual_design": "APPLIED_FRONTEND_ONLY",
     "cross_browser_screenshots": "NOT_RUN",
     "web_editor_persistence": "BROWSER_LOCAL_ONLY",
-    "maira_global": "SOURCE_IMPLEMENTED_BUILD_PENDING",
-    "maira_context": "SCREEN_AND_SELECTED_WORKFLOW_NODE",
-    "maira_ai": "NOT_CONNECTED"
+    "maira_global": "PASS_SOURCE_AND_RAILWAY_WEB_BUILD",
+    "maira_context": "UI_READS_CURRENT_MODULE_AND_SELECTED_WORKFLOW_NODE",
+    "maira_ai": "NOT_CONNECTED",
+    "maira_ui_browser": "NOT_AUTOMATED_BROWSER_TESTED"
   },
   "limitations": [
     "Open Development frontend is for fictitious data only",
@@ -50,7 +51,12 @@
   },
   "github_source_commit": "main (see Railway deployment commit and Drive context)",
   "railway_source_connection": "CONNECTED_MAIN",
-  "release_notes": "V5.4: global MAIRA floating launcher and contextual side panel across all screens, working local workflow shortcuts and accurate Gemini not-connected state; no model calls.",
-  "base_source_commit": "4a6bd04485ee749f133c9e3dd1c9f63e2a79204a",
-  "visual_design_version": "1.0"
+  "release_notes": "V5.4 global MAIRA floating launcher on all screens; contextual module/selected workflow node, local validator/simulator/add approval/export actions, no Gemini model calls or real institutional data.",
+  "base_source_commit": "d176b0fe39017c226c499eb0a4ae6cef13b93df5",
+  "visual_design_version": "1.0",
+  "watch_patterns": {
+    "api": "/api/**",
+    "web": "/web/**"
+  },
+  "deploy_validation_source_commit": "d176b0fe39017c226c499eb0a4ae6cef13b93df5"
 }

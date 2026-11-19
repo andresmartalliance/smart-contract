@@ -1,8 +1,18 @@
 # Smart Contract + MAIRA
 
-**V5.3 — Diseño premium + Workflow Studio editable · ambiente Development**
+**V5.4 — MAIRA contextual en todas las pantallas + Workflow Studio · ambiente Development**
 
 Smart Contract es una plataforma SaaS multiempresa con motor declarativo de workflows de contratación, campos, políticas y modalidades configurables. La primera aplicación es contratación de red prestadora de salud, sin codificar PGP, cápita ni evento como flujos obligatorios. El workflow institucional de Famisanar aún no ha sido recibido y no forma parte de esta versión.
+
+## Qué cambia en V5.4
+
+- Un botón MAIRA flotante visible en todas las pantallas, persistente al navegar; abre y cierra un panel lateral contextual sin bloquear el diseñador.
+- El panel reconoce el módulo actual; en Flujos también reconoce el nombre y estado del borrador y la etapa seleccionada.
+- Atajos reales y locales: verificar estructura, simular, agregar una aprobación y exportar JSON, además de navegación a Workflow Studio y vista MAIRA.
+- El panel distingue claramente asistencia contextual local de inteligencia generativa: **Gemini aún NO está conectado**. No muestra respuestas falsas ni envía información del cliente.
+- Diseño responsive, control accesible de apertura/cierre y advertencias claras sobre la ausencia de datos institucionales autenticados.
+- Configuración Railway por watch paths: API /api/** y Web /web/**, para reducir compilaciones por commits exclusivamente documentales. No cambia la infraestructura.
+- Las experiencias Configurador y Operador institucionales, RLS, publicación y MAIRA con Gemini siguen pendientes.
 
 ## Qué cambia en V5.3
 
@@ -15,7 +25,7 @@ Smart Contract es una plataforma SaaS multiempresa con motor declarativo de work
 - La navegación inicia en Resumen y abre el mismo Workflow Studio funcional de V5.2, preservando su persistencia local y JSON.
 - No hay nuevas dependencias, cuentas ni servicios. No se alteraron esquemas de base de datos, API ni permisos.
 
-## Qué funciona en V5.3
+## Qué funciona en V5.4
 
 **Diseñador visual Vue 3 / Vue Flow:**
 
@@ -58,7 +68,7 @@ Smart Contract es una plataforma SaaS multiempresa con motor declarativo de work
 
 ## Continuidad
 
-Repositorio privado: `andresmartalliance/smart-contract`. Proyecto Railway: `smart-contract` / `development`. Google Drive: carpeta `Smart Contract - Desarrollo y Continuidad`, documento `00 - SMART CONTRACT - CONTEXTO MAESTRO INTEGRAL - V5.3` (se actualiza al verificar el release).
+Repositorio privado: `andresmartalliance/smart-contract`. Proyecto Railway: `smart-contract` / `development`. Google Drive: carpeta `Smart Contract - Desarrollo y Continuidad`, documento `00 - SMART CONTRACT - CONTEXTO MAESTRO INTEGRAL - V5.4` (se actualiza al verificar el release).
 
 El usuario autorizó trabajar únicamente en este repositorio, proyecto Railway y carpeta Drive; esa limitación es una **política de ejecución** porque los conectores tienen alcance técnico más amplio. No modificar otros productos.
 
