@@ -1,8 +1,8 @@
 {
   "product": "smart-contract",
   "architecture": "5.0",
-  "package": "5.5-maira-brand-identity",
-  "status": "RAILWAY_DEV_MAIRA_BRAND_DEPLOYED_NOT_GEMINI",
+  "package": "5.6-maira-circular-emblem-blue",
+  "status": "RAILWAY_BUILD_PENDING_MAIRA_CIRCLE",
   "repository_target": "andresmartalliance/smart-contract",
   "railway_project_id": "1f226324-580b-4b1c-b235-12c717d70af8",
   "railway_development_environment_id": "6e8d45ca-d6f2-448c-a48a-63e5a2ab1806",
@@ -26,8 +26,10 @@
     "maira_context": "UI_READS_CURRENT_MODULE_AND_SELECTED_WORKFLOW_NODE",
     "maira_ai": "NOT_CONNECTED",
     "maira_ui_browser": "NOT_AUTOMATED_BROWSER_TESTED",
-    "maira_brand": "PASS_RAILWAY_VUE_TSC_VITE_AND_WEB_DEPLOY",
-    "visual_screenshot": "NOT_TESTED_IN_BROWSER"
+    "maira_brand": "V5.6_SOURCE_IMPLEMENTED_FRONTEND_BUILD_PENDING",
+    "visual_screenshot": "NOT_TESTED_IN_BROWSER",
+    "hero_round": "IMPLEMENTED_SOURCE_BROWSER_UNVERIFIED",
+    "maira_original_color": "PRESERVED_HOME_GRADIENT_#10223f_#153968_#164578"
   },
   "limitations": [
     "Open Development frontend is for fictitious data only",
@@ -55,7 +57,7 @@
   },
   "github_source_commit": "main (see Railway deployment commit and Drive context)",
   "railway_source_connection": "CONNECTED_MAIN",
-  "release_notes": "V5.5 MAIRA visual branding and official English acronym Multi-tenant AI for Intelligent Review & Agreements; navy/cyan identity similar in language to NORA reference; Spanish contextual explanation in MAIRA page and dock. No Gemini integration.",
+  "release_notes": "V5.6: circular MAIRA / AI AGENT emblem replaces SMART square in Resumen, aligns agent palette to approved original Resumen deep blues, avoids overlaid square and keeps orbit chips external. Visual-only.",
   "base_source_commit": "d176b0fe39017c226c499eb0a4ae6cef13b93df5",
   "visual_design_version": "1.0",
   "watch_patterns": {

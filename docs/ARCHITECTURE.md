@@ -1,4 +1,4 @@
-# Smart Contract V5.5 — Arquitectura integral y estado real
+# Smart Contract V5.6 — Arquitectura integral y estado real
 
 ## Objetivo de producto
 Plataforma SaaS multiempresa de workflows contractuales dinámicos, con bibliotecas de campos, bloques, políticas, reglas, cálculos y plantillas. Contratación de la red prestadora es el primer caso: no es una limitación de diseño. Las modalidades se registran como datos, nunca como condicionales de implementación codificados para evento, cápita, PGP u otra modalidad.
@@ -29,6 +29,12 @@ Smart puede reutilizar componentes, esquemas y plantillas genéricas de su propi
 
 ## Infraestructura y continuidad
 GitHub privado `andresmartalliance/smart-contract` rama `main`, Railway `smart-contract` ambiente `development`, `api`, `web`, `Postgres`. El documento maestro de continuidad de Drive se actualiza **integralmente** tras cada paquete. Una release = mismo commit/código/reglas/API/frontend + pruebas + estado verificado. Evitar commits aislados y despliegues automáticos innecesarios. Los conectores de ChatGPT tienen permisos más amplios que estos recursos; operar exclusivamente dentro del proyecto conforme a la política documentada.
+
+## Corrección visual V5.6 — Emblema y paleta MAIRA
+
+Se conserva el gradiente original aprobado del Resumen `linear-gradient(114deg,#10223f,#153968 70%,#164578)`. La forma cuadrada superpuesta y rotulada SMART fue sustituida por emblema circular MAIRA / AI AGENT centrado dentro de los anillos. Los chips exteriores fueron reubicados y el CSS responsive mantiene la forma circular. El panel principal de identidad MAIRA también usa esta familia de azules en lugar del azul verdoso de V5.5.
+
+Sin cambios en flujos, motor de reglas, integraciones, autenticación, backend, SQL ni políticas multiempresa. Se verificará compilación TypeScript/Vite y estado Railway; la prueba visual en navegador sigue pendiente.
 
 ## Identidad del agente MAIRA — V5.5
 

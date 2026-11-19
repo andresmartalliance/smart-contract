@@ -577,7 +577,7 @@ function simulateDraft(){
           </div>
           <div class="hero-visual" aria-hidden="true">
             <div class="hero-orbit"></div><div class="hero-orbit orbit-two"></div>
-            <div class="hero-core">SMART</div>
+            <div class="hero-core"><strong class="hero-core-name">MAIRA</strong><span class="hero-core-caption">AI AGENT</span></div>
             <span class="hero-chip chip-top">◇ Workflows adaptativos</span>
             <span class="hero-chip chip-bottom">✧ Inteligencia contractual</span>
           </div>

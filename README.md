@@ -1,8 +1,14 @@
 # Smart Contract + MAIRA
 
-**V5.5 — Identidad MAIRA y significado internacional + Workflow Studio · ambiente Development**
+**V5.6 — Emblema MAIRA circular y paleta unificada · ambiente Development**
 
 Smart Contract es una plataforma SaaS multiempresa con motor declarativo de workflows de contratación, campos, políticas y modalidades configurables. La primera aplicación es contratación de red prestadora de salud, sin codificar PGP, cápita ni evento como flujos obligatorios. El workflow institucional de Famisanar aún no ha sido recibido y no forma parte de esta versión.
+
+## Ajuste de identidad V5.6
+
+- Resumen: el emblema **MAIRA / AI AGENT** reemplaza la figura cuadrada SMART; ahora es circular, centrada dentro de los anillos y sin la sensación de objeto superpuesto.
+- Se conserva **exactamente** el degradado original del Resumen `#10223f → #153968 → #164578` y se aplica la misma familia cromática a la identidad de MAIRA, sustituyendo el azul verdoso previo.
+- Chips externos reubicados para no tapar el emblema y ajuste responsive. Sin cambios en API, BD, flujos ni integración Gemini.
 
 ## Identidad MAIRA V5.5
 
