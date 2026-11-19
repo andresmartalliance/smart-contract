@@ -14,7 +14,7 @@ from pathlib import PurePath
 from typing import Any, Literal
 
 import httpx
-from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
 from google.auth.transport.requests import Request as GoogleRequest
 from google.oauth2 import id_token
 from pydantic import BaseModel, Field, ValidationError
@@ -217,11 +217,20 @@ def _parse_proposal(payload: Any) -> Proposal:
     return proposed
 
 
-async def _call_gemini(data: bytes, suffix: str, filename: str, api_key: str) -> Proposal:
+async def _call_gemini(data: bytes, suffix: str, filename: str, api_key: str,
+                       party_kind: str | None = None) -> Proposal:
+    context = (
+        "\n\nContexto de la solicitud (no forma parte del documento): el destinatario registrado "
+        "es una " + ("PERSONA JURIDICA" if party_kind=="JURIDICA" else "PERSONA NATURAL")
+        + ". Conserva fielmente los pasos originales y señala en questions y observations "
+          "si aparecen términos aspirante, contratación de personal o requisitos "
+          "que podrían no aplicar al tipo de destinatario. No inventes otros documentos "
+          "ni cambies responsables para adaptarlo."
+    ) if party_kind else ""
     if suffix == ".txt":
-        parts = [{"text": PROMPT + "\n\nDocumento: " + filename + "\n" + data.decode("utf-8") }]
+        parts = [{"text": PROMPT + context + "\n\nDocumento: " + filename + "\n" + data.decode("utf-8") }]
     else:
-        parts = [{"text": PROMPT + "\n\nDocumento: " + filename},
+        parts = [{"text": PROMPT + context + "\n\nDocumento: " + filename},
                  {"inline_data": {"mime_type": MIMES[suffix], "data": base64.b64encode(data).decode("ascii")}}]
     model = os.getenv("SMART_GEMINI_MODEL", "gemini-2.5-flash").strip()
     if not re.fullmatch(r"[A-Za-z0-9._-]{2,80}", model):
@@ -250,14 +259,24 @@ async def _call_gemini(data: bytes, suffix: str, filename: str, api_key: str) ->
 
 
 @router.post("/workflow-import")
-async def interpret_workflow_document(file: UploadFile = File(...), email: str = Depends(_verify_identity)):
+async def interpret_workflow_document(
+    file: UploadFile = File(...),
+    party_kind: Literal["NATURAL","JURIDICA"] | None = Form(default=None),
+    email: str = Depends(_verify_identity)
+):
     _, _, key = _configuration()
     if not key:
         raise HTTPException(503, "Gemini for Smart Contract is not configured")
     name = PurePath((file.filename or "document").replace("\\", "/")).name[:100]
     content = await file.read(MAX_FILE_BYTES + 1)
     suffix, safe_data = _validate_file(name, content)
-    result = await _call_gemini(safe_data, suffix, name, key)
+    result = await _call_gemini(safe_data, suffix, name, key, party_kind)
+    if party_kind=="JURIDICA":
+        source=" ".join(n.label+" "+str(n.role or "") for n in result.workflow.nodes).lower()
+        if any(word in source for word in ("aspirante","personal a contratar")):
+            alert="El diagrama menciona aspirantes o personal; revisar pertinencia para persona jurídica antes de asignarle tareas."
+            if alert not in result.observations:
+                result.observations.append(alert)
     return {"status": "DRAFT_FOR_HUMAN_REVIEW", "filename": name,
             "node_count": len(result.workflow.nodes), "mapped_steps": len(result.source_map),
             **result.model_dump(mode="json"),
