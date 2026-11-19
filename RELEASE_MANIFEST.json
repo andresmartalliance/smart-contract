@@ -1,8 +1,8 @@
 {
   "product": "smart-contract",
   "architecture": "5.0",
-  "package": "5.3-futuristic-ui",
-  "status": "RAILWAY_DEV_PREMIUM_UI_DEPLOYED_LOCAL_DRAFT_ONLY",
+  "package": "5.4-maira-global-dock",
+  "status": "PENDING_RAILWAY_VALIDATION",
   "repository_target": "andresmartalliance/smart-contract",
   "railway_project_id": "1f226324-580b-4b1c-b235-12c717d70af8",
   "railway_development_environment_id": "6e8d45ca-d6f2-448c-a48a-63e5a2ab1806",
@@ -21,7 +21,10 @@
     "workflow_auth": "NOT_AVAILABLE_ON_FRONTEND",
     "visual_design": "APPLIED_FRONTEND_ONLY",
     "cross_browser_screenshots": "NOT_RUN",
-    "web_editor_persistence": "BROWSER_LOCAL_ONLY"
+    "web_editor_persistence": "BROWSER_LOCAL_ONLY",
+    "maira_global": "SOURCE_IMPLEMENTED_BUILD_PENDING",
+    "maira_context": "SCREEN_AND_SELECTED_WORKFLOW_NODE",
+    "maira_ai": "NOT_CONNECTED"
   },
   "limitations": [
     "Open Development frontend is for fictitious data only",
@@ -31,7 +34,8 @@
     "External HTTPS not independently verified",
     "GitHub Actions results not independently verified",
     "Browser screenshot/UI interaction tests not independently run",
-    "Design changes only: not an operational multi-tenant product"
+    "Design changes only: not an operational multi-tenant product",
+    "MAIRA actions limited to existing local editor; no Gemini connection or institutional data"
   ],
   "git_repository_access": "AUTHORIZED_PROJECT_ONLY_BY_POLICY",
   "source_of_truth": "andresmartalliance/smart-contract main; release Git SHA available from repository/CI; Drive master is context",
@@ -46,7 +50,7 @@
   },
   "github_source_commit": "main (see Railway deployment commit and Drive context)",
   "railway_source_connection": "CONNECTED_MAIN",
-  "release_notes": "V5.3 light-premium futuristic design: sidebar, executive Resumen, styled Workflow Studio, MAIRA identity and honest empty states. V5.2 workflow capabilities preserved; no contract data or Gemini integration.",
+  "release_notes": "V5.4: global MAIRA floating launcher and contextual side panel across all screens, working local workflow shortcuts and accurate Gemini not-connected state; no model calls.",
   "base_source_commit": "4a6bd04485ee749f133c9e3dd1c9f63e2a79204a",
   "visual_design_version": "1.0"
 }

@@ -16,6 +16,8 @@ type WorkEdge = {source:string;target:string;when?:Condition|null}
 type Workflow = {key: string; name: string; modality_key: string | null; nodes: WorkNode[]; edges: WorkEdge[]; metadata: Record<string, unknown>}
 
 const current = ref<Screen>('resumen')
+const mairaOpen = ref(false)
+const mairaLastAction = ref('')
 const menu: { key: Screen; title: string; glyph: string }[] = [
   { key:'resumen',title:'Resumen',glyph:'▦' },
   { key:'contrataciones',title:'Contrataciones',glyph:'▤' },
@@ -129,6 +131,41 @@ const nodeCount = computed(() => nodes.value.length)
 const activeCount = computed(() => nodes.value.filter(n=>(n.data as WorkNode).enabled).length)
 const policyCount = computed(() => nodes.value.filter(n=>['ORG_REQUIRED','LEGAL_LOCKED'].includes((n.data as WorkNode).policy)).length)
 const stageLabel = computed(() => selectedData.value?.label || 'Selecciona una etapa')
+const mairaContext = computed(() => {
+  switch (current.value) {
+    case 'resumen':
+      return {title:'Tu centro de control',detail:'Aquí puedes consultar el borrador local y continuar diseñando procesos. No hay información de contratos reales.'}
+    case 'flujos':
+      return {title:selectedData.value ? 'Etapa: '+selectedData.value.label : 'Diseño del workflow',
+        detail:selectedData.value
+          ? 'Tipo: '+selectedData.value.kind+' · Responsable: '+(selectedData.value.role||'sin asignar')+'. Puedes editar esta etapa desde Propiedades.'
+          : 'Tu borrador tiene '+nodeCount.value+' etapas y '+edges.value.length+' conexiones. Selecciona una etapa para ver su contexto.'}
+    case 'contrataciones':
+      return {title:'Contrataciones',detail:'La gestión de expedientes aún requiere autenticación y permisos institucionales. Puedes preparar los procesos en Workflow Studio.'}
+    case 'prestadores':
+      return {title:'Prestadores',detail:'El catálogo institucional de prestadores aún no está habilitado. Diseña primero los requisitos de registro y validación documental.'}
+    case 'configuracion':
+      return {title:'Configuración',detail:'Los roles y las políticas de cada empresa se administrarán aquí cuando esté habilitado el acceso multiempresa.'}
+    case 'maira':
+      return {title:'MAIRA Intelligence',detail:'La asistencia contextual está disponible en toda la plataforma. La interpretación mediante Gemini todavía no está conectada.'}
+  }
+})
+const mairaShortcuts = computed(() => current.value==='flujos'
+  ? [{key:'verify',label:'Verificar estructura',icon:'✓'},{key:'simulate',label:'Simular borrador',icon:'◇'},{key:'approval',label:'Agregar aprobación',icon:'+'},{key:'export',label:'Exportar JSON',icon:'↧'}]
+  : [{key:'workflow',label:'Abrir Workflow Studio',icon:'◇'},{key:'maira',label:'Conocer capacidades de MAIRA',icon:'✧'}]
+)
+function mairaShortcut(key:string){
+  mairaLastAction.value=''
+  if(key==='workflow'){current.value='flujos';mairaLastAction.value='Workflow Studio abierto.'}
+  else if(key==='maira'){current.value='maira';mairaLastAction.value='Vista de MAIRA abierta.'}
+  else if(key==='verify'){
+    const valid=validateDraft()
+    mairaLastAction.value=valid?'El borrador pasó la verificación estructural local. No es una aprobación jurídica.':'La verificación encontró '+errors.value.length+' observación(es). Revisa los detalles en el diseñador.'
+  }
+  else if(key==='simulate'){simulateDraft();mairaLastAction.value=simulationError.value||'Simulación local calculada. Revisa sus resultados debajo del diagrama.'}
+  else if(key==='approval'){addBlock('APPROVAL');mairaLastAction.value='Agregué una etapa de aprobación en el borrador local. Configura su responsable y verifica las dependencias.'}
+  else if(key==='export'){exportDraft();mairaLastAction.value='Borrador exportado a JSON desde este navegador.'}
+}
 
 function editNode(field:'label'|'role'|'enabled'|'policy'|'instructions'|'conditionField'|'conditionValue'|'conditionOperator'|'executionMode', val:string|boolean){
   if(!selectedNode.value || !selectedData.value)return
@@ -594,5 +631,43 @@ function simulateDraft(){
         </div>
       </section>
     </main>
+    <aside v-if="mairaOpen" id="maira-panel" class="maira-dock" aria-label="Asistencia contextual de MAIRA">
+      <div class="maira-dock-head">
+        <div class="maira-dock-avatar" aria-hidden="true">✦</div>
+        <div class="maira-dock-heading"><strong>MAIRA</strong><small>Asistencia en Smart Contract</small></div>
+        <button type="button" class="maira-dock-close" aria-label="Cerrar panel MAIRA" @click="mairaOpen=false">×</button>
+      </div>
+      <div class="maira-dock-body">
+        <span class="maira-dock-eyebrow">CONTEXTO ACTUAL · {{screenTitle}}</span>
+        <h2>{{mairaContext.title}}</h2>
+        <p>{{mairaContext.detail}}</p>
+        <div v-if="current==='flujos'" class="maira-dock-stats" aria-label="Estado del workflow">
+          <div><strong>{{nodeCount}}</strong><span>Etapas</span></div>
+          <div><strong>{{edges.length}}</strong><span>Conexiones</span></div>
+          <div><strong>{{activeCount}}</strong><span>Activas</span></div>
+        </div>
+        <div class="maira-dock-divider"></div>
+        <span class="maira-dock-eyebrow">ACCIONES DISPONIBLES</span>
+        <div class="maira-dock-shortcuts">
+          <button v-for="shortcut in mairaShortcuts" :key="shortcut.key" type="button" @click="mairaShortcut(shortcut.key)">
+            <span class="maira-shortcut-icon" aria-hidden="true">{{shortcut.icon}}</span>
+            <span>{{shortcut.label}}</span><span class="maira-shortcut-arrow" aria-hidden="true">↗</span>
+          </button>
+        </div>
+        <div v-if="mairaLastAction" class="maira-dock-feedback" role="status">{{mairaLastAction}}</div>
+        <div v-if="current==='flujos' && errors.length" class="maira-dock-issues">
+          <strong>{{errors.length}} observación(es) del borrador</strong>
+          <p v-for="(issue,i) in errors.slice(0,3)" :key="i">{{issue}}</p>
+        </div>
+      </div>
+      <div class="maira-dock-foot">
+        <span class="maira-dock-indicator"></span>
+        <div><strong>Asistencia contextual disponible</strong><small>Gemini aún no está conectado. No se envían documentos ni se ejecutan decisiones contractuales.</small></div>
+      </div>
+    </aside>
+    <button class="maira-launcher" type="button" aria-controls="maira-panel" :aria-expanded="mairaOpen" :aria-label="mairaOpen?'Cerrar MAIRA':'Abrir MAIRA'" @click="mairaOpen=!mairaOpen">
+      <span class="maira-launcher-spark" aria-hidden="true">✦</span>
+      <span>MAIRA</span>
+    </button>
   </div>
 </template>

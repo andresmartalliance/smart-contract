@@ -230,3 +230,35 @@ nav button.active .nav-icon{stroke:#236ed3;transform:scale(1.03)}
 @media(max-width:960px){.sidebar{width:76px;padding:25px 9px}.brand{justify-content:center;padding:0 0 24px}.brand>div:last-child,.nav-section,.menu-title,.sidebar-foot{display:none}.sidebar nav button{justify-content:center;padding:12px}.nav-icon{width:21px;height:21px}.main{padding:25px 20px}.stat-grid{grid-template-columns:repeat(2,1fr)}.dashboard-lower{grid-template-columns:1fr}.maira-hero{grid-template-columns:1fr 160px}}
 @media(max-width:760px){.top-header{margin-bottom:20px}.top-header h1{font-size:24px}.top-product{display:none}.main{padding:20px 12px 32px}.heading{flex-direction:column;align-items:flex-start}.heading h2{font-size:21px}.header-actions{width:100%}.workflow-meta{grid-template-columns:1fr;padding:16px}.studio-layout{display:flex;flex-direction:column}.studio-catalog{height:220px;flex:none}.diagram-panel{height:560px;flex:none}.inspector-panel{display:flex;flex-direction:column;max-height:none;min-height:340px}.summary-hero{grid-template-columns:1fr;min-height:0;padding:29px 24px}.hero-visual{min-height:160px}.hero-orbit{width:145px;height:145px}.hero-orbit.orbit-two{width:115px;height:115px}.hero-core{width:88px;height:88px;border-radius:27px}.hero-chip.chip-top{right:0}.hero-chip.chip-bottom{left:0}.stat-grid{gap:9px}.metric-card{padding:16px}.metric-card strong{font-size:30px}.capability-grid,.placeholder-features{grid-template-columns:1fr}.maira-hero{grid-template-columns:1fr}.maira-orb{width:113px;height:113px}.status-panel,.summary-strip,.canvas-footer{flex-direction:column;align-items:flex-start}.simulation-fields{grid-template-columns:1fr}.sidebar{width:59px;padding:22px 6px}.brand-mark{width:39px;height:39px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
+
+/* Smart Contract V5.4 — MAIRA persistent contextual dock */
+.maira-launcher{position:fixed;right:28px;bottom:25px;z-index:130;display:flex;align-items:center;justify-content:center;gap:13px;height:61px;min-width:157px;padding:0 25px;border:1px solid rgba(172,229,255,.38);border-radius:999px;color:#fff;background:linear-gradient(135deg,#073652 0%,#0c4b6a 58%,#194e87 100%);box-shadow:0 14px 42px rgba(6,43,77,.25),0 2px 7px rgba(4,39,72,.1);font-weight:760;font-size:17px;letter-spacing:.045em;transition:transform .18s ease,box-shadow .18s ease}
+.maira-launcher:hover{transform:translateY(-3px);box-shadow:0 17px 48px rgba(6,43,77,.31)}
+.maira-launcher-spark{font-size:29px;font-weight:500;color:#c6f4ff;line-height:1}
+.maira-dock{position:fixed;right:28px;bottom:102px;z-index:129;width:min(400px,calc(100vw - 32px));max-height:min(690px,calc(100dvh - 134px));display:flex;flex-direction:column;overflow:hidden;background:#fff;border:1px solid #dbe8f3;border-radius:23px;box-shadow:0 27px 95px rgba(9,40,72,.23),0 4px 14px rgba(9,40,72,.07);animation:maira-enter .21s ease-out}
+@keyframes maira-enter{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.maira-dock-head{display:flex;align-items:center;gap:12px;flex-shrink:0;padding:20px 20px 18px;background:linear-gradient(120deg,#07314c 0%,#134d72 62%,#264b8c 100%);color:#fff}
+.maira-dock-avatar{display:grid;place-items:center;width:43px;height:43px;flex-shrink:0;border:1px solid rgba(180,237,255,.4);border-radius:14px;background:rgba(190,237,255,.1);font-size:26px;color:#c4f4ff}
+.maira-dock-heading{display:flex;flex-direction:column;gap:3px}.maira-dock-heading strong{font-size:17px;letter-spacing:.04em}.maira-dock-heading small{font-size:11px;color:#b8d3e7}
+.maira-dock-close{margin-left:auto;width:35px;height:35px;border:1px solid rgba(217,240,255,.24);border-radius:11px;background:rgba(255,255,255,.07);color:#fff;font-size:25px;line-height:1}.maira-dock-close:hover{background:rgba(255,255,255,.16)}
+.maira-dock-body{overflow-y:auto;padding:22px 21px 19px}
+.maira-dock-eyebrow{display:block;font-size:10px;font-weight:750;letter-spacing:.11em;color:#5586a6}
+.maira-dock-body h2{font-size:20px;line-height:1.22;margin:9px 0 9px;color:#122f48;letter-spacing:-.025em}
+.maira-dock-body p{font-size:12px;line-height:1.65;color:#667f95;margin:0}
+.maira-dock-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:17px}
+.maira-dock-stats>div{display:flex;flex-direction:column;gap:5px;padding:12px 10px;border:1px solid #e5eef6;border-radius:12px;background:#f6f9fc}
+.maira-dock-stats strong{color:#143a55;font-size:21px;line-height:1}.maira-dock-stats span{font-size:10px;color:#8397a8}
+.maira-dock-divider{height:1px;background:#eaf0f5;margin:20px 0}
+.maira-dock-shortcuts{display:grid;gap:8px;margin-top:12px}
+.maira-dock-shortcuts button{display:flex;align-items:center;gap:12px;width:100%;padding:11px 12px;text-align:left;background:#f7fafd;border:1px solid #e4edf5;border-radius:12px;color:#294b63;font-weight:630;font-size:12px;transition:border-color .18s ease,background .18s ease}
+.maira-dock-shortcuts button:hover{border-color:#abd6ef;background:#eff7ff}
+.maira-shortcut-icon{width:29px;height:29px;display:grid;place-items:center;border-radius:9px;background:#e4f2fb;color:#15658e;font-size:17px}
+.maira-shortcut-arrow{margin-left:auto;color:#7a9cb1;font-size:14px}
+.maira-dock-feedback{margin-top:14px;border:1px solid #cbe5f2;border-radius:11px;padding:11px 12px;background:#eff9fd;color:#205976;font-size:12px;line-height:1.5}
+.maira-dock-issues{margin-top:13px;border:1px solid #f0d8d8;border-radius:11px;padding:12px;background:#fff8f8}
+.maira-dock-issues strong{color:#983e46;font-size:12px}.maira-dock-issues p{margin-top:8px;color:#9b5860}
+.maira-dock-foot{display:flex;gap:10px;align-items:flex-start;flex-shrink:0;border-top:1px solid #e8eef5;padding:15px 20px 16px;background:#f8fbfd}
+.maira-dock-indicator{width:8px;height:8px;flex-shrink:0;border-radius:50%;background:#459cb6;margin-top:5px}
+.maira-dock-foot div{display:flex;flex-direction:column;gap:5px}.maira-dock-foot strong{font-size:11px;color:#31556b}.maira-dock-foot small{font-size:10px;color:#879cac;line-height:1.5}
+@media(max-width:760px){.maira-launcher{right:14px;bottom:14px;height:52px;min-width:128px;font-size:14px;padding:0 18px}.maira-launcher-spark{font-size:23px}.maira-dock{right:12px;bottom:77px;max-height:calc(100dvh - 103px);width:min(400px,calc(100vw - 24px))}}
+@media(prefers-reduced-motion:reduce){.maira-dock{animation:none}}
