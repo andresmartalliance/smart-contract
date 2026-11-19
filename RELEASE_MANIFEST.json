@@ -1,8 +1,8 @@
 {
   "product": "smart-contract",
   "architecture": "5.0",
-  "package": "5.4-maira-global-dock",
-  "status": "RAILWAY_DEV_MAIRA_CONTEXTUAL_DOCK_DEPLOYED_NOT_GEMINI",
+  "package": "5.5-maira-brand-identity",
+  "status": "RAILWAY_BUILD_PENDING_BRAND_IDENTITY",
   "repository_target": "andresmartalliance/smart-contract",
   "railway_project_id": "1f226324-580b-4b1c-b235-12c717d70af8",
   "railway_development_environment_id": "6e8d45ca-d6f2-448c-a48a-63e5a2ab1806",
@@ -25,7 +25,9 @@
     "maira_global": "PASS_SOURCE_AND_RAILWAY_WEB_BUILD",
     "maira_context": "UI_READS_CURRENT_MODULE_AND_SELECTED_WORKFLOW_NODE",
     "maira_ai": "NOT_CONNECTED",
-    "maira_ui_browser": "NOT_AUTOMATED_BROWSER_TESTED"
+    "maira_ui_browser": "NOT_AUTOMATED_BROWSER_TESTED",
+    "maira_brand": "SOURCE_UPDATED_BUILD_PENDING",
+    "visual_screenshot": "NOT_TESTED_IN_BROWSER"
   },
   "limitations": [
     "Open Development frontend is for fictitious data only",
@@ -51,12 +53,19 @@
   },
   "github_source_commit": "main (see Railway deployment commit and Drive context)",
   "railway_source_connection": "CONNECTED_MAIN",
-  "release_notes": "V5.4 global MAIRA floating launcher on all screens; contextual module/selected workflow node, local validator/simulator/add approval/export actions, no Gemini model calls or real institutional data.",
+  "release_notes": "V5.5 MAIRA visual branding and official English acronym Multi-tenant AI for Intelligent Review & Agreements; navy/cyan identity similar in language to NORA reference; Spanish contextual explanation in MAIRA page and dock. No Gemini integration.",
   "base_source_commit": "d176b0fe39017c226c499eb0a4ae6cef13b93df5",
   "visual_design_version": "1.0",
   "watch_patterns": {
     "api": "/api/**",
     "web": "/web/**"
   },
-  "deploy_validation_source_commit": "d176b0fe39017c226c499eb0a4ae6cef13b93df5"
+  "deploy_validation_source_commit": "d176b0fe39017c226c499eb0a4ae6cef13b93df5",
+  "maira_brand": {
+    "name": "MAIRA",
+    "expansion": "Multi-tenant AI for Intelligent Review & Agreements",
+    "descriptor": "Contract Intelligence Agent",
+    "spanish": "Inteligencia artificial multiempresa para revisión inteligente y acuerdos contractuales",
+    "colors": "existing deep navy and cyan"
+  }
 }

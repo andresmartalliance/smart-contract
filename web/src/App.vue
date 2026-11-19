@@ -601,16 +601,31 @@ function simulateDraft(){
           </div>
           <div class="dashboard-panel">
             <div class="dashboard-panel-head"><div><h3>MAIRA Intelligence</h3><p class="panel-lead">Tu futura asistente para la contratación.</p></div><span class="status-pill">PRÓXIMA INTEGRACIÓN</span></div>
-            <div class="intelligence-status"><div class="intelligence-glyph">✧</div><div><strong>Capacidades diseñadas</strong><small>Interpretar · Recomendar · Construir · Analizar</small></div></div>
+            <div class="intelligence-status"><div class="intelligence-glyph">✧</div><div><strong>MAIRA · Contract Intelligence Agent</strong><small>Multi-tenant AI for Intelligent Review &amp; Agreements</small></div></div>
             <p class="status-line">MAIRA todavía no está conectada a Gemini. El estudio visual está disponible; la generación de flujos con IA requiere el siguiente hito funcional.</p>
             <button class="dashboard-link" @click="current='maira'">Explorar el diseño de MAIRA <span aria-hidden="true">↗</span></button>
           </div>
         </div>
       </section>
       <section v-else-if="current==='maira'" class="overview">
-        <div class="maira-hero">
-          <div><span class="eyebrow">INTELIGENCIA CONTRACTUAL / MAIRA</span><h2>Una nueva manera de contratar.</h2><p>MAIRA está diseñada para interpretar necesidades, revisar documentación y proponer flujos configurables. La integración con Gemini todavía no está habilitada.</p><span class="status-pill">AGENTE AÚN NO CONECTADO</span></div>
-          <div class="maira-orb" aria-hidden="true"></div>
+        <div class="maira-hero maira-identity-layout">
+          <div class="maira-identity-card" aria-label="MAIRA, agente de inteligencia contractual">
+            <div class="maira-identity-rings">
+              <div class="maira-identity-circle">
+                <strong>MAIRA</strong>
+                <span>AI AGENT</span>
+              </div>
+            </div>
+            <p class="maira-identity-tagline">Contract Intelligence</p>
+          </div>
+          <div class="maira-identity-copy">
+            <span class="eyebrow">SMART CONTRACT · AGENTE DE INTELIGENCIA CONTRACTUAL</span>
+            <h2>MAIRA</h2>
+            <p class="maira-full-name">Multi-tenant AI for Intelligent Review &amp; Agreements</p>
+            <p class="maira-es-meaning">Inteligencia artificial multiempresa para revisión inteligente y acuerdos contractuales.</p>
+            <p class="maira-introduction">MAIRA está diseñada para interpretar necesidades, revisar documentación y proponer flujos configurables. La conexión con Gemini todavía no está habilitada.</p>
+            <span class="status-pill">INTEGRACIÓN CON GEMINI PENDIENTE</span>
+          </div>
         </div>
         <div class="overview-heading"><div><h3>Capacidades de MAIRA</h3><p>Funciones previstas, no disponibles todavía para ejecutar sobre expedientes.</p></div></div>
         <div class="capability-grid">
@@ -634,10 +649,11 @@ function simulateDraft(){
     <aside v-if="mairaOpen" id="maira-panel" class="maira-dock" aria-label="Asistencia contextual de MAIRA">
       <div class="maira-dock-head">
         <div class="maira-dock-avatar" aria-hidden="true">✦</div>
-        <div class="maira-dock-heading"><strong>MAIRA</strong><small>Asistencia en Smart Contract</small></div>
+        <div class="maira-dock-heading"><strong>MAIRA</strong><small>Contract Intelligence Agent</small></div>
         <button type="button" class="maira-dock-close" aria-label="Cerrar panel MAIRA" @click="mairaOpen=false">×</button>
       </div>
       <div class="maira-dock-body">
+        <div class="maira-dock-meaning"><strong>Multi-tenant AI for Intelligent Review &amp; Agreements</strong><span>IA multiempresa para revisión inteligente y acuerdos contractuales</span></div>
         <span class="maira-dock-eyebrow">CONTEXTO ACTUAL · {{screenTitle}}</span>
         <h2>{{mairaContext.title}}</h2>
         <p>{{mairaContext.detail}}</p>
