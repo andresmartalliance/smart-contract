@@ -1,27 +1,31 @@
 # Smart Contract + MAIRA
 
-**V6.3 — Gestión Contractual + Mi Contratación · piloto de doble portal · Development**
+**V6.4 — Personas y empresas independientes de plantillas · Development**
 
 Smart Contract es una plataforma SaaS multiempresa con motor declarativo de workflows de contratación, campos, políticas y modalidades configurables. La primera aplicación es contratación de red prestadora de salud, sin codificar PGP, cápita ni evento como flujos obligatorios. El workflow institucional de Famisanar aún no ha sido recibido y no forma parte de esta versión.
 
-## V6.3 — Piloto funcional entre contratante y contratista
+## V6.4 — Directorio de personas y empresas, independiente de los contratos
 
-El mismo frontend ofrece **Gestión Contractual** (institución que contrata) y **Mi Contratación** (persona natural, proveedor o IPS invitada). No hay dos apps ni otro entorno. Ambos utilizan Google Sign-In, mismo backend FastAPI y PostgreSQL, con autorizaciones distintas en cada solicitud.
+**La entidad, el usuario y el expediente no son el mismo registro.** La necesidad del usuario es registrar primero a un prestador, persona natural o jurídica, y después asociarle un proceso existente o una plantilla nueva. Ahora la plataforma lo permite sin obligar a construir un workflow para crear la entidad.
 
-Recorrido para la primera prueba con **información ficticia**:
+### Recorrido correcto para el piloto (solo datos ficticios)
+1. Ingresar con el administrador Google habilitado y abrir **Personas y empresas**.
+2. Registrar razón social/nombre, tipo de persona y correo de contacto (opcional hasta iniciar el proceso). El registro vive en PostgreSQL y se reutiliza en tantas contrataciones como sean necesarias.
+3. Desde el directorio pulsar **Crear expediente** para ese registro. En **Gestión Contractual**, indicar título y opcionalmente seleccionar una plantilla existente.
+4. Si no hay plantilla, **Crear expediente sin plantilla**. Se guarda con estado `DRAFT`, sin crear tareas ni dar acceso al expediente. Se podrá diseñar una plantilla después en **Flujos** (manual o mediante MAIRA cuando Gemini esté configurado).
+5. Desde el detalle del borrador, seleccionar una plantilla publicada y **Asociar plantilla e iniciar proceso**. Esto genera tareas, activa las dependencias y vincula el correo de contacto para acceso al expediente.
+6. El usuario externo puede entrar antes de tener procesos si su correo Google está registrado como contacto (y está autorizado como Test user en Google Auth Platform Testing). Su panel **Mi Contratación** estará vacío hasta que se active un expediente para él.
+7. Probar diligenciamiento externo, devolución, corrección y revisión interna desde sesiones separadas.
 
-1. Ingresar a Smart Contract con el correo habilitado para administrar el piloto (`andres@wearesmart.co`). El primer acceso permite crear el espacio ficticio desde **Gestión Contractual** si la cuenta todavía no tiene institución.
-2. Abrir **Flujos → Ejemplo de doble portal**. El ejemplo incluye Inicio → Datos del contratista (formulario dinámico) → Revisión interna (aprobación simulada de trámite) → Fin. El configurador puede cambiar responsables y la parte que ejecuta cada etapa.
-3. Seleccionar **Publicar plantilla de prueba**. Esta versión se persiste en PostgreSQL y no es una aprobación jurídica.
-4. En **Gestión Contractual**, crear un expediente con nombre, correo invitado y tipo de persona (natural o jurídica). La aplicación concede acceso al correo designado; **no envía email**. Copiar y compartir manualmente el enlace.
-5. Abrir una sesión separada del navegador con la cuenta Google invitada (debe ser usuaria de prueba en Google Auth Platform → Audience si el OAuth sigue en Testing). En **Mi Contratación**, llenar la actividad asignada.
-6. Volver a la cuenta del contratante; revisar, devolver para corregir o completar la siguiente actividad. El historial técnico queda en `audit_events` de PostgreSQL. El expediente llega al estado `COMPLETED` cuando las etapas del piloto terminan.
+Se agregó `GET/POST /api/v1/portal/parties`, `PATCH /api/v1/portal/parties/{id}` y `POST /api/v1/portal/cases/{id}/workflow`. `POST /cases` acepta `party_id` de un registro existente y `workflow_id` opcional; la forma anterior de crear una persona inline se mantiene por compatibilidad, sin afectar expedientes previos. `GET /cases/{id}` devuelve un borrador sin tareas de manera válida. No se hace envío automático de invitaciones por email.
 
-**Aislamiento:** la API valida el ID token Google, correo, membresía activa en la institución para acciones internas y acceso al expediente por invitación exacta para externos. Una contraparte solo recibe sus propias actividades, sin ver las respuestas internas. La interfaz oculta las secciones de configuración institucional a usuarios que solo fueron invitados. La separación se prueba desde backend con datos ficticios y no debe confundirse con RLS de PostgreSQL, que aún está pendiente.
+**Persistencia y migración:** Alembic `0003_party_registry` habilita `contract_cases.party_id`, permite `workflow_version_id` nulo y correo de contacto nulo, y recupera vínculos existentes por `contract_case_access` (sin borrar datos). La migración se ejecuta por el comando preDeploy de Railway API. **No hay RLS institucional completa** y el piloto sigue limitado a datos sintéticos. La entidad tiene un contacto único en este MVP: representantes múltiples, identificación legal/NIT, roles propios del contratista e invitaciones por canales son posteriores.
 
-**Limitaciones explícitas:** piloto habilitado solo en Railway Development mediante `SMART_PORTAL_DEMO_ENABLED=true` y correo administrador autorizado. El flujo de trabajo ejecutable está restringido a etapas manuales sin condiciones; se rechazan firmas, integraciones, cálculos y generación documental como si fueran operaciones realizadas. Los documentos, notificaciones de invitación y firma electrónica productiva no están implementados. Tampoco hay selección de varias instituciones para un mismo administrador, permisos institucionales completos, RLS ni pruebas con dos cuentas Google reales verificadas en navegador. No cargar datos de pacientes, contratos o clientes.
+**Verificaciones de V6.4:** GitHub Actions commit funcional `42fbc0fa8ea36deef52432417e0a560937bf1944`: **45 pruebas backend aprobadas**, `vue-tsc` + Vite aprobado. Despliegues Railway Web `f6479ef2041a64033d9904a1984caf77d3d31c05` y API `42fbc0fa8ea36deef52432417e0a560937bf1944` exitosos; PostgreSQL en línea. Aún no se ha recorrido manualmente la nueva UI con dos cuentas Google. MAIRA sigue sin GEMINI API Key, por lo que no genera flujos del PDF.
 
-**Verificación:** GitHub Actions V6.3 aprobó 37 pruebas backend y la compilación Vue. Railway confirmó API/Web/PostgreSQL en línea con último despliegue del código V6.3 y migración Alembic 0002 configurada en preDeploy. La prueba interactiva de dos sesiones queda pendiente. Gemini aún no tiene clave configurada, por lo que MAIRA no ha interpretado documentos.
+## V6.3 — Historia de la primera ejecución entre dos portales
+
+La V6.3 introdujo Gestión Contractual y Mi Contratación, versiones publicadas, expedientes, actividades por lado, correcciones y auditoría. En esa versión el alta de un contratista estaba incrustada en la creación de un expediente con plantilla obligatoria. **Ese acoplamiento fue eliminado en V6.4.** Se conserva el motor, la seguridad por tenant del piloto y la funcionalidad de doble portal.
 
 ## Smart Contract V6.2 — Pantalla de acceso corporativo
 
