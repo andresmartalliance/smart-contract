@@ -1,4 +1,14 @@
-# Smart Contract V6.5.1 — Arquitectura integral y estado real
+# Smart Contract V6.5.2 — Arquitectura integral y estado real
+
+## V6.5.2 — Diagnóstico de inferencia Gemini
+
+**Incidente observado:** Railway API HTTP POST /api/v1/maira/workflow-import a ~17:11:46Z del 19 nov 2026 devolvió HTTP 502 en 434 ms. La autenticación, validación de archivo y estado inicial se completaron. El código anterior de `_call_gemini` aplicaba `raise_for_status` y colapsaba cualquier fallo de Google a un genérico «Gemini could not analyze…», sin capturar el estado HTTP del proveedor. El status HTTP del upstream Google NO está en logs anteriores, por tanto no atribuirlo a cuota, clave o modelo todavía.
+
+**Corrección:** helper `_post_gemini` efectúa POST HTTPS con `x-goog-api-key` exclusivamente en servidor. Maneja timeout, errores de transporte, HTTP 400/401/402/403/404/429/500/502/503/504, e identifica de forma acotada API_KEY_INVALID sin devolver contenido arbitrario del proveedor. Los logs nunca contienen clave, respuesta cruda del modelo, documento ni email. `_gemini_model` valida nombre seguro. `_call_gemini` sigue usando el prompt, PDF y _parse_proposal existentes y comparte diagnóstico.
+
+**Verificación real de conectividad:** endpoint protegido `POST /api/v1/maira/workflow-import/check-connection` usa `_verify_identity` Google y una solicitud mínima de `generateContent` (respuesta «OK»), con tiempo máximo de 20 s. A diferencia de `models.list`, prueba que el proyecto pueda ejecutar inferencia, con coste mínimo por invocación. El frontend ofrece botón «Verificar conexión Gemini» junto a Analizar; el usuario decide cuándo activarlo. Fallos son específicos, no genéricos; mantener documentos de prueba sintéticos/autorizados.
+
+**Control de calidad:** CI GitHub run `44575310655` con 58/58 tests Python PASS y Vue build PASS. Railway Web versión `5e37b1ec889aa8ac73e36e6d3fe776db1e012b40` SUCCESS, API versión `2702b12e973f9fb9322901762198deac4650fb40` SUCCESS, Postgres ONLINE. La inferencia con clave real NO se puede afirmar probada hasta que usuario pulse Verificar conexión Gemini y/o cargue PDF y el sistema muestre resultado. RLS institucional y Gemini workflow completo todavía pendientes.
 
 ## V6.5.1 — Estado de credenciales de Gemini y observabilidad UX
 

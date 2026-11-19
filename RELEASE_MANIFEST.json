@@ -1,20 +1,20 @@
 {
   "product": "smart-contract",
   "architecture": "5.0",
-  "package": "6.5.1-maira-gemini-configuration-ready",
-  "status": "V6_5_1_API_KEY_PRESENT_WEB_READY_GEMINI_INFERENCE_NOT_TESTED",
+  "package": "6.5.2-gemini-upstream-diagnostics",
+  "status": "V6_5_2_DIAGNOSTICS_DEPLOYED_PROBE_NOT_YET_EXECUTED",
   "repository_target": "andresmartalliance/smart-contract",
   "railway_project_id": "1f226324-580b-4b1c-b235-12c717d70af8",
   "railway_development_environment_id": "6e8d45ca-d6f2-448c-a48a-63e5a2ab1806",
   "google_drive_master_document_id": "1_7cuP7hS2nFZRZD33d9Svd1R8l334K2UTKak39Brxoo",
   "database_migration": "0004_party_process_previews",
   "acceptance": {
-    "backend_tests": "50/50 PASS GitHub Actions run 44570098194",
+    "backend_tests": "58/58 PASS GitHub Actions 44575310655",
     "frontend_typescript_syntax": "PASS global TypeScript parser",
-    "frontend_vue_build": "PASS_GITHUB_ACTIONS_44573188138_RAILWAY_WEB_SUCCESS",
+    "frontend_vue_build": "PASS GitHub Actions 44575310655",
     "database_migration": "ALEMBIC_0003_CONFIGURED_PREDEPLOY_RAILWAY_API_SUCCESS_SQL_INSPECTION_NOT_RUN",
     "workflow_editor_persistence": "BROWSER_LOCAL_ONLY",
-    "railway_smoke": "WEB_API_POSTGRES_ONLINE_WEB_RECENT_FAILURE_HISTORY_3_API_ZERO",
+    "railway_smoke": "WEB_API_POSTGRES_ONLINE_WEB_PRIOR_FAILURE_HISTORY",
     "multi_tenant_operational": "NOT_READY_RLS_AND_ENTERPRISE_IAM_PENDING",
     "web_editor_typescript_build": "PASS_RAILWAY_VUE_TSC_VITE",
     "client_draft": "BROWSER_LOCALSTORAGE_ONLY",
@@ -32,7 +32,7 @@
     "maira_original_color": "PRESERVED_HOME_GRADIENT_#10223f_#153968_#164578",
     "maira_document_import": "READY_IF_API_STATUS_READY_BUT_MODEL_INFERENCE_NOT_VALIDATED",
     "google_login": "CLIENT_ID_CONFIGURED_USER_REPORTED_LOGIN_WORKING",
-    "gemini": "SMART_GEMINI_API_KEY_PRESENT_RAILWAY_API_VALUE_REDACTED_INFERENCE_NOT_TESTED",
+    "gemini": "KEY_PRESENT_UPSTREAM_PROVIDER_STATUS_UNVERIFIED",
     "provenance": "SOURCE_STEP_EXCERPT_PAGE_CONFIDENCE_PRESERVED_IN_NODE",
     "proposal_replacement": "REQUIRES_SECOND_CONFIRMATION_AND_LOCAL_ROLLBACK",
     "favicon": "SVG_PNG_64_AND_SIDEBAR_IMPLEMENTED_RAILWAY_WEB_SUCCESS",
@@ -61,7 +61,11 @@
     "party_kind_context": "ADDED_AS_GEMINI_DOCUMENT_CONTEXT_WITHOUT_SENSITIVE_DETAILS",
     "legal_person_mismatch": "TESTED_REQUIRES_REVIEW_ON_ASPIRANTE_SOURCE",
     "preview_authorization": "TESTED_CONFIGURATOR_ONLY_SAVE_AND_INTERNAL_REVIEW",
-    "workflow_import_e2e": "NOT_TESTED_PENDING_AUTHENTIC_PDF_UPLOAD_WITH_GOOGLE_ID_TOKEN"
+    "workflow_import_e2e": "FIRST_REAL_ATTEMPT_RETURNED_502_DETAILS_NOW_CLASSIFIED",
+    "gemini_upstream_error": "REAL_UPLOAD_502_PREVIOUS_CODE_DISCARDED_PROVIDER_STATUS",
+    "gemini_diagnostics": "DEPLOYED_AUTHENTICATED_TEST_BUTTON_NOT_EXECUTED",
+    "gemini_model": "gemini-2.5-flash_DEFAULT_CONFIGURABLE",
+    "gemini_document_import": "GEMINI_INFERENCE_NOT_YET_VALIDATED"
   },
   "limitations": [
     "Open Development frontend is for fictitious data only",
@@ -98,7 +102,9 @@
     "Preview is not publication or live contracting execution",
     "Original process PDF is for applicants/personnel; fit to corporate IPS must be reviewed",
     "No live PDF-to-workflow test has been performed in app",
-    "Gemini key is present but validity, quota and first authentic PDF inference remain unverified"
+    "Gemini key is present but validity, quota and first authentic PDF inference remain unverified",
+    "Provider's precise HTTP status from the failed 17:11Z attempt was not logged and cannot be reconstructed",
+    "User-authenticated new connection check not executed yet"
   ],
   "git_repository_access": "AUTHORIZED_PROJECT_ONLY_BY_POLICY",
   "source_of_truth": "andresmartalliance/smart-contract main; release Git SHA available from repository/CI; Drive master is context",
@@ -113,14 +119,14 @@
   },
   "github_source_commit": "main (see Railway deployment commit and Drive context)",
   "railway_source_connection": "CONNECTED_MAIN",
-  "release_notes": "Railway API has SMART_GEMINI_API_KEY present (value redacted), backend deployment online, web UI removes stale pending Gemini labels and uses live /workflow-import/status. CI and Railway Web SUCCESS. Actual Gemini inference/file upload still untested.",
+  "release_notes": "Repaired collapsed upstream 502 error. Google HTTP status now safely categorized; Google-authenticated tiny generateContent probe with UI button. 58 backend tests PASS, Vue build PASS, Railway Web/API SUCCESS. Gemini credentials present but real inference status from Google still unknown until user runs probe.",
   "base_source_commit": "d176b0fe39017c226c499eb0a4ae6cef13b93df5",
   "visual_design_version": "1.0",
   "watch_patterns": {
     "api": "/api/**",
     "web": "/web/**"
   },
-  "deploy_validation_source_commit": "3b68670427bc35b319c8608f7115cc276260cd0d",
+  "deploy_validation_source_commit": "2702b12e973f9fb9322901762198deac4650fb40",
   "maira_brand": {
     "name": "MAIRA",
     "expansion": "Multi-tenant AI for Intelligent Review & Agreements",

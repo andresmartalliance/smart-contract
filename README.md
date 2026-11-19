@@ -1,8 +1,18 @@
 # Smart Contract + MAIRA
 
-**V6.5.1 — Gemini configurado; prueba documental pendiente · Development**
+**V6.5.2 — Diagnóstico de conexión Gemini y fallas externas · Development**
 
 Smart Contract es una plataforma SaaS multiempresa con motor declarativo de workflows de contratación, campos, políticas y modalidades configurables. La primera aplicación es contratación de red prestadora de salud, sin codificar PGP, cápita ni evento como flujos obligatorios. El workflow institucional de Famisanar aún no ha sido recibido y no forma parte de esta versión.
+
+## V6.5.2 — Diagnóstico de error de Gemini
+
+**Evidencia del error real:** el 19 de noviembre de 2026, ~17:11:46Z (12:11 hora Colombia), el servicio Railway API recibió una solicitud POST a `/api/v1/maira/workflow-import` del PDF `Process Flowchart clico contract V2.pdf` y respondió **502** en ~434 ms. Google Sign-In, endpoint de estado y subida del documento funcionaron. El código anterior llamaba `resp.raise_for_status()` y ocultaba cualquier error HTTP del proveedor detrás de un único mensaje inglés. Los logs NO conservan el status original de Google, por tanto la causa concreta (400 clave, 403 permisos, 404 modelo, 429 cuota, etc.) no puede inferirse con certeza de ese intento.
+
+Se sustituyó esa excepción genérica por `_post_gemini` que clasifica errores HTTP sin exponer valores de clave, contenido del PDF ni texto arbitrario del proveedor. Los mensajes son breves y concretos en español: clave inválida, parámetros mal formados, permisos, modelo, cuota, facturación, indisponibilidad o red. Los logs internos registran solamente código HTTP y estado de error saneado.
+
+Se agregó endpoint `POST /api/v1/maira/workflow-import/check-connection` — protegido por el mismo Google ID token y lista de usuarios permitidos — que realiza una **inferencia de texto mínima** sobre el modelo configurado (`gemini-2.5-flash` por defecto), sin archivos, y devuelve conexión/modelo si es exitosa. En la pantalla de carga está el botón **Verificar conexión Gemini**. No se ejecuta de forma automática ni se considera una firma o un contrato. El botón de análisis conserva la carga original; si hay fallo, recibe el error concreto.
+
+**Validaciones:** GitHub Actions run `44575310655` **58 tests backend y build Vue PASS**, Railway Web SUCCESS commit `5e37b1ec889aa8ac73e36e6d3fe776db1e012b40`, Railway API SUCCESS commit `2702b12e973f9fb9322901762198deac4650fb40`, PostgreSQL online. **Aún no hay un resultado del endpoint diagnóstico con la clave real**, por lo que NO se ha demostrado la inferencia real. Próxima acción del usuario: entrar a Hospital Smart → Crear proceso con Maira → **Verificar conexión Gemini**. Si falla, ese mensaje revelará la categoría exacta. Si confirma conexión, repetir análisis del PDF y revisar la correspondencia con sus 23 actividades.
 
 ## V6.5.1 — Activación de Gemini y estado visual coherente
 
