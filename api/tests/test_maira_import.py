@@ -245,8 +245,8 @@ def test_source_first_compiler_preserves_all_23_steps():
     assert proposal.workflow.metadata["requires_review"] is True
     assert proposal.workflow.metadata["inferred_dependency_count"]>0
     assert any("Dependencias provisionales" in s for s in proposal.observations)
-    assert proposal.workflow.nodes[5].config["actor_side"]=="CONTRATANTE"
-    assert proposal.workflow.nodes[6].config["actor_side"]=="CONTRATISTA"
+    assert proposal.workflow.nodes[4].config["actor_side"]=="CONTRATANTE"
+    assert proposal.workflow.nodes[5].config["actor_side"]=="CONTRATISTA"
     assert all(node.kind not in ("START","END") for node in proposal.workflow.nodes[1:-1])
 
 
