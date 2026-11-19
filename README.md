@@ -49,3 +49,11 @@ Proyecto existente: `smart-contract`, ambiente `development`. No conectar servic
 ## Criterio de avance
 
 Una release solo se declara completa con: commit SHA, CI verde, migración probada, despliegue healthy, smoke tests, documento maestro Drive sincronizado y manifiesto actualizado. Este bootstrap es **local**, no desplegado.
+
+## Estado de integración V5.1
+
+- GitHub: repositorio privado conectado, base de 38 archivos confirmada en `main`.
+- Railway `smart-contract` / `development`: servicios `api` y `web` creados y configurados con `/api` y `/web`, pero **sin despliegue**.
+- Bloqueo: la conexión GitHub de Railway no autoriza todavía este repositorio privado (`User does not have access to the repo`). La autorización de ChatGPT/GitHub es independiente de la de Railway.
+- Próximo paso: conceder acceso a `andresmartalliance/smart-contract` desde la integración GitHub de Railway; conectar los servicios y verificar build/health sin datos reales.
+- La app no tiene sesión Google ni MAIRA operativa. No utilizarla con datos de clientes.
