@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import logging
 import re
 from pathlib import PurePath
 from typing import Any, Literal
@@ -23,6 +24,7 @@ from ..workflow.schema import WorkflowDefinition
 from ..workflow.validator import WorkflowInvalid, topological_order
 
 router = APIRouter(prefix="/api/v1/maira", tags=["maira"])
+logger = logging.getLogger("smart_contract.maira")
 MAX_FILE_BYTES = 6 * 1024 * 1024
 ALLOWED_EXT = {".pdf", ".png", ".jpg", ".jpeg", ".txt"}
 MIMES = {".pdf": "application/pdf", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
@@ -219,6 +221,84 @@ def _parse_proposal(payload: Any) -> Proposal:
     return proposed
 
 
+
+def _gemini_model() -> str:
+    model = os.getenv("SMART_GEMINI_MODEL", "gemini-2.5-flash").strip()
+    if not re.fullmatch(r"[A-Za-z0-9._-]{2,80}", model):
+        raise HTTPException(503, "Modelo de Gemini mal configurado. Revisa SMART_GEMINI_MODEL.")
+    return model
+
+
+def _provider_failure(code: int, body: Any) -> HTTPException:
+    # Never reflect provider response bodies, request bodies, or API keys to clients or logs.
+    error = body.get("error", {}) if isinstance(body, dict) else {}
+    if not isinstance(error, dict):
+        error = {}
+    provider_status = str(error.get("status", ""))[:45].upper()
+    if not re.fullmatch(r"[A-Z_]{1,45}", provider_status):
+        provider_status = "UNKNOWN"
+    hint = " ".join([str(error.get("message", ""))[:400], provider_status]).lower()
+    logger.warning("Gemini generateContent rejected request: HTTP=%s status=%s", code, provider_status)
+    if code in (400, 401) and any(v in hint for v in ("api_key_invalid", "api key not valid", "invalid api key", "api_key_expired")):
+        detail = "Gemini rechazó la clave API (HTTP %s). Verifica SMART_GEMINI_API_KEY en Railway API y que sea una clave de Google AI Studio." % code
+    elif code == 400:
+        detail = "Gemini rechazó los parámetros de la solicitud (HTTP 400). Revisa el modelo, el documento o el formato solicitado."
+    elif code in (401, 403):
+        detail = "Google negó acceso al modelo (HTTP %s). Comprueba permisos de la clave, proyecto y API Generative Language." % code
+    elif code == 402:
+        detail = "Gemini requiere créditos o facturación habilitada para el modelo (HTTP 402)."
+    elif code == 404:
+        detail = "Google no encontró el modelo %s o tu proyecto no puede utilizarlo (HTTP 404). Revisa SMART_GEMINI_MODEL." % _gemini_model()
+    elif code == 429:
+        detail = "Gemini rechazó la solicitud por cuota o límite de uso (HTTP 429). Revisa el plan y límites de Google AI Studio."
+    elif code in (500, 502, 503, 504):
+        detail = "El servicio de Gemini está temporalmente indisponible (HTTP %s). Intenta nuevamente más tarde." % code
+    else:
+        detail = "Gemini rechazó la solicitud (HTTP %s, código %s). Revisa el proyecto y el modelo en Google AI Studio." % (code, provider_status)
+    return HTTPException(502, detail)
+
+
+async def _post_gemini(request: dict[str, Any], api_key: str, model: str, timeout: float) -> dict[str, Any]:
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                headers={"x-goog-api-key": api_key, "content-type": "application/json"},
+                json=request)
+    except httpx.TimeoutException:
+        logger.warning("Gemini generateContent timed out: model=%s", model)
+        raise HTTPException(504, "Gemini tardó demasiado en responder. Puedes repetir el análisis.") from None
+    except httpx.RequestError as exc:
+        logger.warning("Gemini generateContent transport error: type=%s", type(exc).__name__)
+        raise HTTPException(502, "No fue posible conectar con Gemini desde Railway. Verifica la conectividad del servicio API.") from None
+    try:
+        body = response.json()
+    except ValueError:
+        body = {}
+    if response.status_code >= 400:
+        raise _provider_failure(response.status_code, body)
+    if not isinstance(body, dict):
+        raise HTTPException(502, "Gemini devolvió una respuesta ilegible.")
+    return body
+
+
+@router.post("/workflow-import/check-connection")
+async def check_gemini_connection(email: str = Depends(_verify_identity)):
+    """Authenticated lightweight inference; no source document and no key exposed."""
+    _, _, key = _configuration()
+    if not key:
+        raise HTTPException(503, "Gemini no está configurado en Railway API.")
+    model = _gemini_model()
+    reply = await _post_gemini({
+        "contents": [{"role": "user", "parts": [{"text": "Responde solo OK."}]}],
+        "generationConfig": {"temperature": 0, "maxOutputTokens": 32}
+    }, key, model, timeout=20.0)
+    candidates = reply.get("candidates") or []
+    if not candidates:
+        raise HTTPException(502, "Gemini respondió, pero no generó contenido. Comprueba restricciones del modelo.")
+    return {"connected": True, "model": model, "message": "Gemini respondió correctamente. Ya puedes analizar el documento."}
+
+
 async def _call_gemini(data: bytes, suffix: str, filename: str, api_key: str,
                        party_kind: str | None = None) -> Proposal:
     context = (
@@ -234,21 +314,10 @@ async def _call_gemini(data: bytes, suffix: str, filename: str, api_key: str,
     else:
         parts = [{"text": PROMPT + context + "\n\nDocumento: " + filename},
                  {"inline_data": {"mime_type": MIMES[suffix], "data": base64.b64encode(data).decode("ascii")}}]
-    model = os.getenv("SMART_GEMINI_MODEL", "gemini-2.5-flash").strip()
-    if not re.fullmatch(r"[A-Za-z0-9._-]{2,80}", model):
-        raise HTTPException(503, "Gemini model configuration is invalid")
+    model = _gemini_model()
     req = {"contents": [{"role": "user", "parts": parts}],
            "generationConfig": {"responseMimeType": "application/json", "temperature": 0.1, "maxOutputTokens": 24000}}
-    try:
-        async with httpx.AsyncClient(timeout=110.0) as client:
-            resp = await client.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
-                headers={"x-goog-api-key": api_key, "content-type": "application/json"},
-                json=req)
-            resp.raise_for_status()
-            response_json = resp.json()
-    except (httpx.HTTPError, ValueError):
-        raise HTTPException(502, "Gemini could not analyze the document. Check API configuration and try again") from None
+    response_json = await _post_gemini(req, api_key, model, timeout=110.0)
     try:
         candidate = response_json["candidates"][0]["content"]["parts"]
         text_result = "".join(p.get("text", "") for p in candidate)
