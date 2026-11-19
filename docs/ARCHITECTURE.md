@@ -1,4 +1,16 @@
-# Smart Contract V6.4.1 — Arquitectura integral y estado real
+# Smart Contract V6.5 — Arquitectura integral y estado real
+
+## V6.5 — Proceso documental contextual a un tercero
+
+Vista previa trazable por tercero independiente de las plantillas publicadas: `ContractParty` no almacena workflows; `PartyProcessPreview` (nuevo modelo del tenant) referencia `party_id` y una propuesta JSON, mapeos de origen y dudas. Su creación no modifica `WorkflowVersion`, `ContractCase`, `ContractTask` ni `ContractCaseAccess`. Solo un usuario institucional con rol de configuración y acceso al tenant puede guardar la propuesta. Los externos nunca reciben este borrador antes de que se publique y se asocie a un caso.
+
+Flujo técnico: ficha Personas y empresas → crear proceso con Maira (scoped partyId) → cliente añade `party_kind=NATURAL|JURIDICA` al multipart autorizado de Gemini → agente conserva pasos y asigna lados solo con rol explícito; detecta incompatibilidad aspirante/persona jurídica → API valida mapa y DAG → frontend ofrece revisión de actividades por lado (prestador/contratante/por definir) y dependencias → guardar vista previa por tenant en PostgreSQL → reabrir desde ficha del tercero → pasar a diseñador para revisión. No se genera ninguna obligación fuera del diagrama ni se convierte una notificación automáticamente en tarea del destinatario.
+
+El diagrama fuente específico fue revisado: `Process Flowchart clico contract V2.pdf`, 2 páginas, 23 pasos numerados contando los subpasos. Distingue administración, aspirante, jurídica, supervisor, financiero, SST y sistema. Esta fuente es un flujo de contratación de personal; requiere validación humana para aplicarse a una IPS como Hospital Smart. El número de actividades es criterio de revisión de este documento, NO está codificado como regla fija del motor.
+
+Migración `0004_party_process_previews` crea tabla sin modificar expedientes previos. Se guarda una nueva propuesta como `DRAFT_REVIEW`, con `workflow`, `source_map`, `questions`, `observations`, `filename`, `created_by`, `created_at`, `tenant_id` y `party_id`. El PDF no se conserva, solo propuesta. Restricción de 500 mapeos y validación por `_parse_proposal`. Endpoints con filtros y permisos de tenant; acceso externo denegado. Hay pruebas de no publicación, no invitación, aislamiento por institución y rechazo de pasos inventados.
+
+Resultados verificados: CI 50/50 Python tests PASS y Vue-tsc/Vite PASS (commit `5ed5b0df2ad801b0761062b3ba0ba31bf01b0474`). Railway web, api y Postgres online con API SUCCESS. No se verificó el flujo con Gemini en navegador: falta SMART_GEMINI_API_KEY. No habilitar documentos institucionales reales sin RLS y seguridad documental.
 
 ## UX MAIRA V6.4.1 — Pulse elegante
 

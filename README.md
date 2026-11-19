@@ -1,8 +1,20 @@
 # Smart Contract + MAIRA
 
-**V6.4.1 — MAIRA compacta con pulso discreto · Development**
+**V6.5 — Vista previa de proceso por persona o empresa con Maira · Development**
 
 Smart Contract es una plataforma SaaS multiempresa con motor declarativo de workflows de contratación, campos, políticas y modalidades configurables. La primera aplicación es contratación de red prestadora de salud, sin codificar PGP, cápita ni evento como flujos obligatorios. El workflow institucional de Famisanar aún no ha sido recibido y no forma parte de esta versión.
+
+## V6.5 — De documento a vista previa de Hospital Smart
+
+**Prueba de producto prioritaria:** Personas y empresas → buscar Hospital Smart → **Crear proceso con Maira** → cargar el diagrama original PDF/PNG/TXT → analizar por Gemini → vista previa con pasos, responsables y dependencias → **Guardar vista previa en Hospital Smart** → regresar al registro y abrir **Vista previa**. La vista guardada se consulta en PostgreSQL y permite comparar las tareas que vería el prestador con las actividades del contratante sin ejecutar un contrato.
+
+**Origen exacto del caso:** `Process Flowchart clico contract V2.pdf`, documento de dos páginas aportado por el usuario. Se inspeccionó: contiene 23 pasos numerados contando subpasos, desde creación de usuarios y proyectos, registro de aspirante, documentos, validación jurídica y presupuestal hasta contrato, firma, póliza, ARL y acta de inicio. El documento refiere a un aspirante y contratación de personal, no presupone requisitos contractuales de una IPS. Maira recibe únicamente el tipo NATURAL/JURIDICA como contexto (no los datos personales) y debe advertir la posible incompatibilidad sin inventar requisitos o cambiar el contenido de fuente. Identificar el ejecutor no equivale a identificar el destinatario de notificaciones.
+
+**Almacenamiento seguro de la vista:** migración Alembic `0004_party_process_previews` crea `party_process_previews` vinculada a tenant y party. Guarda únicamente la propuesta de workflow, la correspondencia `source_map` con páginas/citas, dudas, observaciones y nombre de archivo; **no guarda PDF, imagen ni secretos**. Se ejecuta `_parse_proposal` antes de persistir, para rechazar nodos sin origen, duplicados o dependencias inválidas. La API exige membresía de configuración para guardar y membresía interna para consultar. Los invitados al expediente no pueden ver estas propuestas.
+
+**API:** `POST/GET /api/v1/portal/parties/{party_id}/process-previews` y `GET /api/v1/portal/parties/{party_id}/process-previews/{preview_id}`; se conserva `POST /api/v1/maira/workflow-import` y se agrega contexto opcional `party_kind` de forma validada. La pestaña Personas y empresas muestra tanto Crear proceso con Maira como Vista previa para cada registro. La vista es revisión previa, no publicación ni asignación de plantilla. El editor permite adaptar cuando se elige explícitamente Revisar y adaptar en Workflow Studio. La publicación del workflow integral requerirá resolver las actividades no ejecutables (notificaciones, firma, integración) y revisar responsables. No hay atajos para considerar una firma realizada.
+
+**Estado probado:** GitHub Actions para commit funcional `5ed5b0df2ad801b0761062b3ba0ba31bf01b0474` pasó **50 tests backend y build Vue**. Railway Development confirmó Web/API/Postgres online y último despliegue API SUCCESS; Frontend del cambio anterior compiló y desplegó SUCCESS. Las pruebas son automáticas con identidad Google simulada; no se ejecutó análisis real de Gemini ni carga PDF en navegador. `SMART_GEMINI_API_KEY` permanece sin configurar en API Railway, por lo que la app muestra bloqueo antes de enviar el archivo. El Client ID Google y la allowlist administrativa siguen configurados. Esta función es solo para pruebas sintéticas/autorizadas y no implica seguridad multiempresa productiva.
 
 ## V6.4.1 — MAIRA flotante compacta
 
