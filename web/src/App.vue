@@ -151,6 +151,7 @@ function stopMairaClock(){if(mairaTimer!==null){clearInterval(mairaTimer);mairaT
 
 const mairaConnectionBusy=ref(false)
 const mairaConnectionResult=ref('')
+const mairaModelChoice=ref('')
 const mairaImportError=ref('')
 const mairaImportInfo=ref('')
 const mairaSourceFile=ref<File|null>(null)
@@ -429,18 +430,33 @@ function chooseMairaSource(event:Event){
  }else mairaSourceFile.value=file
 }
 async function checkMairaConnection(){
- if(!mairaGoogleToken.value){mairaImportError.value='Debes iniciar sesión con Google para verificar la conexión.';return}
+ if(!mairaGoogleToken.value){mairaImportError.value='Debes iniciar sesión con Google para diagnosticar Gemini.';return}
+ if(mairaImportBusy.value)return
  mairaConnectionBusy.value=true
  mairaConnectionResult.value=''
  mairaImportError.value=''
+ mairaModelChoice.value=''
  try{
-  const response=await fetch(MAIRA_API+'/api/v1/maira/workflow-import/check-connection',{
+  const response=await fetch(MAIRA_API+'/api/v1/maira/workflow-import/diagnose-models',{
    method:'POST',headers:{Authorization:'Bearer '+mairaGoogleToken.value},cache:'no-store'
   })
-  const data=await response.json() as {connected?:boolean;model?:string;message?:string;detail?:string}
-  if(!response.ok)throw new Error(data.detail||'Error verificando Gemini ('+response.status+')')
-  mairaConnectionResult.value=(data.message||'Gemini conectado correctamente.')+' Modelo: '+(data.model||'configurado')
- }catch(e){mairaImportError.value=e instanceof Error?e.message:'No se pudo verificar la conexión.'}
+  const body=await response.json() as {
+   configured_model?:string;recommended_model?:string|null;verified?:boolean;detail?:string;
+   results?:{model:string;state:string;http:number|null}[]
+  }
+  if(!response.ok)throw new Error(body.detail||'No fue posible diagnosticar los modelos ('+response.status+').')
+  const states=(body.results||[]).map(x=>x.model+': '+(x.state==='OK'?'respondió correctamente':x.http?'HTTP '+x.http:x.state)).join(' · ')
+  if(!body.verified||!body.recommended_model){
+   throw new Error('Ningún modelo respondió a la prueba mínima. '+states+'. Evita volver a procesar el PDF hasta restablecer Gemini.')
+  }
+  if(body.recommended_model!==body.configured_model){
+   mairaModelChoice.value=body.recommended_model
+   mairaConnectionResult.value='Modelo alternativo verificado: '+body.recommended_model+'. Se usará en este análisis. '+states+'.'
+  }else{
+   mairaModelChoice.value=''
+   mairaConnectionResult.value='Modelo configurado respondió correctamente. '+states+'.'
+  }
+ }catch(e){mairaImportError.value=e instanceof Error?e.message:'Error de diagnóstico'}
  finally{mairaConnectionBusy.value=false}
 }
 async function analyzeMairaDocument(){
@@ -454,6 +470,7 @@ async function analyzeMairaDocument(){
  try{
   const data=new FormData();data.append('file',mairaSourceFile.value,mairaSourceFile.value.name)
   if(mairaTargetParty.value)data.append('party_kind',mairaTargetParty.value.kind)
+  if(mairaModelChoice.value)data.append('model_choice',mairaModelChoice.value)
   const response=await fetch(MAIRA_API+'/api/v1/maira/workflow-import/stream',{
     method:'POST',headers:{Authorization:'Bearer '+mairaGoogleToken.value},body:data
   })
@@ -1031,7 +1048,7 @@ function simulateDraft(){
                   {{mairaImportBusy?'Maira está analizando…':'Analizar documento con Maira'}}
                 </button>
                 <button type="button" class="ghost-button" :disabled="!mairaImportStatus?.ready||!mairaGoogleToken||mairaConnectionBusy||mairaImportBusy" @click="checkMairaConnection">
-                  {{mairaConnectionBusy?'Verificando…':'Verificar conexión Gemini'}}
+                  {{mairaConnectionBusy?'Diagnosticando…':'Diagnosticar modelos Gemini'}}
                 </button>
               </div>
               <p v-if="mairaConnectionResult" class="maira-import-notice" role="status">{{mairaConnectionResult}}</p>

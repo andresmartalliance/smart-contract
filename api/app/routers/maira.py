@@ -453,6 +453,58 @@ async def _post_gemini(request: dict[str, Any], api_key: str, model: str, timeou
     raise HTTPException(502, "No se obtuvo una respuesta válida de Gemini.")
 
 
+async def _probe_gemini_model(api_key: str, model: str) -> dict[str, Any]:
+    """One tiny, non-document inference. No retry, no provider body exposure."""
+    payload = {"contents": [{"role": "user", "parts": [{"text": "Responde solo OK."}]}],
+               "generationConfig": {"temperature": 0, "maxOutputTokens": 48}}
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                headers={"x-goog-api-key": api_key, "content-type": "application/json"},
+                json=payload)
+    except httpx.TimeoutException:
+        return {"model": model, "state": "TIMEOUT", "http": None}
+    except httpx.RequestError:
+        return {"model": model, "state": "NETWORK_ERROR", "http": None}
+    if response.status_code != 200:
+        return {"model": model, "state": "UNAVAILABLE" if response.status_code in (500, 502, 503, 504)
+                else "RATE_LIMITED" if response.status_code == 429 else "NOT_READY",
+                "http": response.status_code}
+    try:
+        body = response.json()
+        candidates = body.get("candidates", [])
+        meaningful = any(str(part.get("text") or "").strip()
+                         for candidate in candidates for part in candidate.get("content", {}).get("parts", []))
+    except (ValueError, TypeError, AttributeError):
+        meaningful = False
+    return {"model": model, "state": "OK" if meaningful else "EMPTY", "http": 200}
+
+
+@router.post("/workflow-import/diagnose-models")
+async def diagnose_gemini_models(email: str = Depends(_verify_identity)):
+    """Check the configured model and one documented stable Flash alternative.
+
+    Access is restricted to the same verified Google allowlist. Two tiny model
+    calls, in parallel, with no retries and no source documents or secrets.
+    A successful tiny text probe does not guarantee PDF processing.
+    """
+    _, _, key = _configuration()
+    if not key:
+        raise HTTPException(503, "Gemini no está configurado.")
+    configured = _gemini_model()
+    models = list(dict.fromkeys([configured, "gemini-3.8-flash"]))
+    results = await asyncio.gather(*[_probe_gemini_model(key, name) for name in models])
+    working = [entry["model"] for entry in results if entry["state"] == "OK"]
+    recommended = configured if configured in working else (
+        "gemini-3.8-flash" if "gemini-3.8-flash" in working else None
+    )
+    return {"configured_model": configured, "results": results,
+            "recommended_model": recommended, "verified": bool(recommended),
+            "notice": "Se probaron dos solicitudes mínimas de texto, sin documentos. "
+                      "Una respuesta satisfactoria no garantiza el análisis del PDF."}
+
+
 @router.post("/workflow-import/check-connection")
 async def check_gemini_connection(email: str = Depends(_verify_identity)):
     """Authenticated lightweight inference; no source document and no key exposed."""
@@ -504,7 +556,8 @@ TEXT_FALLBACK_NOTICE = (
 
 async def _call_gemini(data: bytes, suffix: str, filename: str, api_key: str,
                        party_kind: str | None = None,
-                       progress: ProgressCallback | None = None) -> Proposal:
+                       progress: ProgressCallback | None = None,
+                       model_override: str | None = None) -> Proposal:
     context = (
         "\n\nContexto de la solicitud (no forma parte del documento): el destinatario registrado "
         "es una " + ("PERSONA JURIDICA" if party_kind=="JURIDICA" else "PERSONA NATURAL")
@@ -518,7 +571,9 @@ async def _call_gemini(data: bytes, suffix: str, filename: str, api_key: str,
     else:
         parts = [{"text": PROMPT + context + "\n\nDocumento: " + filename},
                  {"inline_data": {"mime_type": MIMES[suffix], "data": base64.b64encode(data).decode("ascii")}}]
-    model = _gemini_model()
+    if model_override is not None and model_override != "gemini-3.8-flash":
+        raise HTTPException(400, "Modelo de análisis no permitido.")
+    model = model_override or _gemini_model()
     req = {"contents": [{"role": "user", "parts": parts}],
            "generationConfig": {"responseMimeType": "application/json", "temperature": 0.1, "maxOutputTokens": 24000}}
     fallback_req = None
@@ -635,6 +690,7 @@ async def interpret_workflow_document(
 async def interpret_workflow_document_stream(
     file: UploadFile = File(...),
     party_kind: Literal["NATURAL", "JURIDICA"] | None = Form(default=None),
+    model_choice: Literal["gemini-3.8-flash"] | None = Form(default=None),
     email: str = Depends(_verify_identity),
 ):
     """Incremental NDJSON: explicit server milestones; heartbeat is not progress."""
@@ -654,8 +710,12 @@ async def interpret_workflow_document_stream(
         async def execute() -> None:
             try:
                 await notify("VALIDADO", "Archivo recibido y formato validado.")
-                proposal = await _call_gemini(safe_data, suffix, name, key, party_kind,
-                                              progress=notify)
+                if model_choice:
+                    proposal = await _call_gemini(safe_data, suffix, name, key, party_kind,
+                                                  progress=notify, model_override=model_choice)
+                else:
+                    proposal = await _call_gemini(safe_data, suffix, name, key, party_kind,
+                                                  progress=notify)
                 await notify("FINALIZANDO", "Workflow construido. Preparando vista previa.")
                 await queue.put({"event": "done", "result": _document_result(proposal, name, party_kind)})
             except HTTPException as error:
