@@ -41,3 +41,42 @@ def test_simulation_requires_completed_deps():
     assert result['s0']=='WAITING_DEPENDENCIES'
     result=simulate(wf,{}, {'start'})
     assert result['s0']=='AVAILABLE'
+
+
+def test_fails_when_branch_never_reaches_end():
+    wf = flow(3)
+    wf.edges.pop()  # s2 has no route to END
+    with pytest.raises(WorkflowInvalid, match='Nodes cannot reach END'):
+        topological_order(wf)
+
+
+def test_end_cannot_have_outgoing_edge():
+    wf = flow(2)
+    wf.edges.append(type(wf.edges[0])(source='end', target='s1'))
+    with pytest.raises(WorkflowInvalid, match='END node'):
+        topological_order(wf)
+
+
+def test_duplicate_edge_is_rejected():
+    wf = flow(2)
+    wf.edges.append(type(wf.edges[0])(source='start', target='s0'))
+    with pytest.raises(WorkflowInvalid, match='Duplicate edge'):
+        topological_order(wf)
+
+
+def test_conditional_step_requires_condition():
+    wf = flow(2)
+    wf.nodes[1].policy = 'CONDITIONAL'
+    with pytest.raises(WorkflowInvalid, match='activation condition'):
+        topological_order(wf)
+
+
+def test_dynamic_fields_are_checked_without_fixed_modality():
+    wf = flow(2)
+    wf.modality_key = 'CUSTOM_FUTURE_PAYMENT_SCHEME'
+    wf.nodes[1].config = {'fields': [
+        {'key': 'custom_amount', 'label': 'Importe variable', 'type': 'number', 'required': True},
+        {'key': 'custom_amount', 'label': 'Duplicado', 'type': 'number', 'required': False},
+    ]}
+    with pytest.raises(WorkflowInvalid, match='duplicate field'):
+        topological_order(wf)

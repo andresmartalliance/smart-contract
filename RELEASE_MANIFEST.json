@@ -1,44 +1,43 @@
 {
   "product": "smart-contract",
   "architecture": "5.0",
-  "package": "5.1-bootstrap",
-  "status": "RAILWAY_DEV_BOOTSTRAP_DEPLOYED_NOT_OPERATIONAL",
+  "package": "5.2-workflow-studio",
+  "status": "RELEASE_CANDIDATE_AWAITING_RAILWAY_BUILD",
   "repository_target": "andresmartalliance/smart-contract",
-  "github_commit_sha": "b91193df330a40872ac0784aab015d8a5fdc80ee",
   "railway_project_id": "1f226324-580b-4b1c-b235-12c717d70af8",
   "railway_development_environment_id": "6e8d45ca-d6f2-448c-a48a-63e5a2ab1806",
-  "railway_deployment_id": "4ab8d68f-8656-4204-abf8-30ce82532394",
   "google_drive_master_document_id": "1_7cuP7hS2nFZRZD33d9Svd1R8l334K2UTKak39Brxoo",
   "database_migration": "0001_baseline",
   "acceptance": {
-    "workflow_engine_tests": "PASS_5_OF_5_TESTS",
-    "tenancy_tests": "PASS_4_OF_4_TESTS",
-    "frontend_build": "PASS_RAILWAY_VUE_TSC_VITE",
-    "railway_smoke": "RAILWAY_HEALTH_API_200_AND_SERVICES_ONLINE_EXTERNAL_HTTPS_UNVERIFIED",
-    "database_migration": "ALEMBIC_PREDEPLOY_COMMAND_CONFIGURED_AND_DEPLOY_SUCCESS_SQL_READBACK_NOT_DONE"
+    "backend_tests": "14/14 PASS local Python",
+    "frontend_typescript_syntax": "PASS global TypeScript parser",
+    "frontend_vue_build": "PENDING_RAILWAY_BUILD",
+    "database_migration": "UNCHANGED_0001_BASELINE",
+    "workflow_editor_persistence": "BROWSER_LOCAL_ONLY",
+    "railway_smoke": "PENDING_DEPLOYMENT",
+    "multi_tenant_operational": "NOT_READY_GOOGLE_OAUTH_AND_RLS_MISSING"
   },
   "limitations": [
-    "MAIRA remains a scaffold; Gemini not integrated",
-    "Google OAuth and tenant production RLS not implemented",
-    "No actual contract operations or institutional workflow execution",
-    "External HTTPS URLs not independently checked; Railway reports online/healthy",
-    "GitHub Actions CI results not independently verified",
-    "Three moderate npm dependency advisories reported during frontend build",
-    "No user/customer data should be loaded into this Development bootstrap"
+    "No Google Sign-In or tenant safe frontend writes",
+    "No client-contract data permitted in open Development editor",
+    "MAIRA/Gemini not configured",
+    "No approval/publication or real contract execution",
+    "Frontend build verification pending Railway",
+    "Dependency security audit requires follow-up",
+    "Workflow example generic, institutional 128-step workflow not yet received"
   ],
+  "git_repository_access": "AUTHORIZED_PROJECT_ONLY_BY_POLICY",
+  "source_of_truth": "andresmartalliance/smart-contract main; release Git SHA available from repository/CI; Drive master is context",
   "railway_services": {
     "api": "c1ea4a30-1b3e-436d-b509-1919cb3f1857",
-    "web": "03902694-12b6-4411-85be-970096f88f15"
-  },
-  "railway_source_connection": "CONNECTED_MAIN",
-  "github_source_commit": "71c5bf9817428714c2f774c0eb77c5812b2f4f9b",
-  "railway_deployments": {
-    "api": "4ab8d68f-8656-4204-abf8-30ce82532394",
-    "web": "6c2bec94-59e0-4477-8777-6195a10337fa",
-    "postgres": "40250447-815e-4fd7-b93f-e912ab912917"
+    "web": "03902694-12b6-4411-85be-970096f88f15",
+    "postgres": "01345eda-9aa4-49d9-a1e8-d96a35869241"
   },
   "railway_domains": {
     "api": "api-development-18b59fbb.up.railway.app",
     "web": "web-development-80ecf771.up.railway.app"
-  }
+  },
+  "github_source_commit": "PENDING_RELEASE_COMMIT",
+  "railway_source_connection": "CONNECTED_MAIN",
+  "release_notes": "Editable visual workflow studio with browser-only drafts, condition branches, customizable form fields, role assignments, local simulation, import/export and upgraded backend graph validation."
 }

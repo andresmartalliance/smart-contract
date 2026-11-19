@@ -1,39 +1,36 @@
-# Smart Contract V5.1 — Arquitectura congelada para el primer desarrollo
+# Smart Contract V5.2 — Arquitectura integral y estado real
 
-## Producto
+## Objetivo de producto
+Plataforma SaaS multiempresa de workflows contractuales dinámicos, con bibliotecas de campos, bloques, políticas, reglas, cálculos y plantillas. Contratación de la red prestadora es el primer caso: no es una limitación de diseño. Las modalidades se registran como datos, nunca como condicionales de implementación codificados para evento, cápita, PGP u otra modalidad.
 
-SaaS multiempresa de workflows contractuales dinámicos, con biblioteca de campos, bloques, reglas, fórmulas y plantillas. Modalidades de pago como datos y componentes contractuales, nunca como un `if modalidad == ...`. Primer contexto: red prestadora EPS; Famisanar es caso de uso potencial, no cliente confirmado de la aplicación ni tenant real configurado.
-
-## Usuarios
-
-Dos experiencias: Configurador (diseño, validación y propuestas de flujos) y Operador (expedientes y tareas). Permisos granulares para Jurídica, Técnica, Financiera, Red, Actuarial, Aprobaciones; la separación de funciones prevalece sobre las etiquetas de interfaz.
+## Usuarios y separación de responsabilidades
+- **Configurador:** diseña y modifica flujos, define políticas y reglas, compara versiones y solicita publicación.
+- **Operador:** tramita expedientes y tareas con permisos granulares para Jurídica, Red, Financiera, Técnica, Actuarial y aprobadores.
+El frontend V5.2 es un editor local público y todavía NO aplica permisos de usuario; el backend sí exige JWT + membresía de tenant. No conectar el editor a operaciones reales sin identidad segura.
 
 ## Multiempresa
+Cada institución se asocia a `tenant_id`, todos los endpoints actuales resuelven la membresía en el backend, y los registros se filtran por tenant. La capa definitiva requiere además RLS PostgreSQL, almacenamiento segregado, logs y jobs tenant-aware, pruebas adversariales de autorización y aislamiento del conocimiento de MAIRA. Los documentos, tarifas y manuales pertenecen al cliente y jamás se convierten automáticamente en biblioteca global.
 
-Cada entidad posee `tenant_id` y todas las definiciones y expedientes se consultan desde identidad autenticada y membresía real. Baseline en API filtra por tenant; para producción exige complementar con PostgreSQL RLS, pruebas adversariales, consultas de jobs y almacenamiento con namespaces por empresa. Los datos y el conocimiento de una entidad no son biblioteca global por defecto.
-
-## Motor
-
-DSL declarativo validado, grafo DAG, checks de nodos obligatorios, referencias, topología y roles; condiciones desconocidas nunca son aprobadas. La simulación inicial es conservadora y **no ejecuta decisiones jurídicas**. Faltan rutas avanzadas (split/join expresivo, subprocesos, excepciones y migraciones), almacenamiento seguro de borradores y publicaciones aprobadas.
+## Workflow core
+- Esquema declarativo: `key`, `name`, `modality_key` libre, `nodes`, `edges`, `metadata`.
+- Nodos: tipo, rol, política, habilitado, condición DSL, configuraciones y campos.
+- Enlaces: dependencias con condición de ejecución opcional, soportando bifurcación y paralelismo por grafo.
+- Restricciones: un inicio, una o más finalizaciones, DAG sin ciclos, todos los nodos alcanzables desde inicio y capaces de alcanzar un final, roles en aprobaciones, requisitos protegidos no apagables.
+- Políticas: `LEGAL_LOCKED`, `ORG_REQUIRED`, `CONDITIONAL`, `OPTIONAL`; este editor no puede rebajar directamente la protección de una etapa existente. En producción el bloqueo se deberá cotejar con una biblioteca jurídica institucional firmada, no solo con el JSON del cliente.
+- Validación local + backend con control de identidad. Simulación local con datos de ejemplo y reglas conocidas. El simulador no toma decisiones jurídicas ni ejecuta tareas.
+- Borrador local: localStorage y JSON. **No** publicación ni persistencia institucional en frontend; un mismo navegador puede recuperar su borrador, pero no hay colaboración ni control de acceso allí.
+- Las posiciones del grafo viven en `config.position`. Los campos propios usan `config.fields`, preparados para renderización futura de formularios sin pantallas dedicadas.
 
 ## MAIRA
+MAIRA será el agente contractual para proponer flujos, recuperar políticas, analizar documentos, diligenciar minutas y orientar cada tarea. Se ejecutará con herramientas backend por tenant, auditoría y permisos. La interfaz actual comunica que Gemini no está conectado: no hay simulación engañosa de agente ni autonomía de publicación.
 
-Agente con herramientas de dominio: consulta expediente, extrae documentos, propone reglas y workflows, analiza cambios y prepara minutas. Cada acción entra por backend, validación de permiso, auditoría y aprobación para mutaciones importantes. Este primer paquete no simula inteligencia artificial: su endpoint declara que aún está desactivada.
+## Conocimiento y activos reutilizables
+Smart puede reutilizar componentes, esquemas y plantillas genéricas de su propiedad. Los manuales institucionales, negociaciones, notas técnicas, tarifas, expedientes y comentarios son privados. MAIRA solo podrá convertir hallazgos en propuestas versionadas; un responsable autorizado decide si aplicarlas.
 
-## Knowledge asset
+## Infraestructura y continuidad
+GitHub privado `andresmartalliance/smart-contract` rama `main`, Railway `smart-contract` ambiente `development`, `api`, `web`, `Postgres`. El documento maestro de continuidad de Drive se actualiza **integralmente** tras cada paquete. Una release = mismo commit/código/reglas/API/frontend + pruebas + estado verificado. Evitar commits aislados y despliegues automáticos innecesarios. Los conectores de ChatGPT tienen permisos más amplios que estos recursos; operar exclusivamente dentro del proyecto conforme a la política documentada.
 
-Plantillas y reglas reutilizables de Smart pueden estar en biblioteca central. Manuales, contratos, tarifas, notas técnicas, notas de revisión y documentos de clientes son privados por tenant; no exportar ni compartir automáticamente. Futura recomendación a otros tenants solo a partir de conocimiento explícitamente autorizado y anonimizado cuando corresponda.
-
-## Continudad sin parches acumulados
-
-Una release es un estado autocontenido: código integrado, migraciones, pruebas, manifiesto, estado Railway y **un solo documento maestro vigente en Drive**, actualizado en todas sus secciones. Snapshots previos son históricos. Nunca afirmar funcionalidades inexistentes; verificar cada hito con pruebas y readback. Los cambios pequeños pueden realizarse internamente, pero se consolidan y validan en una entrega integral.
-
-## Pendientes prioritarios
-
-1. Habilitar acceso de la integración GitHub al repositorio `andresmartalliance/smart-contract`.
-2. Subir base y confirmar CI, dependencias, licencias y seguridad.
-3. Conectar Railway Development y servicios; verificar migraciones y health checks.
-4. Implementar OAuth Google real, RLS PostgreSQL, gestor de tenants, expedientes y auditoría avanzada.
-5. Editor Vue Flow persistente conectado a API; versionado, aprobación de publicación y generador de formularios.
-6. Conectar MAIRA + Gemini con reglas y permisos, evaluación de documentos y propuestas de flujos.
-7. Ingresar workflow real Famisanar, normalizar etapas y probar rutas sin codificación por modalidad.
+## Estado de entrega V5.2
+**Incluye:** editor visual funcional con bloqueos locales, formularios configurables, responsables, conexiones condicionadas, validación, simulación, importación/exportación y recuperación local; backend validado con 14 pruebas de motor y aislamiento.
+**No incluye:** Google OAuth; escritura institucional desde navegador; publicación; RLS; integración Gemini; ejecución real de contratos; SIIFA/REPS; matriz de procesos de Famisanar; verificación jurídica de plantillas específicas.
+**Antes de prometer MVP:** construir sesión, controles backend/RLS, biblioteca persistente y versionada, publicación formal, expediente operativo y MAIRA; luego probar rutas institucionales reales.
