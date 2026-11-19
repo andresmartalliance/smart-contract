@@ -1,8 +1,16 @@
 # Smart Contract + MAIRA
 
-**V5.6 — Emblema MAIRA circular y paleta unificada · ambiente Development**
+**V6.0 — MAIRA: carga de documentos y propuesta de workflows · Development**
 
 Smart Contract es una plataforma SaaS multiempresa con motor declarativo de workflows de contratación, campos, políticas y modalidades configurables. La primera aplicación es contratación de red prestadora de salud, sin codificar PGP, cápita ni evento como flujos obligatorios. El workflow institucional de Famisanar aún no ha sido recibido y no forma parte de esta versión.
+
+## MAIRA V6.0 — Primera prueba de interpretación (piloto limitado)
+
+Desde **Flujos → Crear con MAIRA** el Configurador puede seleccionar un archivo PDF, PNG, JPG o TXT (máximo 6 MB), autenticarse con una cuenta Google explícitamente permitida y solicitar que Gemini analice el documento. MAIRA propone un workflow declarativo con nodos y dependencias, una tabla de pasos originales con citas cortas, páginas, nivel de confianza y dudas para validación humana. El borrador debe revisarse antes de aplicarse al editor.
+
+**Estado actual:** UI y API desplegadas, GitHub Actions completa (22 pruebas) y Railway API/Web SUCCESS. El acceso Google y Gemini **NO** están configurados en este proyecto: el botón muestra una indicación de configuración pendiente y **no puede analizar ningún documento aún**. Esto es deliberado para no crear una carga pública de documentos. Variables requeridas en API: `SMART_GOOGLE_CLIENT_ID` (cliente OAuth Web del dominio Development), `SMART_MAIRA_ALLOWED_EMAILS` (lista de correos autorizados) y `SMART_GEMINI_API_KEY` (clave de Google AI Studio); opcional `SMART_GEMINI_MODEL` con valor predeterminado `gemini-2.5-flash`. No subir credenciales a GitHub ni a Drive.
+
+El análisis devuelve un borrador **sin persistencia en el servidor**; el archivo se envía a Gemini con el consentimiento del usuario autenticado, la carga se limita a tipos reconocidos, validación de cabeceras y tamaño, y la propuesta se valida con el motor existente. Al aceptar, se guarda únicamente en localStorage del navegador. Solo pruebas con documentos sintéticos/autorizados; faltan RLS, gobierno del tenant, retención institucional y revisión de seguridad.
 
 ## Ajuste de identidad V5.6
 

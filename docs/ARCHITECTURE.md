@@ -1,4 +1,21 @@
-# Smart Contract V5.6 — Arquitectura integral y estado real
+# Smart Contract V6.0 — Arquitectura integral y estado real
+
+## Flujo de prueba MAIRA V6.0 — Documentos a workflows
+
+Entrada de usuario: **Flujos → Crear con MAIRA → subir PDF/imagen/TXT → analizar → comparar pasos originales → aceptar propuesta → editar**.  El texto original se manda a Gemini únicamente tras verificar un ID token de Google OAuth y que el correo pertenece a una lista explícita del proyecto Smart Contract. MAIRA genera JSON de nodes/edges (sin codificar modalidades). El servidor valida esquema, DAG, rol de aprobaciones y trazabilidad de los nodos a los pasos. Responde documento→paso→nodo y dudas/observaciones. La aceptación se realiza con acción explícita y conserva el flujo como borrador local.
+
+API:
+- GET `/api/v1/maira/workflow-import/status`: devuelve disponibilidad sin exponer secretos.
+- POST `/api/v1/maira/workflow-import`: multipart con Google ID token; PDF, PNG, JPG y TXT hasta 6 MB.
+- GET `/api/v1/maira/capabilities`: contrato de compatibilidad mantenido.
+
+Variables de Railway API requeridas: `SMART_GOOGLE_CLIENT_ID`, `SMART_MAIRA_ALLOWED_EMAILS`, `SMART_GEMINI_API_KEY`, opcional `SMART_GEMINI_MODEL`. **Ninguna de las tres obligatorias está configurada en el proyecto.** No copiarlas desde otros proyectos ni guardarlas en GitHub/Drive.
+
+La primera prueba de archivo debe usar «Process Flowchart clico contract V2.pdf», con pasos numerados, correos, revisión jurídica, presupuestos, contrato/firma, póliza, ARL y acta de inicio. La IA no debe fingir que es un workflow de red prestadora de Famisanar. Su mapeo real no está comprobado porque faltan credenciales.
+
+Validación: GitHub Actions para commit de código `62d2309ffd30679c118ca3672f886e20b1bb63d9` PASS con 22 tests backend y build web. Railway web SUCCESS `b25596f1cad95d3439fe70910baa40fd346d91e5` y API SUCCESS `62d2309ffd30679c118ca3672f886e20b1bb63d9`. No se ha ejecutado una prueba E2E de Gemini ni una captura automática del UI. Se preservaron flujos, diseño visual y arquitectura existentes.
+
+Limitación de seguridad: la credencial Google en el piloto es independiente de la autenticación multiempresa productiva. No es base para publicación, expedientes reales, intercambio de documentos empresariales o uso institucional hasta implementar roles y políticas a nivel de tenant, auditoría y consentimiento específicos. No exponer documentación confidencial con este prototipo.
 
 ## Objetivo de producto
 Plataforma SaaS multiempresa de workflows contractuales dinámicos, con bibliotecas de campos, bloques, políticas, reglas, cálculos y plantillas. Contratación de la red prestadora es el primer caso: no es una limitación de diseño. Las modalidades se registran como datos, nunca como condicionales de implementación codificados para evento, cápita, PGP u otra modalidad.
