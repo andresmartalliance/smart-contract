@@ -923,7 +923,7 @@ function simulateDraft(){
         <div class="top-meta"><span class="top-product">Smart Contract · V6.3 PILOTO</span><span class="context-pill">Development</span><button type="button" class="logout-button" @click="logoutGoogle" title="Cerrar sesión Google">Salir</button></div>
       </header>
       <section v-if="current==='flujos'&&hasInstitution" class="stack">
-        <div class="heading"><div><span class="eyebrow">Diseño inteligente de procesos</span><h2>Workflow Studio</h2><p>Diseña, conecta y valida etapas configurables. Todos los cambios siguen siendo un borrador local.</p></div><div class="header-actions"><button class="primary-button" @click="openMairaDocumentImport">✧ Crear con MAIRA</button><button class="ghost-button" @click="loadPortalPilotExample">Ejemplo de doble portal</button><button class="ghost-button" @click="newWorkflow">＋ Nuevo flujo</button><button class="ghost-button" @click="fileInput?.click()">↥ Importar</button><button class="primary-button" @click="exportDraft">↧ Exportar JSON</button><button class="ghost-button" :disabled="portalBusy" @click="publishPilot">Publicar plantilla de prueba</button></div></div>
+        <div class="heading"><div><span class="eyebrow">Diseño inteligente de procesos</span><h2>Workflow Studio</h2><p>Diseña, conecta y valida etapas configurables. Todos los cambios siguen siendo un borrador local.</p></div><div class="header-actions"><button class="primary-button" @click="openMairaDocumentImport()">✧ Crear con MAIRA</button><button class="ghost-button" @click="loadPortalPilotExample">Ejemplo de doble portal</button><button class="ghost-button" @click="newWorkflow">＋ Nuevo flujo</button><button class="ghost-button" @click="fileInput?.click()">↥ Importar</button><button class="primary-button" @click="exportDraft">↧ Exportar JSON</button><button class="ghost-button" :disabled="portalBusy" @click="publishPilot">Publicar plantilla de prueba</button></div></div>
 
         <div v-if="mairaImportOpen" class="maira-import-surface" role="region" aria-label="Crear flujo a partir de documento con MAIRA">
           <div class="maira-import-head">
@@ -1167,7 +1167,7 @@ function simulateDraft(){
                 <div v-if="partyPreviewTarget&&partyPreview" class="pilot-panel party-process-preview">
           <div class="pilot-detail-top">
             <div><span class="eyebrow">VISTA PREVIA · NO PUBLICADA</span><h3>{{partyPreviewTarget.name}}</h3>
-              <p>Proceso interpretado: {{partyPreview.workflow.name}} · {{partyPreview.source_steps||partyPreview.source_map.length}} actividades</p></div>
+              <p>Proceso interpretado: {{partyPreview.workflow.name}} · {{partyPreview.source_map.length}} actividades</p></div>
             <button type="button" class="ghost-button" @click="partyPreview=null;partyPreviewTarget=null">Cerrar</button>
           </div>
           <p class="pilot-notice">Esta es una simulación de responsabilidades. El prestador no recibe estas tareas hasta que un administrador apruebe y active una plantilla en un expediente.</p>
