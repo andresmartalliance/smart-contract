@@ -583,7 +583,7 @@ function simulateDraft(){
   <div class="shell">
     <aside class="sidebar">
       <div class="brand">
-        <div class="brand-mark">S</div>
+        <div class="brand-mark"><img src="/favicon.svg" alt="" width="34" height="34"/></div>
         <div><strong>Smart Contract</strong><small>INTELLIGENCE PLATFORM</small></div>
       </div>
       <div class="nav-section">Workspace</div>

@@ -1,8 +1,8 @@
 {
   "product": "smart-contract",
   "architecture": "5.0",
-  "package": "6.1-maira-traceability-safe-import",
-  "status": "V6_1_DEPLOYED_BLOCKED_PENDING_GOOGLE_CLIENT_AND_GEMINI",
+  "package": "6.1.1-smart-contract-favicon",
+  "status": "FAVICON_SUBMITTED_FOR_RAILWAY_WEB_BUILD",
   "repository_target": "andresmartalliance/smart-contract",
   "railway_project_id": "1f226324-580b-4b1c-b235-12c717d70af8",
   "railway_development_environment_id": "6e8d45ca-d6f2-448c-a48a-63e5a2ab1806",
@@ -34,7 +34,8 @@
     "google_login": "ALLOWLIST_CONFIGURED_OAUTH_CLIENT_MISSING",
     "gemini": "SMART_GEMINI_API_KEY_MISSING",
     "provenance": "SOURCE_STEP_EXCERPT_PAGE_CONFIDENCE_PRESERVED_IN_NODE",
-    "proposal_replacement": "REQUIRES_SECOND_CONFIRMATION_AND_LOCAL_ROLLBACK"
+    "proposal_replacement": "REQUIRES_SECOND_CONFIRMATION_AND_LOCAL_ROLLBACK",
+    "favicon": "SOURCE_ADDED_BUILD_PENDING"
   },
   "limitations": [
     "Open Development frontend is for fictitious data only",
@@ -70,7 +71,7 @@
   },
   "github_source_commit": "main (see Railway deployment commit and Drive context)",
   "railway_source_connection": "CONNECTED_MAIN",
-  "release_notes": "MAIRA V6.1: preserved source-step evidence in workflow nodes and Inspector, one-to-one mapping enforcement, apply confirmation with rollback and staged Google-only readiness.",
+  "release_notes": "Added user-approved single-solid-blue Smart Contract favicon in SVG and 64px PNG, transparent background; replaced sidebar placeholder S. No changes to MAIRA, backend, or workflows.",
   "base_source_commit": "d176b0fe39017c226c499eb0a4ae6cef13b93df5",
   "visual_design_version": "1.0",
   "watch_patterns": {
@@ -84,5 +85,13 @@
     "descriptor": "Contract Intelligence Agent",
     "spanish": "Inteligencia artificial multiempresa para revisión inteligente y acuerdos contractuales",
     "colors": "existing deep navy and cyan"
+  },
+  "brand_icon": {
+    "symbol": "abstract rounded cloud and three rising bars",
+    "approved_single_color": "#0040DB",
+    "transparent_background": true,
+    "vector_path": "web/public/favicon.svg",
+    "png_path": "web/public/favicon-64.png",
+    "sidebar_icon": true
   }
 }
