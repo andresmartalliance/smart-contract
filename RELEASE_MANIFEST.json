@@ -2,7 +2,7 @@
   "product": "smart-contract",
   "architecture": "5.0",
   "package": "5.6-maira-circular-emblem-blue",
-  "status": "RAILWAY_BUILD_PENDING_MAIRA_CIRCLE",
+  "status": "RAILWAY_DEV_MAIRA_CIRCLE_DEPLOYED_NOT_GEMINI",
   "repository_target": "andresmartalliance/smart-contract",
   "railway_project_id": "1f226324-580b-4b1c-b235-12c717d70af8",
   "railway_development_environment_id": "6e8d45ca-d6f2-448c-a48a-63e5a2ab1806",
@@ -14,7 +14,7 @@
     "frontend_vue_build": "PASS_RAILWAY_VUE_TSC_VITE",
     "database_migration": "UNCHANGED_0001_BASELINE",
     "workflow_editor_persistence": "BROWSER_LOCAL_ONLY",
-    "railway_smoke": "RAILWAY_WEB_DEPLOY_SUCCESS_API_POSTGRES_ONLINE",
+    "railway_smoke": "WEB_SUCCESS_API_POSTGRES_ONLINE",
     "multi_tenant_operational": "NOT_READY_GOOGLE_OAUTH_AND_RLS_MISSING",
     "web_editor_typescript_build": "PASS_RAILWAY_VUE_TSC_VITE",
     "client_draft": "BROWSER_LOCALSTORAGE_ONLY",
@@ -26,9 +26,9 @@
     "maira_context": "UI_READS_CURRENT_MODULE_AND_SELECTED_WORKFLOW_NODE",
     "maira_ai": "NOT_CONNECTED",
     "maira_ui_browser": "NOT_AUTOMATED_BROWSER_TESTED",
-    "maira_brand": "V5.6_SOURCE_IMPLEMENTED_FRONTEND_BUILD_PENDING",
-    "visual_screenshot": "NOT_TESTED_IN_BROWSER",
-    "hero_round": "IMPLEMENTED_SOURCE_BROWSER_UNVERIFIED",
+    "maira_brand": "PASS_VUE_TSC_VITE_RAILWAY_DEPLOY",
+    "visual_screenshot": "NOT_AUTOMATED_BROWSER_VERIFIED",
+    "hero_round": "SOURCE_UPDATED_RAILWAY_HEALTH_OK_NO_BROWSER_E2E",
     "maira_original_color": "PRESERVED_HOME_GRADIENT_#10223f_#153968_#164578"
   },
   "limitations": [
@@ -42,7 +42,8 @@
     "Design changes only: not an operational multi-tenant product",
     "MAIRA actions limited to existing local editor; no Gemini connection or institutional data",
     "MAIRA branding only; not a live Gemini assistant",
-    "No independent browser visual screenshot verification of V5.5"
+    "No independent browser visual screenshot verification of V5.5",
+    "MAIRA circular logo updated; visual screenshot / browser interaction not independently verified"
   ],
   "git_repository_access": "AUTHORIZED_PROJECT_ONLY_BY_POLICY",
   "source_of_truth": "andresmartalliance/smart-contract main; release Git SHA available from repository/CI; Drive master is context",
@@ -64,7 +65,7 @@
     "api": "/api/**",
     "web": "/web/**"
   },
-  "deploy_validation_source_commit": "877c27498b25b7110b7822c3ee3758b6dbdf4b3b",
+  "deploy_validation_source_commit": "e247ab29825bdd7738b72d025184600da8e5c5b7",
   "maira_brand": {
     "name": "MAIRA",
     "expansion": "Multi-tenant AI for Intelligent Review & Agreements",
