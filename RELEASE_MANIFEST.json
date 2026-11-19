@@ -1,8 +1,8 @@
 {
   "product": "smart-contract",
   "architecture": "5.0",
-  "package": "6.5.4-maira-source-first-compiler",
-  "status": "V6_5_4_COMPILER_DEPLOYED_REAL_PDF_RETEST_PENDING",
+  "package": "6.5.6-maira-pdf-text-recovery",
+  "status": "V6_5_6_TEXT_FALLBACK_DEPLOYMENT_PENDING_REAL_INFERENCE_UNVERIFIED",
   "repository_target": "andresmartalliance/smart-contract",
   "railway_project_id": "1f226324-580b-4b1c-b235-12c717d70af8",
   "railway_development_environment_id": "6e8d45ca-d6f2-448c-a48a-63e5a2ab1806",
@@ -67,7 +67,10 @@
     "gemini_model": "gemini-3.6-flash_RAILWAY_API_AND_CODE_DEFAULT",
     "gemini_document_import": "GEMINI_INFERENCE_NOT_YET_VALIDATED",
     "source_first_graph": "COMPILES_START_END_ONE_NODE_PER_CITED_STEP_WITH_PROVISIONAL_ORDER_FLAGS",
-    "human_review": "REQUIRED_DEPENDENCIES_WITHOUT_EVIDENCE_FLAGGED"
+    "human_review": "REQUIRED_DEPENDENCIES_WITHOUT_EVIDENCE_FLAGGED",
+    "maira_pdf_text_recovery": "SOURCE_CODE_WITH_REAL_PDF_TEXT_EXTRACTION_TESTS_MOCKED_GEMINI_PASSED",
+    "maira_live_recovery": "NOT_VALIDATED_WITH_USER_KEY",
+    "maira_provider_incident": "GEMINI_3_6_FLASH_HTTP_503_UNAVAILABLE_TWICE_2026_11_19_18_18Z"
   },
   "limitations": [
     "Open Development frontend is for fictitious data only",
@@ -126,7 +129,7 @@
   },
   "github_source_commit": "main (see Railway deployment commit and Drive context)",
   "railway_source_connection": "CONNECTED_MAIN",
-  "release_notes": "Maira returns document steps with source evidence; Smart Contract deterministically compiles review-only workflow DAG; uncertain arrows explicitly flagged. Legacy workflow payload supported. 68 tests PASS. Real PDF retry pending.",
+  "release_notes": "V6.5.6: On upstream 502/503/504 for PDF, replace identical retry with lighter text-layer inference if PDF has extractable text, cap at two model calls, mark all visual arrows provisional, retain review-only policy, do not fallback to pricier model; no authentic Gemini inference of PDF yet. Prior: source-first compiler V6.5.4.",
   "base_source_commit": "d176b0fe39017c226c499eb0a4ae6cef13b93df5",
   "visual_design_version": "1.0",
   "watch_patterns": {

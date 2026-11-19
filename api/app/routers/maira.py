@@ -476,9 +476,9 @@ def _pdf_text_for_fallback(data: bytes) -> str | None:
         for number, page in enumerate(reader.pages, start=1):
             text = (page.extract_text(extraction_mode="layout") or "").strip()
             if text:
-                pages.append(f"--- PAGINA {number} ---\\n{text[:12000]}")
-        joined = "\\n\\n".join(pages)[:30000]
-        if len(re.sub(r"\\s+", "", joined)) < 150:
+                pages.append(f"--- PAGINA {number} ---\n{text[:12000]}")
+        joined = "\n\n".join(pages)[:30000]
+        if len(re.sub(r"\s+", "", joined)) < 150:
             return None
         return joined
     except Exception as exc:
@@ -518,15 +518,15 @@ async def _call_gemini(data: bytes, suffix: str, filename: str, api_key: str,
         if extracted_text:
             text_instructions = (
                 PROMPT + context
-                + "\\n\\nMODO DE RECUPERACION DE TEXTO: se extrajo una capa "
+                + "\n\nMODO DE RECUPERACION DE TEXTO: se extrajo una capa "
                   "textual del PDF, no las flechas del diagrama. El orden espacial "
                   "de columnas puede estar mezclado. Reconoce solo pasos con numero "
                   "legible; citas literales del texto recibido; rol solo si esta "
                   "inequivocamente asociado. No inventes etapas, roles, flechas "
                   "ni condiciones. En TODOS los pasos deja depends_on=null, "
                   "incluso si crees conocer el orden, y usa confidence=baja "
-                  "cuando haya dudas.\\n\\nDocumento: " + filename
-                + "\\n" + extracted_text
+                  "cuando haya dudas.\n\nDocumento: " + filename
+                + "\n" + extracted_text
             )
             fallback_req = {
                 "contents": [{"role": "user", "parts": [{"text": text_instructions}]}],

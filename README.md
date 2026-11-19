@@ -1,5 +1,15 @@
 # Smart Contract + MAIRA
 
+## V6.5.6 — Recuperación documental frente a HTTP 503 persistente
+
+**Evidencia:** el 19 nov 2026, ~18:18Z, Gemini 3.6 Flash respondió 503 en dos intentos del mismo PDF. Railway API y su autenticación estaban saludables. Un reintento idéntico no resolvió la sobrecarga del proveedor.
+
+**Cambio:** si la primera inferencia del PDF obtiene 502/503/504 y el PDF trae una capa textual suficiente, el segundo y último intento usa el texto extraído por `pypdf`, separado por página, con un prompt más liviano. En ausencia de capa textual (PDF escaneado, archivo ilegible), conserva un único reintento multimodal. No hay modelos alternos silenciosos ni llamadas repetidas por 429/cuota o errores de credenciales. La fuente no se guarda ni se expone en logs.
+
+**Límite técnico:** texto extraído no prueba flechas. Aun cuando Gemini proponga dependencias, el backend las marca como provisionales, reduce la confianza y agrega advertencia explícita para revisión humana. El flujo sigue siendo un borrador, sin ejecución automática. Este modo debe verificarse con documentos de distinta disposición antes de uso institucional.
+
+**Verificación:** pruebas de recuperación y del motor del backend aprobadas con respuestas Gemini simuladas; revisión del PDF original confirmó que posee capa textual en dos páginas. **La inferencia real de Gemini con la clave del usuario no se ha ejecutado exitosamente después del cambio**. Se requiere verificar ambos modos en la aplicación para afirmar que funciona. Si incluso una solicitud mínima de texto retorna 503, la indisponibilidad es del proveedor/modelo, no del parser.
+
 **V6.5.4 — Construcción de workflows desde evidencia documental · Development**
 
 Smart Contract es una plataforma SaaS multiempresa con motor declarativo de workflows de contratación, campos, políticas y modalidades configurables. La primera aplicación es contratación de red prestadora de salud, sin codificar PGP, cápita ni evento como flujos obligatorios. El workflow institucional de Famisanar aún no ha sido recibido y no forma parte de esta versión.

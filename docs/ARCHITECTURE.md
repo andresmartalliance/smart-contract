@@ -188,3 +188,8 @@ Diseño light-premium de Smart: superficies casi blancas, azul profundo, acentos
 **Incluye:** editor visual funcional con bloqueos locales, formularios configurables, responsables, conexiones condicionadas, validación, simulación, importación/exportación y recuperación local; backend validado con 14 pruebas de motor y aislamiento.
 **No incluye:** Google OAuth; escritura institucional desde navegador; publicación; RLS; integración Gemini; ejecución real de contratos; SIIFA/REPS; matriz de procesos de Famisanar; verificación jurídica de plantillas específicas.
 **Antes de prometer MVP:** construir sesión, controles backend/RLS, biblioteca persistente y versionada, publicación formal, expediente operativo y MAIRA; luego probar rutas institucionales reales.
+
+
+### V6.5.6 — Resiliencia Gemini: PDF multimodal a lectura textual
+
+Ante 502/503/504 de generación inicial, la segunda solicitud puede ser exclusivamente textual, extraída por pypdf, con límite de dos llamadas total. La extracción es efímera; las dependencias de diagrama quedan provisionales y exige revisión. En ausencia de texto, se conserva un reintento multimodal. No hay alternancia automática de modelos. Pruebas simuladas aprobadas; inferencia real pendiente.
