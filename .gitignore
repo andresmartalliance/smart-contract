@@ -1,8 +1,26 @@
-# Smart Contract initial repository
+# Python
 __pycache__/
 *.py[cod]
+.pytest_cache/
 .venv/
-.env
+venv/
+*.egg-info/
+.mypy_cache/
+.coverage
+htmlcov/
+# JS
 node_modules/
 dist/
-.pytest_cache/
+.vite/
+# Secrets and data
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.sqlite3
+*.db
+.DS_Store
+# IDE
+.idea/
+.vscode/

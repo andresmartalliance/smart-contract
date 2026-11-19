@@ -1,0 +1,28 @@
+{
+  "product": "smart-contract",
+  "architecture": "5.0",
+  "package": "5.1-bootstrap",
+  "status": "GITHUB_BASELINE_COMMIT_PENDING_CI_AND_DEPLOY",
+  "repository_target": "andresmartalliance/smart-contract",
+  "github_commit_sha": null,
+  "railway_project_id": "1f226324-580b-4b1c-b235-12c717d70af8",
+  "railway_development_environment_id": "6e8d45ca-d6f2-448c-a48a-63e5a2ab1806",
+  "railway_deployment_id": null,
+  "google_drive_master_document_id": "1_7cuP7hS2nFZRZD33d9Svd1R8l334K2UTKak39Brxoo",
+  "database_migration": "0001_baseline",
+  "acceptance": {
+    "workflow_engine_tests": "PASS_5_OF_5_TESTS",
+    "tenancy_tests": "PASS_4_OF_4_TESTS",
+    "frontend_build": "UNVERIFIED_DEPENDENCY_INSTALL_TIMEOUT",
+    "railway_smoke": "NOT_RUN",
+    "database_migration": "PASS_SQLITE_SMOKE_ONLY_POSTGRES_PENDING"
+  },
+  "limitations": [
+    "Railway and GitHub CI not yet validated",
+    "JWT issuer provisioning absent",
+    "MAIRA provider not connected",
+    "PostgreSQL RLS not enabled",
+    "No operational contract workflow yet"
+  ],
+  "git_repository_access": "GRANTED"
+}

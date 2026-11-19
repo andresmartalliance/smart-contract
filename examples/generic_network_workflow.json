@@ -1,0 +1,25 @@
+{
+  "key": "red-prestadora-base",
+  "name": "Acuerdo de red - ejemplo configurable",
+  "modality_key": "modalidad-definida-por-tenant",
+  "nodes": [
+    {"id":"inicio","label":"Inicio","kind":"START","policy":"ORG_REQUIRED"},
+    {"id":"datos","label":"Datos de prestador y acuerdo","kind":"FORM","policy":"ORG_REQUIRED"},
+    {"id":"juridica","label":"Concepto jurídico","kind":"APPROVAL","role":"JURIDICO","policy":"ORG_REQUIRED"},
+    {"id":"tecnica","label":"Evaluación técnica","kind":"APPROVAL","role":"TECNICO","policy":"CONDITIONAL","when":{"field":"contract.requires_technical_review","op":"eq","value":true}},
+    {"id":"financiera","label":"Evaluación financiera","kind":"APPROVAL","role":"FINANCIERO","policy":"ORG_REQUIRED"},
+    {"id":"acuerdo","label":"Generación de minuta","kind":"DOCUMENT_GENERATION","policy":"ORG_REQUIRED"},
+    {"id":"fin","label":"Formalización","kind":"END","policy":"ORG_REQUIRED"}
+  ],
+  "edges": [
+    {"source":"inicio","target":"datos"},
+    {"source":"datos","target":"juridica"},
+    {"source":"datos","target":"tecnica"},
+    {"source":"datos","target":"financiera"},
+    {"source":"juridica","target":"acuerdo"},
+    {"source":"tecnica","target":"acuerdo"},
+    {"source":"financiera","target":"acuerdo"},
+    {"source":"acuerdo","target":"fin"}
+  ],
+  "metadata":{"scope":"ejemplo-sintetico; no flujo de Famisanar validado","author":"Smart Alliance"}
+}
