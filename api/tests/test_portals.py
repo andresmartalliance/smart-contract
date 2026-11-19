@@ -277,3 +277,77 @@ def test_registered_external_contact_can_login_before_workflow_but_sees_no_case(
     assert portal.get("/api/v1/portal/parties").status_code==403
     assert portal.post("/api/v1/portal/cases",json={
        "title":"Unauthorized draft","party_id":record["id"]}).status_code==403
+
+
+def proposal_for_previewer():
+    return {"filename":"Ciclo de contratación v2.pdf",
+        "workflow":{"key":"CICLO_V2_ORIGINAL","name":"Ciclo de contratación",
+            "nodes":[
+             {"id":"start","label":"Inicio","kind":"START","policy":"ORG_REQUIRED"},
+             {"id":"step1","label":"Creación de usuarios y proyectos","kind":"VALIDATION",
+               "role":"ADMINISTRADOR","config":{"actor_side":"CONTRATANTE","source_step":"1"}},
+             {"id":"step2","label":"Registro de personal a contratar","kind":"FORM",
+               "role":"ASPIRANTE","config":{"actor_side":"CONTRATISTA","source_step":"2"}},
+             {"id":"end","label":"Fin","kind":"END","policy":"ORG_REQUIRED"}],
+            "edges":[{"source":"start","target":"step1"},
+                     {"source":"step1","target":"step2"},
+                     {"source":"step2","target":"end"}],
+            "metadata":{"source":"maira-document-import","draft":True}},
+        "source_map":[{"source_step":"1","node_id":"step1",
+            "source_excerpt":"CREACIÓN DE USUARIOS Y PROYECTOS","page":1,"confidence":"alta"},
+             {"source_step":"2","node_id":"step2",
+            "source_excerpt":"REGISTRO DE PERSONAL A CONTRATAR","page":1,"confidence":"alta"}],
+        "questions":["Confirmar si ASPIRANTE aplica a persona jurídica"],
+        "observations":["Documento de contratación de personal; adaptar antes de enviar al hospital"]}
+
+def test_preview_saved_for_registered_hospital_without_activating_tasks(portal):
+    create_pilot(portal)
+    party=create_party_record(portal,name="Hospital Smart",kind="JURIDICA")
+    base=f"/api/v1/portal/parties/{party['id']}/process-previews"
+    save=portal.post(base,json=proposal_for_previewer())
+    assert save.status_code==201,save.text
+    result=save.json()
+    assert result["status"]=="DRAFT_REVIEW"
+    assert result["source_map"][1]["source_step"]=="2"
+    assert result["workflow"]["nodes"][2]["config"]["source_step"]=="2"
+    assert result["questions"]
+    assert len(portal.get(base).json())==1
+    detail=portal.get(base+"/"+result["id"])
+    assert detail.status_code==200
+    assert "REGISTRO DE PERSONAL" in detail.json()["source_map"][1]["source_excerpt"]
+    assert portal.get("/api/v1/portal/cases").json()==[]
+    assert portal.get("/api/v1/portal/workflows").json()==[]
+    as_user("contacto@example.com")
+    assert portal.get(base).status_code==403
+    assert portal.get(base+"/"+result["id"]).status_code==403
+
+def test_cannot_save_party_preview_from_other_tenant(portal):
+    create_pilot(portal)
+    party=create_party_record(portal,name="Hospital Smart",kind="JURIDICA")
+    as_user("charlie")
+    base=f"/api/v1/portal/parties/{party['id']}/process-previews"
+    assert portal.get(base).status_code==404
+    assert portal.post(base,json=proposal_for_previewer()).status_code in (403,404)
+
+def test_reject_preview_with_invented_unmapped_node(portal):
+    create_pilot(portal)
+    party=create_party_record(portal)
+    payload=proposal_for_previewer()
+    payload["workflow"]["nodes"].insert(3,{"id":"invented","kind":"FORM","label":"Documento no mencionado"})
+    payload["workflow"]["edges"]=[
+        {"source":"start","target":"step1"},{"source":"step1","target":"step2"},
+        {"source":"step2","target":"invented"},{"source":"invented","target":"end"}]
+    r=portal.post(f"/api/v1/portal/parties/{party['id']}/process-previews",json=payload)
+    assert r.status_code==422
+    assert "unmapped" in r.text
+
+def test_preview_does_not_give_external_case_access(portal):
+    create_pilot(portal)
+    party=create_party_record(portal,email="persona@example.com")
+    as_user("alice@example.com")
+    preview=portal.post(f"/api/v1/portal/parties/{party['id']}/process-previews",
+                        json=proposal_for_previewer())
+    assert preview.status_code==201
+    as_user("persona@example.com")
+    assert portal.get("/api/v1/portal/my-cases").json()==[]
+    assert portal.get(f"/api/v1/portal/parties/{party['id']}/process-previews").status_code==403
