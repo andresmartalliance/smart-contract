@@ -91,9 +91,9 @@ def _case_for_external(db: Session, id: str, email: str):
     return c
 
 def _internal_case(db: Session, c: ContractCase, email: str) -> bool:
-    return bool(db.scalar(select(Membership.id).where(
-      Membership.tenant_id==c.tenant_id, Membership.user_id==email,Membership.active.is_(True),
-      Membership.roles.is_not(None))))
+    membership = db.scalar(select(Membership).where(
+      Membership.tenant_id==c.tenant_id, Membership.user_id==email, Membership.active.is_(True)))
+    return bool(membership and set(membership.roles).intersection({"ADMIN","CONFIGURADOR","OPERADOR"}))
 
 def _task_payload(task: ContractTask, external: bool=False) -> dict[str,Any]:
     # Never expose one side's answers, confidential notes, or fields to the other.
@@ -183,6 +183,8 @@ def publish(input:PublishInput,email:str=Depends(verify_google_email),db:Session
         raise HTTPException(422, "Pilot does not execute: " + ", ".join(unsupported))
     if any(not n.enabled for n in wf.nodes):
         raise HTTPException(422,"Disabled workflow nodes are not executable in this pilot")
+    if any(n.kind=="APPROVAL" and n.config.get("actor_side")=="CONTRATISTA" for n in wf.nodes):
+        raise HTTPException(422,"Institutional approvals cannot be assigned to contractors in this pilot")
     if any(n.kind in ("FORM","DOCUMENT_REQUEST") and n.config.get("execution_mode") in ("AI_ASSISTED","API","RPA") for n in wf.nodes):
         raise HTTPException(422,"Automated execution not enabled in this pilot")
     number=db.scalar(select(func.max(WorkflowVersion.version)).where(

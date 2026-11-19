@@ -355,6 +355,27 @@ function loadExample(){
   edges.value=[{id:'e1',source:'inicio',target:'documentos'},{id:'e2',source:'documentos',target:'juridica'},{id:'e3',source:'documentos',target:'financiera'},{id:'e4',source:'juridica',target:'acuerdo'},{id:'e5',source:'financiera',target:'acuerdo'},{id:'e6',source:'acuerdo',target:'fin'}]
   selectedId.value='documentos';selectedEdgeId.value=null;nodeCounter.value=1;errors.value=[];simulationVisible.value=false;flowMessage.value='Plantilla base cargada para edición.'
 }
+function loadPortalPilotExample(){
+ workflowName.value='Ciclo de contratación · prueba entre dos portales'
+ workflowKey.value='PILOTO_DOBLE_PORTAL'
+ modalityKey.value='PRUEBA'
+ const inicio=nodeInfo('inicio','START','Inicio',260,20,null,'ORG_REQUIRED')
+ const datos=nodeInfo('datos','FORM','Datos del contratista',260,160,'CONTRATISTA')
+ const revision=nodeInfo('revision','APPROVAL','Revisión interna',260,300,'JURIDICO')
+ const fin=nodeInfo('fin','END','Cierre del piloto',260,440,null,'ORG_REQUIRED')
+ const work=datos.data as WorkNode
+ datos.data={...work,config:{...work.config,actor_side:'CONTRATISTA',
+  fields:[{key:'contacto',label:'Persona de contacto (ficticia)',type:'text',required:true}]}}
+ const review=revision.data as WorkNode
+ revision.data={...review,config:{...review.config,actor_side:'CONTRATANTE'}}
+ nodes.value=[inicio,datos,revision,fin]
+ edges.value=[{id:'p1',source:'inicio',target:'datos'},
+  {id:'p2',source:'datos',target:'revision'},
+  {id:'p3',source:'revision',target:'fin'}]
+ selectedId.value='datos';selectedEdgeId.value=null
+ errors.value=[];simulationVisible.value=false
+ flowMessage.value='Ejemplo ficticio de doble portal. Revisa las etapas y publica solo para el piloto.'
+}
 function newWorkflow(){
   workflowName.value='Nuevo proceso de contratación';workflowKey.value='NUEVO_PROCESO';modalityKey.value=''
   nodes.value=[nodeInfo('inicio','START','Inicio',230,60,null,'ORG_REQUIRED'),nodeInfo('fin','END','Finalización',230,270,null,'ORG_REQUIRED')]
@@ -766,7 +787,7 @@ function simulateDraft(){
         <div class="top-meta"><span class="top-product">Smart Contract · V6.3 PILOTO</span><span class="context-pill">Development</span><button type="button" class="logout-button" @click="logoutGoogle" title="Cerrar sesión Google">Salir</button></div>
       </header>
       <section v-if="current==='flujos'&&hasInstitution" class="stack">
-        <div class="heading"><div><span class="eyebrow">Diseño inteligente de procesos</span><h2>Workflow Studio</h2><p>Diseña, conecta y valida etapas configurables. Todos los cambios siguen siendo un borrador local.</p></div><div class="header-actions"><button class="primary-button" @click="openMairaDocumentImport">✧ Crear con MAIRA</button><button class="ghost-button" @click="newWorkflow">＋ Nuevo flujo</button><button class="ghost-button" @click="fileInput?.click()">↥ Importar</button><button class="primary-button" @click="exportDraft">↧ Exportar JSON</button><button class="ghost-button" :disabled="portalBusy" @click="publishPilot">Publicar plantilla de prueba</button></div></div>
+        <div class="heading"><div><span class="eyebrow">Diseño inteligente de procesos</span><h2>Workflow Studio</h2><p>Diseña, conecta y valida etapas configurables. Todos los cambios siguen siendo un borrador local.</p></div><div class="header-actions"><button class="primary-button" @click="openMairaDocumentImport">✧ Crear con MAIRA</button><button class="ghost-button" @click="loadPortalPilotExample">Ejemplo de doble portal</button><button class="ghost-button" @click="newWorkflow">＋ Nuevo flujo</button><button class="ghost-button" @click="fileInput?.click()">↥ Importar</button><button class="primary-button" @click="exportDraft">↧ Exportar JSON</button><button class="ghost-button" :disabled="portalBusy" @click="publishPilot">Publicar plantilla de prueba</button></div></div>
 
         <div v-if="mairaImportOpen" class="maira-import-surface" role="region" aria-label="Crear flujo a partir de documento con MAIRA">
           <div class="maira-import-head">

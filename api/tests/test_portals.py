@@ -135,3 +135,19 @@ def test_pilot_feature_flag_required_for_setup(testing,monkeypatch):
         assert client.post("/api/v1/portal/demo/setup",json={"name":"Pilot"}).status_code==403
     finally:
         app.dependency_overrides.pop(verify_google_email,None)
+
+def test_signature_and_integration_are_not_fake_completed(portal):
+    create_pilot(portal)
+    for kind in ["SIGNATURE", "INTEGRATION", "DOCUMENT_GENERATION"]:
+        wf=sample_flow()
+        wf["nodes"][2]["kind"]=kind
+        wf["nodes"][2]["role"]="JURIDICO"
+        r=portal.post("/api/v1/portal/workflows/publish",json={"workflow":wf})
+        assert r.status_code==422 and "does not execute" in r.text
+
+def test_cannot_assign_institutional_approval_to_contractor(portal):
+    create_pilot(portal)
+    wf=sample_flow()
+    wf["nodes"][2]["config"]={"actor_side":"CONTRATISTA"}
+    result=portal.post("/api/v1/portal/workflows/publish",json={"workflow":wf})
+    assert result.status_code==422 and "Institutional approvals" in result.text
