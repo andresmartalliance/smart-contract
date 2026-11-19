@@ -15,7 +15,7 @@ type WorkNode = {id:string;label:string;kind:Kind;policy:Policy;enabled:boolean;
 type WorkEdge = {source:string;target:string;when?:Condition|null}
 type Workflow = {key: string; name: string; modality_key: string | null; nodes: WorkNode[]; edges: WorkEdge[]; metadata: Record<string, unknown>}
 
-const current = ref<Screen>('flujos')
+const current = ref<Screen>('resumen')
 const menu: { key: Screen; title: string; glyph: string }[] = [
   { key:'resumen',title:'Resumen',glyph:'▦' },
   { key:'contrataciones',title:'Contrataciones',glyph:'▤' },
@@ -25,6 +25,16 @@ const menu: { key: Screen; title: string; glyph: string }[] = [
   { key:'configuracion',title:'Configuración',glyph:'⚙' }
 ]
 const screenTitle = computed(() => menu.find(m => m.key === current.value)?.title ?? '')
+const iconPaths: Record<Screen,string[]> = {
+  resumen: ['M3 3h8v8H3z','M13 3h8v8h-8z','M3 13h8v8H3z','M13 13h8v8h-8z'],
+  contrataciones: ['M8 3h9l4 4v14H8z','M17 3v5h5','M11 12h7','M11 16h7','M4 7v14'],
+  prestadores: ['M3 21V9l9-6 9 6v12','M9 21v-8h6v8','M3 10h18'],
+  flujos: ['M12 2 3 12l9 10 9-10z','M12 8v8','M8 12h8'],
+  maira: ['M12 2v3','M12 19v3','M2 12h3','M19 12h3','M5 5l2 2','M17 17l2 2','M19 5l-2 2','M7 17l-2 2','M12 7l2 5-2 5-2-5z'],
+  configuracion: ['M12 3a3 3 0 0 1 3 3c0 1.2-.6 2-1.5 2.6A5 5 0 0 1 17 12a5 5 0 1 1-10 0 5 5 0 0 1 3.5-4.4C9.6 7 9 6.2 9 6a3 3 0 0 1 3-3z','M12 10v4','M12 17h.01']
+}
+const activeDependencyCount = computed(() => edges.value.length)
+const catalogCount = computed(() => blocks.length)
 const blocks: {kind:Kind; title:string; glyph:string; category:string}[] = [
   {kind:'FORM',title:'Formulario',glyph:'▤',category:'Captura'},
   {kind:'DOCUMENT_REQUEST',title:'Solicitar documentos',glyph:'▣',category:'Captura'},
@@ -73,7 +83,7 @@ const nodes = shallowRef<Node[]>([])
 const edges = shallowRef<Edge[]>([])
 
 function nodeInfo(id:string, kind:Kind, label:string, x:number,y:number,role:string|null=null,policy:Policy='OPTIONAL'):Node {
-  return {id,type:kind==='START'?'input':kind==='END'?'output':'default',position:{x,y},data:{label,kind,role,policy,enabled:true,config:{execution_mode:'MANUAL',fields:[]}},class:kind==='START'?'node-start':kind==='END'?'node-end':''}
+  return {id,type:kind==='START'?'input':kind==='END'?'output':'default',position:{x,y},data:{label,kind,role,policy,enabled:true,config:{execution_mode:'MANUAL',fields:[]}},class:kind==='START'?'node-start':kind==='END'?'node-end':'node-'+kind.toLowerCase()}
 }
 function loadExample(){
   workflowName.value='Contratación de red prestadora';workflowKey.value='RED_PRESTADORA_BASE';modalityKey.value=''
@@ -138,7 +148,7 @@ function editNode(field:'label'|'role'|'enabled'|'policy'|'instructions'|'condit
    }
   else if(field==='role')next.role=val===''?null:val
   else next[field]=val
-  nodes.value=nodes.value.map(n=>n.id===selectedId.value?{...n,data:next,class:next.enabled===false?'node-disabled':n.type==='input'?'node-start':n.type==='output'?'node-end':''}:n)
+  nodes.value=nodes.value.map(n=>n.id===selectedId.value?{...n,data:next,class:next.enabled===false?'node-disabled':n.type==='input'?'node-start':n.type==='output'?'node-end':'node-'+String(next.kind||'').toLowerCase()}:n)
   errors.value=[]
 }
 function editField(index:number,property:keyof WorkField,value:string|boolean){
@@ -315,7 +325,7 @@ function loadDefinition(parsed:Partial<Workflow>){
    const position=raw.config?.position
    const x=typeof position?.x==='number'&&Number.isFinite(position.x)?position.x:260
    const y=typeof position?.y==='number'&&Number.isFinite(position.y)?position.y:i*130
-   const n=nodeInfo(raw.id,raw.kind,raw.label,x,y,raw.role||null,raw.policy)
+   const n=nodeInfo(raw.id,raw.kind,raw.label,x,y,raw.role||null,raw.policy);if(!raw.enabled)n.class='node-disabled'
    const mode=raw.config?.execution_mode
    n.data={label:raw.label,kind:raw.kind,role:raw.role||null,policy:raw.policy,enabled:raw.enabled,when:safeCondition(raw.when),config:{position:{x,y},instructions:String(raw.config?.instructions||'').slice(0,5000),execution_mode:executionModes.some(x=>x.value===mode)?mode:'MANUAL',fields}}
    return n
@@ -423,15 +433,29 @@ function simulateDraft(){
 <template>
   <div class="shell">
     <aside class="sidebar">
-      <div class="brand"><div class="brand-mark">S</div><div><strong>Smart Contract</strong><small>MAIRA · Plataforma contractual</small></div></div>
-      <nav><button v-for="entry in menu" :key="entry.key" :class="{active:current===entry.key}" @click="current=entry.key">
-        <span class="menu-glyph">{{entry.glyph}}</span><span class="menu-title">{{entry.title}}</span></button></nav>
-      <div class="sidebar-foot">Smart Alliance<br>Plataforma multiempresa</div>
+      <div class="brand">
+        <div class="brand-mark">S</div>
+        <div><strong>Smart Contract</strong><small>INTELLIGENCE PLATFORM</small></div>
+      </div>
+      <div class="nav-section">Workspace</div>
+      <nav aria-label="Navegación principal">
+        <button v-for="entry in menu" :key="entry.key" :class="{active:current===entry.key,'nav-ai':entry.key==='maira'}" @click="current=entry.key" :aria-current="current===entry.key?'page':undefined">
+          <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+            <path v-for="(path,i) in iconPaths[entry.key]" :key="i" :d="path" />
+          </svg>
+          <span class="menu-title">{{entry.title}}</span>
+        </button>
+      </nav>
+      <div class="sidebar-spacer"></div>
+      <div class="sidebar-foot"><div class="foot-icon">SA</div><div><strong>Smart Alliance</strong><small>Plataforma multiempresa</small></div></div>
     </aside>
     <main class="main">
-      <header class="top-header"><div><small>Smart Contract / {{ screenTitle }}</small><h1>{{screenTitle}}</h1></div><span class="context-pill">Development</span></header>
+      <header class="top-header">
+        <div><small>Workspace / Smart Contract / {{screenTitle}}</small><h1>{{screenTitle}}</h1></div>
+        <div class="top-meta"><span class="top-product">Smart Contract · V5.3</span><span class="context-pill">Development</span></div>
+      </header>
       <section v-if="current==='flujos'" class="stack">
-        <div class="heading"><div><h2>Workflow Studio</h2><p>Construye procesos utilizando etapas, condiciones y responsables configurables.</p></div><div class="header-actions"><button class="ghost-button" @click="newWorkflow">Nuevo flujo</button><button class="ghost-button" @click="fileInput?.click()">Importar</button><button class="primary-button" @click="exportDraft">Exportar borrador</button></div></div>
+        <div class="heading"><div><span class="eyebrow">Diseño inteligente de procesos</span><h2>Workflow Studio</h2><p>Diseña, conecta y valida etapas configurables. Todos los cambios siguen siendo un borrador local.</p></div><div class="header-actions"><button class="ghost-button" @click="newWorkflow">＋ Nuevo flujo</button><button class="ghost-button" @click="fileInput?.click()">↥ Importar</button><button class="primary-button" @click="exportDraft">↧ Exportar JSON</button></div></div>
         <input ref="fileInput" type="file" accept="application/json,.json" class="hidden-input" @change="importDraft" />
         <div class="workflow-meta">
           <label>Nombre del proceso<input v-model="workflowName" maxlength="200" aria-label="Nombre del proceso" /></label>
@@ -503,9 +527,72 @@ function simulateDraft(){
         <div v-if="errors.length" class="validation-list"><strong>Observaciones del flujo</strong><p v-for="(err,i) in errors" :key="i">{{err}}</p></div>
         <div class="summary-strip"><span>{{nodeCount}} etapas · {{edges.length}} conexiones · {{policyCount}} protegidas</span><span>Borrador guardado en este navegador{{lastSavedAt?' · '+lastSavedAt:''}}. Para compartirlo, usa Exportar. La publicación institucional requiere inicio de sesión.</span></div>
       </section>
-      <section v-else-if="current==='resumen'" class="overview"><h2>Visión de la plataforma</h2><p>La información contractual se mostrará aquí cuando las entidades y expedientes tengan acceso autenticado.</p><div class="stat-grid"><div><strong>{{nodeCount}}</strong><span>Etapas del borrador actual</span></div><div><strong>{{activeCount}}</strong><span>Etapas habilitadas</span></div><div><strong>{{edges.length}}</strong><span>Dependencias definidas</span></div></div><button class="primary-button" @click="current='flujos'">Abrir diseñador</button></section>
-      <section v-else-if="current==='maira'" class="overview"><h2>MAIRA</h2><p>MAIRA ayudará a interpretar documentos, recomendar plantillas y proponer modificaciones a los flujos. Todavía no se ha conectado Gemini ni se han habilitado acciones de IA.</p><button class="primary-button" @click="current='flujos'">Ir a Workflow Studio</button></section>
-      <section v-else class="overview"><h2>{{screenTitle}}</h2><p>Esta sección utilizará los datos y permisos de cada institución cuando se complete la autenticación multiempresa. No se muestran datos ficticios como si fueran contratos reales.</p><button class="ghost-button" @click="current='flujos'">Volver a Flujos</button></section>
+      <section v-else-if="current==='resumen'" class="overview">
+        <div class="summary-hero">
+          <div class="hero-copy">
+            <span class="eyebrow">PLATAFORMA DE INTELIGENCIA CONTRACTUAL</span>
+            <h2>El futuro de la contratación se diseña aquí.</h2>
+            <p>Construye procesos adaptativos, controla sus dependencias y prepara un ciclo contractual inteligente con MAIRA. Una arquitectura para múltiples instituciones.</p>
+            <div class="hero-actions">
+              <button class="primary-button" @click="current='flujos'">Abrir Workflow Studio <span aria-hidden="true">↗</span></button>
+              <button class="ghost-button" @click="current='maira'">Conocer MAIRA</button>
+            </div>
+          </div>
+          <div class="hero-visual" aria-hidden="true">
+            <div class="hero-orbit"></div><div class="hero-orbit orbit-two"></div>
+            <div class="hero-core">SMART</div>
+            <span class="hero-chip chip-top">◇ Workflows adaptativos</span>
+            <span class="hero-chip chip-bottom">✧ Inteligencia contractual</span>
+          </div>
+        </div>
+        <div class="overview-heading">
+          <div><h3>Centro de control</h3><p>Indicadores del borrador que estás diseñando en este navegador.</p></div>
+          <span class="section-tag">Borrador local · Sin contratos reales</span>
+        </div>
+        <div class="stat-grid">
+          <div class="metric-card"><div class="metric-label"><span>ETAPAS DEL FLUJO</span><span class="metric-dot">◇</span></div><strong>{{nodeCount}}</strong><span class="metric-foot">Componentes del diseño actual</span></div>
+          <div class="metric-card violet"><div class="metric-label"><span>ETAPAS ACTIVAS</span><span class="metric-dot">✓</span></div><strong>{{activeCount}}</strong><span class="metric-foot">Configuradas para participar</span></div>
+          <div class="metric-card aqua"><div class="metric-label"><span>DEPENDENCIAS</span><span class="metric-dot">⇄</span></div><strong>{{activeDependencyCount}}</strong><span class="metric-foot">Conexiones entre etapas</span></div>
+          <div class="metric-card green"><div class="metric-label"><span>CONTROLES PROTEGIDOS</span><span class="metric-dot">▣</span></div><strong>{{policyCount}}</strong><span class="metric-foot">Restricciones del borrador</span></div>
+        </div>
+        <div class="dashboard-lower">
+          <div class="dashboard-panel">
+            <div class="dashboard-panel-head"><div><h3>Proceso en diseño</h3><p class="panel-lead">Continúa desde la estructura que tienes abierta.</p></div><span class="status-pill">NO PUBLICADO</span></div>
+            <div class="draft-summary"><div class="draft-symbol">◇</div><div><strong>{{workflowName}}</strong><small>{{workflowKey}} · Diseño editable en el navegador</small></div></div>
+            <div class="mini-kpi-row"><span><b>{{nodeCount}}</b> etapas</span><span><b>{{activeCount}}</b> activas</span><span><b>{{edges.length}}</b> conexiones</span><span><b>{{catalogCount}}</b> componentes disponibles</span></div>
+            <button class="dashboard-link" @click="current='flujos'">Continuar configurando <span aria-hidden="true">↗</span></button>
+          </div>
+          <div class="dashboard-panel">
+            <div class="dashboard-panel-head"><div><h3>MAIRA Intelligence</h3><p class="panel-lead">Tu futura asistente para la contratación.</p></div><span class="status-pill">PRÓXIMA INTEGRACIÓN</span></div>
+            <div class="intelligence-status"><div class="intelligence-glyph">✧</div><div><strong>Capacidades diseñadas</strong><small>Interpretar · Recomendar · Construir · Analizar</small></div></div>
+            <p class="status-line">MAIRA todavía no está conectada a Gemini. El estudio visual está disponible; la generación de flujos con IA requiere el siguiente hito funcional.</p>
+            <button class="dashboard-link" @click="current='maira'">Explorar el diseño de MAIRA <span aria-hidden="true">↗</span></button>
+          </div>
+        </div>
+      </section>
+      <section v-else-if="current==='maira'" class="overview">
+        <div class="maira-hero">
+          <div><span class="eyebrow">INTELIGENCIA CONTRACTUAL / MAIRA</span><h2>Una nueva manera de contratar.</h2><p>MAIRA está diseñada para interpretar necesidades, revisar documentación y proponer flujos configurables. La integración con Gemini todavía no está habilitada.</p><span class="status-pill">AGENTE AÚN NO CONECTADO</span></div>
+          <div class="maira-orb" aria-hidden="true"></div>
+        </div>
+        <div class="overview-heading"><div><h3>Capacidades de MAIRA</h3><p>Funciones previstas, no disponibles todavía para ejecutar sobre expedientes.</p></div></div>
+        <div class="capability-grid">
+          <div v-for="(cap,i) in [{name:'Comprender',desc:'Interpretar manuales, necesidades y documentos.'},{name:'Configurar',desc:'Proponer bloques, campos y reglas de procesos.'},{name:'Analizar',desc:'Identificar inconsistencias y controles pendientes.'},{name:'Acompañar',desc:'Guiar la ejecución contractual paso a paso.'}]" :key="cap.name" class="capability-card">
+            <span class="number">0{{i+1}}</span><h3>{{cap.name}}</h3><p>{{cap.desc}}</p>
+          </div>
+        </div>
+        <div class="status-panel"><div><strong>Workflow Studio ya disponible</strong><p>Mientras MAIRA se integra, puedes diseñar y simular procesos manualmente.</p></div><button class="ghost-button" @click="current='flujos'">Abrir Studio ↗</button></div>
+      </section>
+      <section v-else class="overview">
+        <div class="placeholder-panel">
+          <div class="placeholder-icon">{{menu.find(m=>m.key===current)?.glyph}}</div>
+          <span class="eyebrow">SMART CONTRACT / PRÓXIMO HITO</span>
+          <h2>{{screenTitle}}</h2>
+          <p>Este espacio se conectará con expedientes y roles institucionales cuando se complete la autenticación multiempresa. No presentamos datos de prueba como información real.</p>
+          <div class="placeholder-features"><span>◇ Multiempresa</span><span>▣ Control de acceso</span><span>✧ Asistencia MAIRA</span></div>
+          <button class="primary-button" @click="current='flujos'">Abrir Workflow Studio ↗</button>
+        </div>
+      </section>
     </main>
   </div>
 </template>
