@@ -4,7 +4,7 @@ import { VueFlow, type Node, type Edge, type Connection } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 
-type Screen = 'resumen' | 'contrataciones' | 'prestadores' | 'flujos' | 'maira' | 'configuracion'
+type Screen = 'resumen' | 'personas' | 'contrataciones' | 'prestadores' | 'flujos' | 'maira' | 'configuracion'
 type Kind = 'START'|'FORM'|'DOCUMENT_REQUEST'|'DOCUMENT_REVIEW'|'VALIDATION'|'APPROVAL'|'NEGOTIATION'|'CALCULATION'|'DOCUMENT_GENERATION'|'SIGNATURE'|'NOTIFICATION'|'INTEGRATION'|'TIMER'|'JOIN'|'HUMAN_DECISION'|'END'
 type Policy = 'LEGAL_LOCKED' | 'ORG_REQUIRED' | 'CONDITIONAL' | 'OPTIONAL'
 type Condition = {field:string;op:'eq'|'neq'|'gt'|'gte'|'lt'|'lte'|'in'|'exists';value?: unknown}
@@ -20,6 +20,7 @@ const mairaOpen = ref(false)
 const mairaLastAction = ref('')
 const menu: { key: Screen; title: string; glyph: string }[] = [
   { key:'resumen',title:'Resumen',glyph:'▦' },
+  { key:'personas',title:'Personas y empresas',glyph:'♙' },
   { key:'contrataciones',title:'Gestión Contractual',glyph:'▤' },
   { key:'prestadores',title:'Mi Contratación',glyph:'⌂' },
   { key:'flujos',title:'Flujos',glyph:'◇' },
@@ -30,6 +31,7 @@ const screenTitle = computed(() => menu.find(m => m.key === current.value)?.titl
 const visibleMenu = computed(() => hasInstitution.value || portalSession.value?.can_setup ? menu : menu.filter(m=>m.key==='prestadores'||m.key==='maira'))
 const iconPaths: Record<Screen,string[]> = {
   resumen: ['M3 3h8v8H3z','M13 3h8v8h-8z','M3 13h8v8H3z','M13 13h8v8h-8z'],
+  personas: ['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2','M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8','M18 8a3 3 0 0 1 0 6','M22 21v-2a4 4 0 0 0-3-3.87'],
   contrataciones: ['M8 3h9l4 4v14H8z','M17 3v5h5','M11 12h7','M11 16h7','M4 7v14'],
   prestadores: ['M3 21V9l9-6 9 6v12','M9 21v-8h6v8','M3 10h18'],
   flujos: ['M12 2 3 12l9 10 9-10z','M12 8v8','M8 12h8'],
@@ -98,24 +100,34 @@ const mairaApplyConfirm=ref(false)
 const loginGoogleMount=ref<HTMLElement|null>(null)
 const loginEmail=ref('')
 type PortalSession={email:string;institutions:{id:string;roles:string[]}[];invited_cases:number;can_setup:boolean;pilot:boolean}
-type CaseSummary={id:string;title:string;state:string;workflow_version_id:string;party_name:string|null;party_email?:string;total:number;completed:number}
+type CaseSummary={id:string;title:string;state:string;workflow_version_id:string|null;party_id:string|null;party_name:string|null;party_email?:string|null;invited:boolean;total:number;completed:number}
+type PartyRecord={id:string;name:string;kind:'NATURAL'|'JURIDICA';email:string|null;case_count:number}
 type ContractTaskView={id:string;node_id:string;label:string;kind:string;side:string;state:string;fields:WorkField[];answer?:Record<string,unknown>;note?:string}
 type CaseView={case:CaseSummary;side:'CONTRATANTE'|'CONTRATISTA';tasks:ContractTaskView[]}
 type TemplateOption={id:string;name:string;key:string;version:number}
 const portalSession=ref<PortalSession|null>(null)
 const hasInstitution=computed(()=>Boolean(portalSession.value?.institutions?.length))
 const templates=ref<TemplateOption[]>([])
+const partyRecords=ref<PartyRecord[]>([])
+const partySearch=ref('')
+const partyName=ref('')
+const partyEmail=ref('')
+const partyKind=ref<'NATURAL'|'JURIDICA'>('JURIDICA')
+const selectedPartyId=ref('')
+const selectedParty=computed(()=>partyRecords.value.find(x=>x.id===selectedPartyId.value)||null)
+const filteredParties=computed(()=>partyRecords.value.filter(p=>(p.name+' '+(p.email||'')).toLocaleLowerCase('es-CO').includes(partySearch.value.toLocaleLowerCase('es-CO'))))
+const editingPartyId=ref('')
+const editingPartyEmail=ref('')
+const draftWorkflowId=ref('')
 const internalCases=ref<CaseSummary[]>([])
 const myCases=ref<CaseSummary[]>([])
 const activeCase=ref<CaseView|null>(null)
 const portalError=ref('')
 const portalMessage=ref('')
 const portalBusy=ref(false)
+const portalPartySaving=ref(false)
 const pilotName=ref('Institución de pruebas')
 const newCaseTitle=ref('')
-const newPartyName=ref('')
-const newPartyEmail=ref('')
-const newPartyKind=ref<'NATURAL'|'JURIDICA'>('JURIDICA')
 const selectedWorkflowId=ref('')
 const answers=ref<Record<string,string>>({})
 const taskNote=ref('')
@@ -141,8 +153,9 @@ async function refreshPortal(){
   myCases.value=await portalRequest<CaseSummary[]>('/my-cases')
   if(hasInstitution.value){
    templates.value=await portalRequest<TemplateOption[]>('/workflows')
+   partyRecords.value=await portalRequest<PartyRecord[]>('/parties')
    internalCases.value=await portalRequest<CaseSummary[]>('/cases')
-  }else{templates.value=[];internalCases.value=[]}
+  }else{templates.value=[];partyRecords.value=[];internalCases.value=[]}
  }catch(e){portalError.value=e instanceof Error?e.message:'No se pudo consultar la plataforma'}
 }
 async function setupPilot(){
@@ -164,14 +177,60 @@ async function publishPilot(){
  }catch(e){portalError.value=e instanceof Error?e.message:'No se pudo publicar'}
  finally{portalBusy.value=false}
 }
+async function registerParty(){
+ portalPartySaving.value=true;portalError.value='';portalMessage.value=''
+ try{
+  const record=await portalRequest<PartyRecord>('/parties','POST',{
+    name:partyName.value.trim(),kind:partyKind.value,email:partyEmail.value.trim()||null
+  })
+  partyName.value='';partyEmail.value=''
+  await refreshPortal()
+  selectedPartyId.value=record.id
+  portalMessage.value='Persona o empresa registrada. Ahora puedes vincularla a un expediente, con o sin plantilla.'
+ }catch(e){portalError.value=e instanceof Error?e.message:'No se pudo registrar'}
+ finally{portalPartySaving.value=false}
+}
+async function savePartyEmail(id:string){
+ portalPartySaving.value=true;portalError.value='';portalMessage.value=''
+ try{
+  await portalRequest('/parties/'+id,'PATCH',{email:editingPartyEmail.value.trim()||null})
+  editingPartyId.value='';editingPartyEmail.value=''
+  await refreshPortal()
+  portalMessage.value='Contacto actualizado. No modifica automáticamente los accesos concedidos a expedientes anteriores.'
+ }catch(e){portalError.value=e instanceof Error?e.message:'No se pudo actualizar el contacto'}
+ finally{portalPartySaving.value=false}
+}
+function selectPartyForContract(p:PartyRecord){
+ selectedPartyId.value=p.id
+ newCaseTitle.value='Contratación con '+p.name
+ selectedWorkflowId.value=''
+ current.value='contrataciones'
+ activeCase.value=null
+ portalMessage.value='Seleccionaste '+p.name+'. Puedes abrir el expediente sin plantilla.'
+ portalError.value=''
+}
+async function attachWorkflowToCase(){
+ if(!activeCase.value?.case.id||!draftWorkflowId.value)return
+ portalBusy.value=true;portalError.value='';portalMessage.value=''
+ try{
+  const id=activeCase.value.case.id
+  await portalRequest('/cases/'+id+'/workflow','POST',{workflow_id:draftWorkflowId.value})
+  portalMessage.value='Plantilla asociada y proceso activado. El correo registrado puede acceder a Mi Contratación; comparte el enlace manualmente.'
+  await refreshPortal()
+  await openCase(id)
+ }catch(e){portalError.value=e instanceof Error?e.message:'No se pudo asociar la plantilla'}
+ finally{portalBusy.value=false}
+}
 async function createPilotCase(){
  portalBusy.value=true;portalError.value=''
  try{
   const result=await portalRequest<CaseSummary>('/cases','POST',{
-   workflow_id:selectedWorkflowId.value,title:newCaseTitle.value,
-   party:{name:newPartyName.value,email:newPartyEmail.value,kind:newPartyKind.value}
+   title:newCaseTitle.value,party_id:selectedPartyId.value,
+   ...(selectedWorkflowId.value?{workflow_id:selectedWorkflowId.value}:{})
   })
-  portalMessage.value='Expediente de prueba creado y acceso concedido al correo indicado. Comparte el enlace manualmente: aún no se envían invitaciones por email.'
+  portalMessage.value=result.invited
+    ?'Expediente creado y plantilla activada. Comparte el enlace con el correo registrado; no se envía email automáticamente.'
+    :'Expediente creado como borrador sin plantilla. Puedes asociar una existente o diseñar una nueva cuando quieras.'
   await refreshPortal()
   await openCase(result.id)
  }catch(e){portalError.value=e instanceof Error?e.message:'No se pudo crear el expediente'}
@@ -179,7 +238,7 @@ async function createPilotCase(){
 }
 async function openCase(id:string){
  portalError.value='';answers.value={};taskNote.value='';returnReason.value=''
- try{activeCase.value=await portalRequest<CaseView>('/cases/'+id)}
+ try{activeCase.value=await portalRequest<CaseView>('/cases/'+id);draftWorkflowId.value='' }
  catch(e){portalError.value=e instanceof Error?e.message:'No se pudo abrir el expediente'}
 }
 async function completePortalTask(task:ContractTaskView){
@@ -242,7 +301,7 @@ async function acceptGoogleCredential(credential:string){
 }
 function logoutGoogle(){
  loginToken.value='';mairaGoogleToken.value='';loginEmail.value='';mairaImportOpen.value=false
- portalSession.value=null;templates.value=[];internalCases.value=[];myCases.value=[];activeCase.value=null;current.value='resumen'
+ portalSession.value=null;templates.value=[];partyRecords.value=[];selectedPartyId.value='';internalCases.value=[];myCases.value=[];activeCase.value=null;current.value='resumen'
  googleIdentity()?.disableAutoSelect?.()
  void nextTick(()=>{void initializeLoginGoogle()})
 }
@@ -416,6 +475,8 @@ const mairaContext = computed(() => {
         detail:selectedData.value
           ? 'Tipo: '+selectedData.value.kind+' · Responsable: '+(selectedData.value.role||'sin asignar')+'. Puedes editar esta etapa desde Propiedades.'
           : 'Tu borrador tiene '+nodeCount.value+' etapas y '+edges.value.length+' conexiones. Selecciona una etapa para ver su contexto.'}
+    case 'personas':
+      return {title:'Personas y empresas',detail:'Registra terceros una sola vez; no necesitan un workflow para existir.'}
     case 'contrataciones':
       return {title:'Gestión Contractual',detail:'Publica plantillas y crea expedientes de prueba, cada uno con tareas para contratante y contratista.'}
     case 'prestadores':
