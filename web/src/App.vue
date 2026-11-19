@@ -11,7 +11,7 @@ type Condition = {field:string;op:'eq'|'neq'|'gt'|'gte'|'lt'|'lte'|'in'|'exists'
 type FieldType = 'text'|'number'|'date'|'currency'|'boolean'|'select'
 type WorkField = {key:string;label:string;type:FieldType;required:boolean}
 type ExecutionMode = 'MANUAL'|'AI_ASSISTED'|'API'|'RPA'
-type WorkNode = {id:string;label:string;kind:Kind;policy:Policy;enabled:boolean;role:string|null;when?:Condition|null;config:{position?:{x:number;y:number};instructions?:string;execution_mode?:ExecutionMode;fields?:WorkField[];source_step?:string;source_excerpt?:string;source_page?:number|null;source_confidence?:string}}
+type WorkNode = {id:string;label:string;kind:Kind;policy:Policy;enabled:boolean;role:string|null;when?:Condition|null;config:{position?:{x:number;y:number};instructions?:string;execution_mode?:ExecutionMode;fields?:WorkField[];source_step?:string;source_excerpt?:string;source_page?:number|null;source_confidence?:string;actor_side?:'CONTRATANTE'|'CONTRATISTA'}}
 type WorkEdge = {source:string;target:string;when?:Condition|null}
 type Workflow = {key: string; name: string; modality_key: string | null; nodes: WorkNode[]; edges: WorkEdge[]; metadata: Record<string, unknown>}
 
@@ -20,13 +20,14 @@ const mairaOpen = ref(false)
 const mairaLastAction = ref('')
 const menu: { key: Screen; title: string; glyph: string }[] = [
   { key:'resumen',title:'Resumen',glyph:'▦' },
-  { key:'contrataciones',title:'Contrataciones',glyph:'▤' },
-  { key:'prestadores',title:'Prestadores',glyph:'⌂' },
+  { key:'contrataciones',title:'Gestión Contractual',glyph:'▤' },
+  { key:'prestadores',title:'Mi Contratación',glyph:'⌂' },
   { key:'flujos',title:'Flujos',glyph:'◇' },
   { key:'maira',title:'MAIRA',glyph:'✳' },
   { key:'configuracion',title:'Configuración',glyph:'⚙' }
 ]
 const screenTitle = computed(() => menu.find(m => m.key === current.value)?.title ?? '')
+const visibleMenu = computed(() => hasInstitution.value ? menu : menu.filter(m=>m.key==='prestadores'||m.key==='maira'))
 const iconPaths: Record<Screen,string[]> = {
   resumen: ['M3 3h8v8H3z','M13 3h8v8h-8z','M3 13h8v8H3z','M13 13h8v8h-8z'],
   contrataciones: ['M8 3h9l4 4v14H8z','M17 3v5h5','M11 12h7','M11 16h7','M4 7v14'],
@@ -96,6 +97,123 @@ const mairaProposal=ref<MairaProposal|null>(null)
 const mairaApplyConfirm=ref(false)
 const loginGoogleMount=ref<HTMLElement|null>(null)
 const loginEmail=ref('')
+type PortalSession={email:string;institutions:{id:string;roles:string[]}[];invited_cases:number;can_setup:boolean;pilot:boolean}
+type CaseSummary={id:string;title:string;state:string;workflow_version_id:string;party_name:string|null;party_email?:string;total:number;completed:number}
+type ContractTaskView={id:string;node_id:string;label:string;kind:string;side:string;state:string;fields:WorkField[];answer?:Record<string,unknown>;note?:string}
+type CaseView={case:CaseSummary;side:'CONTRATANTE'|'CONTRATISTA';tasks:ContractTaskView[]}
+type TemplateOption={id:string;name:string;key:string;version:number}
+const portalSession=ref<PortalSession|null>(null)
+const hasInstitution=computed(()=>Boolean(portalSession.value?.institutions?.length))
+const templates=ref<TemplateOption[]>([])
+const internalCases=ref<CaseSummary[]>([])
+const myCases=ref<CaseSummary[]>([])
+const activeCase=ref<CaseView|null>(null)
+const portalError=ref('')
+const portalMessage=ref('')
+const portalBusy=ref(false)
+const pilotName=ref('Institución de pruebas')
+const newCaseTitle=ref('')
+const newPartyName=ref('')
+const newPartyEmail=ref('')
+const newPartyKind=ref<'NATURAL'|'JURIDICA'>('JURIDICA')
+const selectedWorkflowId=ref('')
+const answers=ref<Record<string,string>>({})
+const taskNote=ref('')
+const returnReason=ref('')
+async function portalRequest<T>(path:string,method='GET',payload?:unknown):Promise<T>{
+ const response=await fetch(MAIRA_API+'/api/v1/portal'+path,{
+  method,headers:{Authorization:'Bearer '+loginToken.value,...(payload!==undefined?{'Content-Type':'application/json'}:{})},
+  ...(payload!==undefined?{body:JSON.stringify(payload)}:{}),cache:'no-store'
+ })
+ let data:unknown
+ try{data=await response.json()}catch{data={}}
+ if(!response.ok){
+  const message=(data as {detail?:unknown}).detail
+  throw new Error(typeof message==='string'?message:JSON.stringify(message||'Error del servidor ('+response.status+')'))
+ }
+ return data as T
+}
+async function refreshPortal(){
+ if(!loginToken.value)return
+ portalError.value=''
+ try{
+  portalSession.value=await portalRequest<PortalSession>('/session')
+  myCases.value=await portalRequest<CaseSummary[]>('/my-cases')
+  if(hasInstitution.value){
+   templates.value=await portalRequest<TemplateOption[]>('/workflows')
+   internalCases.value=await portalRequest<CaseSummary[]>('/cases')
+  }else{templates.value=[];internalCases.value=[]}
+ }catch(e){portalError.value=e instanceof Error?e.message:'No se pudo consultar la plataforma'}
+}
+async function setupPilot(){
+ portalBusy.value=true;portalError.value=''
+ try{
+  await portalRequest('/demo/setup','POST',{name:pilotName.value})
+  await refreshPortal()
+  portalMessage.value='Espacio de prueba creado. Solo utiliza información sintética.'
+ }catch(e){portalError.value=e instanceof Error?e.message:'No se pudo crear el espacio'}
+ finally{portalBusy.value=false}
+}
+async function publishPilot(){
+ portalBusy.value=true;portalError.value='';portalMessage.value=''
+ try{
+  const result=await portalRequest<{id:string;version:number}>('/workflows/publish','POST',{workflow:definition()})
+  await refreshPortal()
+  selectedWorkflowId.value=result.id
+  portalMessage.value='Plantilla de prueba publicada, versión '+result.version+'. No es una aprobación jurídica.'
+ }catch(e){portalError.value=e instanceof Error?e.message:'No se pudo publicar'}
+ finally{portalBusy.value=false}
+}
+async function createPilotCase(){
+ portalBusy.value=true;portalError.value=''
+ try{
+  const result=await portalRequest<CaseSummary>('/cases','POST',{
+   workflow_id:selectedWorkflowId.value,title:newCaseTitle.value,
+   party:{name:newPartyName.value,email:newPartyEmail.value,kind:newPartyKind.value}
+  })
+  portalMessage.value='Expediente de prueba creado. Comparte la dirección de Smart Contract con el correo invitado; aún no se envían emails automáticamente.'
+  await refreshPortal()
+  await openCase(result.id)
+ }catch(e){portalError.value=e instanceof Error?e.message:'No se pudo crear el expediente'}
+ finally{portalBusy.value=false}
+}
+async function openCase(id:string){
+ portalError.value='';answers.value={};taskNote.value='';returnReason.value=''
+ try{activeCase.value=await portalRequest<CaseView>('/cases/'+id)}
+ catch(e){portalError.value=e instanceof Error?e.message:'No se pudo abrir el expediente'}
+}
+async function completePortalTask(task:ContractTaskView){
+ if(!activeCase.value)return
+ portalBusy.value=true;portalError.value=''
+ const fields=task.fields||[]
+ const data:Record<string,unknown>={}
+ for(const field of fields){const v=answers.value[field.key];if(v!==undefined&&v!=='')data[field.key]=v}
+ try{
+  await portalRequest('/cases/'+activeCase.value.case.id+'/tasks/'+task.id+'/complete','POST',{data,note:taskNote.value})
+  portalMessage.value='Actividad registrada con trazabilidad.'
+  await refreshPortal();await openCase(activeCase.value.case.id)
+ }catch(e){portalError.value=e instanceof Error?e.message:'No se pudo completar'}
+ finally{portalBusy.value=false}
+}
+async function returnPortalTask(task:ContractTaskView){
+ if(!activeCase.value)return
+ portalBusy.value=true;portalError.value=''
+ try{
+  await portalRequest('/cases/'+activeCase.value.case.id+'/tasks/'+task.id+'/return','POST',{reason:returnReason.value})
+  portalMessage.value='Actividad devuelta al contratista para corrección.'
+  await refreshPortal();await openCase(activeCase.value.case.id)
+ }catch(e){portalError.value=e instanceof Error?e.message:'No se pudo devolver'}
+ finally{portalBusy.value=false}
+}
+function inviteLink(){
+ GenUI_copy_stub()
+}
+function GenUI_copy_stub(){
+ const url=window.location.origin+'/?view=mi-contratacion'
+ void navigator.clipboard?.writeText(url)
+ portalMessage.value='Enlace de acceso copiado. El invitado debe entrar con el correo registrado y, en Google Testing, estar autorizado como usuario de prueba.'
+}
+
 const loginToken=ref('')
 const loginPending=ref(false)
 const loginError=ref('')
@@ -110,13 +228,16 @@ type GoogleIdentity={
 async function acceptGoogleCredential(credential:string){
  loginPending.value=true;loginError.value=''
  try{
-  const result=await fetch(MAIRA_API+'/api/v1/maira/session',{headers:{Authorization:'Bearer '+credential},cache:'no-store'})
-  const payload=await result.json() as {email?:string;detail?:string}
+  const result=await fetch(MAIRA_API+'/api/v1/portal/session',{headers:{Authorization:'Bearer '+credential},cache:'no-store'})
+  const payload=await result.json() as PortalSession & {detail?:string}
   if(!result.ok)throw new Error(typeof payload.detail==='string'?payload.detail:'La cuenta no está habilitada para Smart Contract.')
   if(!payload.email)throw new Error('Google no devolvió una cuenta verificada.')
   loginToken.value=credential
   mairaGoogleToken.value=credential
   loginEmail.value=payload.email
+  portalSession.value=payload
+  await refreshPortal()
+  if(!hasInstitution.value)current.value='prestadores'
  }catch(e){
   loginToken.value='';mairaGoogleToken.value='';loginEmail.value=''
   loginError.value=e instanceof Error?e.message:'No se pudo validar la sesión'
@@ -124,6 +245,7 @@ async function acceptGoogleCredential(credential:string){
 }
 function logoutGoogle(){
  loginToken.value='';mairaGoogleToken.value='';loginEmail.value='';mairaImportOpen.value=false
+ portalSession.value=null;templates.value=[];internalCases.value=[];myCases.value=[];activeCase.value=null;current.value='resumen'
  googleIdentity()?.disableAutoSelect?.()
  void nextTick(()=>{void initializeLoginGoogle()})
 }
@@ -277,22 +399,23 @@ const mairaContext = computed(() => {
           ? 'Tipo: '+selectedData.value.kind+' · Responsable: '+(selectedData.value.role||'sin asignar')+'. Puedes editar esta etapa desde Propiedades.'
           : 'Tu borrador tiene '+nodeCount.value+' etapas y '+edges.value.length+' conexiones. Selecciona una etapa para ver su contexto.'}
     case 'contrataciones':
-      return {title:'Contrataciones',detail:'La gestión de expedientes aún requiere autenticación y permisos institucionales. Puedes preparar los procesos en Workflow Studio.'}
+      return {title:'Gestión Contractual',detail:'Publica plantillas y crea expedientes de prueba, cada uno con tareas para contratante y contratista.'}
     case 'prestadores':
-      return {title:'Prestadores',detail:'El catálogo institucional de prestadores aún no está habilitado. Diseña primero los requisitos de registro y validación documental.'}
+      return {title:'Mi Contratación',detail:'Aquí solo verás expedientes a los que tu correo haya sido invitado.'}
     case 'configuracion':
       return {title:'Configuración',detail:'Los roles y las políticas de cada empresa se administrarán aquí cuando esté habilitado el acceso multiempresa.'}
     case 'maira':
       return {title:'MAIRA Intelligence',detail:'La asistencia contextual está disponible en toda la plataforma. La interpretación mediante Gemini todavía no está conectada.'}
   }
 })
-const mairaShortcuts = computed(() => current.value==='flujos'
+const mairaShortcuts = computed(() => !hasInstitution.value ? [{key:'mine',label:'Mi Contratación',icon:'▤'}] : current.value==='flujos'
   ? [{key:'verify',label:'Verificar estructura',icon:'✓'},{key:'simulate',label:'Simular borrador',icon:'◇'},{key:'approval',label:'Agregar aprobación',icon:'+'},{key:'export',label:'Exportar JSON',icon:'↧'}]
   : [{key:'workflow',label:'Abrir Workflow Studio',icon:'◇'},{key:'maira',label:'Conocer capacidades de MAIRA',icon:'✧'}]
 )
 function mairaShortcut(key:string){
   mairaLastAction.value=''
-  if(key==='workflow'){current.value='flujos';mairaLastAction.value='Workflow Studio abierto.'}
+  if(key==='workflow'){current.value=hasInstitution.value?'flujos':'prestadores';mairaLastAction.value='Espacio disponible abierto.'}
+  else if(key==='mine'){current.value='prestadores';mairaLastAction.value='Mi Contratación abierta.'}
   else if(key==='maira'){current.value='maira';mairaLastAction.value='Vista de MAIRA abierta.'}
   else if(key==='verify'){
     const valid=validateDraft()
@@ -303,7 +426,7 @@ function mairaShortcut(key:string){
   else if(key==='export'){exportDraft();mairaLastAction.value='Borrador exportado a JSON desde este navegador.'}
 }
 
-function editNode(field:'label'|'role'|'enabled'|'policy'|'instructions'|'conditionField'|'conditionValue'|'conditionOperator'|'executionMode', val:string|boolean){
+function editNode(field:'label'|'role'|'enabled'|'policy'|'instructions'|'conditionField'|'conditionValue'|'conditionOperator'|'executionMode'|'actorSide', val:string|boolean){
   if(!selectedNode.value || !selectedData.value)return
   const target=selectedData.value
   if(field==='enabled' && val===false && ['ORG_REQUIRED','LEGAL_LOCKED'].includes(target.policy)){
@@ -315,6 +438,7 @@ function editNode(field:'label'|'role'|'enabled'|'policy'|'instructions'|'condit
    else if(field==='conditionOperator'&&target.when)next.when={...target.when,op:val}
    else if(field==='conditionValue'&&target.when)next.when={...target.when,value:castValue(String(val))}
    else if(field==='executionMode')next.config={...target.config,execution_mode:String(val)}
+   else if(field==='actorSide')next.config={...target.config,actor_side:String(val)}
    else if(field==='policy') {
      if(['LEGAL_LOCKED','ORG_REQUIRED'].includes(target.policy)&&!['LEGAL_LOCKED','ORG_REQUIRED'].includes(String(val))){flowMessage.value='No puedes rebajar la protección de una etapa obligatoria desde el editor.';return}
      next.policy=val; if(['ORG_REQUIRED','LEGAL_LOCKED'].includes(String(val)))next.enabled=true
@@ -504,7 +628,8 @@ function loadDefinition(parsed:Partial<Workflow>){
      source_step:typeof raw.config?.source_step==='string'?raw.config.source_step.slice(0,40):undefined,
      source_excerpt:typeof raw.config?.source_excerpt==='string'?raw.config.source_excerpt.slice(0,650):undefined,
      source_page:typeof raw.config?.source_page==='number'?raw.config.source_page:null,
-     source_confidence:typeof raw.config?.source_confidence==='string'?raw.config.source_confidence.slice(0,25):undefined}}
+     source_confidence:typeof raw.config?.source_confidence==='string'?raw.config.source_confidence.slice(0,25):undefined,
+     actor_side:raw.config?.actor_side==='CONTRATISTA'?'CONTRATISTA':'CONTRATANTE'}}
    return n
  })
  const parsedEdges:Edge[]=parsed.edges.map((e,i)=>{
@@ -628,7 +753,7 @@ function simulateDraft(){
       </div>
       <div class="nav-section">Workspace</div>
       <nav aria-label="Navegación principal">
-        <button v-for="entry in menu" :key="entry.key" :class="{active:current===entry.key,'nav-ai':entry.key==='maira'}" @click="current=entry.key" :aria-current="current===entry.key?'page':undefined">
+        <button v-for="entry in visibleMenu" :key="entry.key" :class="{active:current===entry.key,'nav-ai':entry.key==='maira'}" @click="current=entry.key" :aria-current="current===entry.key?'page':undefined">
           <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
             <path v-for="(path,i) in iconPaths[entry.key]" :key="i" :d="path" />
           </svg>
@@ -641,10 +766,10 @@ function simulateDraft(){
     <main class="main">
       <header class="top-header">
         <div><small>Workspace / Smart Contract / {{screenTitle}}</small><h1>{{screenTitle}}</h1></div>
-        <div class="top-meta"><span class="top-product">Smart Contract · V5.3</span><span class="context-pill">Development</span><button type="button" class="logout-button" @click="logoutGoogle" title="Cerrar sesión Google">Salir</button></div>
+        <div class="top-meta"><span class="top-product">Smart Contract · V6.3 PILOTO</span><span class="context-pill">Development</span><button type="button" class="logout-button" @click="logoutGoogle" title="Cerrar sesión Google">Salir</button></div>
       </header>
-      <section v-if="current==='flujos'" class="stack">
-        <div class="heading"><div><span class="eyebrow">Diseño inteligente de procesos</span><h2>Workflow Studio</h2><p>Diseña, conecta y valida etapas configurables. Todos los cambios siguen siendo un borrador local.</p></div><div class="header-actions"><button class="primary-button" @click="openMairaDocumentImport">✧ Crear con MAIRA</button><button class="ghost-button" @click="newWorkflow">＋ Nuevo flujo</button><button class="ghost-button" @click="fileInput?.click()">↥ Importar</button><button class="primary-button" @click="exportDraft">↧ Exportar JSON</button></div></div>
+      <section v-if="current==='flujos'&&hasInstitution" class="stack">
+        <div class="heading"><div><span class="eyebrow">Diseño inteligente de procesos</span><h2>Workflow Studio</h2><p>Diseña, conecta y valida etapas configurables. Todos los cambios siguen siendo un borrador local.</p></div><div class="header-actions"><button class="primary-button" @click="openMairaDocumentImport">✧ Crear con MAIRA</button><button class="ghost-button" @click="newWorkflow">＋ Nuevo flujo</button><button class="ghost-button" @click="fileInput?.click()">↥ Importar</button><button class="primary-button" @click="exportDraft">↧ Exportar JSON</button><button class="ghost-button" :disabled="portalBusy" @click="publishPilot">Publicar plantilla de prueba</button></div></div>
 
         <div v-if="mairaImportOpen" class="maira-import-surface" role="region" aria-label="Crear flujo a partir de documento con MAIRA">
           <div class="maira-import-head">
@@ -723,6 +848,7 @@ function simulateDraft(){
               <label class="inspector-field">Nombre de la etapa<input :value="selectedData.label" maxlength="200" @input="editNode('label',($event.target as HTMLInputElement).value)" /></label>
               <label class="inspector-field">Tipo de componente<input :value="blocks.find(b=>b.kind===selectedData?.kind)?.title||selectedData.kind" disabled /></label>
               <label class="inspector-field">Responsable<input list="roles-contrato" :value="selectedData.role||''" placeholder="Selecciona o escribe otro rol" maxlength="120" @input="editNode('role',($event.target as HTMLInputElement).value)"/><datalist id="roles-contrato"><option v-for="role in roles" :key="role" :value="role" /></datalist></label>
+              <label v-if="selectedData.kind!=='START'&&selectedData.kind!=='END'" class="inspector-field">Ejecuta la actividad<select :value="selectedData.config?.actor_side||'CONTRATANTE'" @change="editNode('actorSide',($event.target as HTMLSelectElement).value)"><option value="CONTRATANTE">Entidad contratante</option><option value="CONTRATISTA">Contratista / prestador</option></select></label>
               <label class="inspector-field">Clasificación<select :value="selectedData.policy" @change="editNode('policy',($event.target as HTMLSelectElement).value)"><option v-for="p in policies" :key="p.value" :value="p.value">{{p.label}}</option></select></label>
               <label class="inspector-field">Campo de condición <span class="field-hint">opcional</span><input :value="selectedData.when?.field||''" placeholder="Ej. contract.requires_policy" @input="editNode('conditionField',($event.target as HTMLInputElement).value)" /></label>
               <label v-if="selectedData.when?.field" class="inspector-field">Operador<select :value="selectedData.when?.op||'eq'" @change="editNode('conditionOperator',($event.target as HTMLSelectElement).value)"><option v-for="op in conditionOperators" :key="op.value" :value="op.value">{{op.label}}</option></select></label>
@@ -835,6 +961,55 @@ function simulateDraft(){
         </div>
         <div class="status-panel"><div><strong>Workflow Studio ya disponible</strong><p>Mientras MAIRA se integra, puedes diseñar y simular procesos manualmente.</p></div><button class="ghost-button" @click="current='flujos'">Abrir Studio ↗</button></div>
       </section>
+
+      <section v-else-if="current==='contrataciones'&&hasInstitution" class="contract-space">
+        <div class="contract-hero"><div><span class="eyebrow">SMART CONTRACT · PILOTO</span><h2>Gestión Contractual</h2><p>Publica una plantilla de prueba, invita a una persona o empresa y gestiona las actividades desde aquí.</p></div><button class="ghost-button" @click="refreshPortal">Actualizar</button></div>
+        <div class="pilot-notice">Ambiente de evaluación con datos sintéticos. No admite documentos confidenciales, firma válida ni contratación productiva.</div>
+        <div v-if="portalError" class="pilot-error" role="alert">{{portalError}}</div>
+        <div v-if="portalMessage" class="pilot-success" role="status">{{portalMessage}}</div>
+        <div v-if="portalSession?.can_setup" class="pilot-panel">
+          <h3>Crear institución de prueba</h3><p>Solo se crearán datos ficticios. El acceso queda vinculado a tu cuenta Google.</p>
+          <label>Nombre del espacio<input v-model="pilotName" maxlength="150"/></label>
+          <button class="primary-button" :disabled="portalBusy" @click="setupPilot">Iniciar piloto</button>
+        </div>
+        <template v-else>
+          <div class="pilot-panel">
+            <h3>Nueva contratación</h3><p>Cada contratación utiliza una versión publicada de un workflow. Las tareas se asignan según el ejecutor configurado en cada etapa.</p>
+            <div class="pilot-form-grid">
+              <label>Plantilla publicada<select v-model="selectedWorkflowId"><option value="">Selecciona plantilla</option><option v-for="tpl in templates" :key="tpl.id" :value="tpl.id">{{tpl.name}} · v{{tpl.version}}</option></select></label>
+              <label>Nombre del expediente<input v-model="newCaseTitle" maxlength="250" placeholder="Contrato de prueba"/></label>
+              <label>Nombre de la persona o empresa<input v-model="newPartyName" maxlength="250" placeholder="Contratista ficticio"/></label>
+              <label>Correo invitado<input v-model="newPartyEmail" type="email" placeholder="segundo-correo@gmail.com"/></label>
+              <label>Tipo<select v-model="newPartyKind"><option value="JURIDICA">Persona jurídica</option><option value="NATURAL">Persona natural</option></select></label>
+            </div>
+            <div class="pilot-actions"><button class="primary-button" :disabled="portalBusy||!selectedWorkflowId||!newCaseTitle||!newPartyName||!newPartyEmail" @click="createPilotCase">Crear expediente e invitar</button><button class="ghost-button" @click="current='flujos'">Diseñar plantilla</button></div>
+            <p v-if="!templates.length" class="pilot-muted">No hay plantillas publicadas. Entra a Flujos, asigna quién ejecuta cada etapa y pulsa «Publicar plantilla de prueba».</p>
+          </div>
+          <div class="pilot-panel">
+            <h3>Expedientes de la institución <span class="pilot-count">{{internalCases.length}}</span></h3>
+            <div v-if="!internalCases.length" class="pilot-empty">Aún no existen expedientes. Crea uno con información ficticia.</div>
+            <button v-for="caseItem in internalCases" :key="caseItem.id" class="pilot-case-row" @click="openCase(caseItem.id)">
+              <span><strong>{{caseItem.title}}</strong><small>{{caseItem.party_name}} · {{caseItem.party_email}}</small></span>
+              <span>{{caseItem.completed}}/{{caseItem.total}} · {{caseItem.state==='COMPLETED'?'Finalizado':'En trámite'}}</span>
+            </button>
+          </div>
+        </template>
+      </section>
+      <section v-else-if="current==='prestadores'" class="contract-space">
+        <div class="contract-hero"><div><span class="eyebrow">SMART CONTRACT · ESPACIO PERSONAL</span><h2>Mi Contratación</h2><p>Consulta las actividades que la entidad te ha asignado. Solo aparecen las invitaciones asociadas a tu cuenta Google.</p></div><button class="ghost-button" @click="refreshPortal">Actualizar</button></div>
+        <div class="pilot-notice">Piloto con datos sintéticos. Las firmas y documentos no se reciben todavía desde este espacio.</div>
+        <div v-if="portalError" class="pilot-error" role="alert">{{portalError}}</div>
+        <div v-if="portalMessage" class="pilot-success" role="status">{{portalMessage}}</div>
+        <div class="pilot-panel">
+          <h3>Mis procesos <span class="pilot-count">{{myCases.length}}</span></h3>
+          <p v-if="!myCases.length" class="pilot-muted">No tienes invitaciones asignadas. Deben invitarte desde Gestión Contractual usando exactamente este correo: {{loginEmail}}.</p>
+          <button v-for="caseItem in myCases" :key="caseItem.id" class="pilot-case-row" @click="openCase(caseItem.id)">
+            <span><strong>{{caseItem.title}}</strong><small>Contratación: {{caseItem.party_name}}</small></span>
+            <span>{{caseItem.completed}}/{{caseItem.total}} · {{caseItem.state==='COMPLETED'?'Finalizado':'En trámite'}}</span>
+          </button>
+        </div>
+      </section>
+
       <section v-else class="overview">
         <div class="placeholder-panel">
           <div class="placeholder-icon">{{menu.find(m=>m.key===current)?.glyph}}</div>
@@ -843,6 +1018,27 @@ function simulateDraft(){
           <p>Este espacio se conectará con expedientes y roles institucionales cuando se complete la autenticación multiempresa. No presentamos datos de prueba como información real.</p>
           <div class="placeholder-features"><span>◇ Multiempresa</span><span>▣ Control de acceso</span><span>✧ Asistencia MAIRA</span></div>
           <button class="primary-button" @click="current='flujos'">Abrir Workflow Studio ↗</button>
+        </div>
+      </section>
+      <section v-if="activeCase&&(current==='contrataciones'||current==='prestadores')" class="contract-case-detail">
+        <div class="pilot-detail-top"><div><span class="eyebrow">EXPEDIENTE DE PRUEBA · {{activeCase.side}}</span><h3>{{activeCase.case.title}}</h3><p>{{activeCase.case.party_name}} · {{activeCase.case.completed}} de {{activeCase.case.total}} actividades completadas</p></div><button class="ghost-button" @click="activeCase=null">Cerrar detalle</button></div>
+        <div class="pilot-progress"><div :style="{width:activeCase.case.total?Math.round(100*activeCase.case.completed/activeCase.case.total)+'%':'0%'}"></div></div>
+        <button v-if="activeCase.side==='CONTRATANTE'" class="ghost-button" @click="inviteLink">Copiar enlace para el contratista</button>
+        <div class="pilot-task-list">
+          <div v-for="task in activeCase.tasks" :key="task.id" class="pilot-task">
+            <div class="pilot-task-head"><strong>{{task.label}}</strong><span class="pilot-task-status">{{task.state==='COMPLETED'?'Completada':task.state==='PENDING'?'Pendiente':task.state==='RETURNED'?'Devuelta':'En espera'}}</span></div>
+            <p class="pilot-muted">{{task.side==='CONTRATANTE'?'Entidad contratante':'Contratista'}} · {{task.kind}}</p>
+            <p v-if="task.note" class="pilot-task-note">{{task.note}}</p>
+            <template v-if="(task.state==='PENDING'||task.state==='RETURNED')&&activeCase.side===task.side&&task.kind!=='START'&&task.kind!=='END'">
+              <div v-for="field in task.fields" :key="field.key" class="pilot-field"><label>{{field.label}}{{field.required?' *':''}}<input :value="answers[field.key]||''" :type="field.type==='number'||field.type==='currency'?'number':field.type==='date'?'date':'text'" @input="answers[field.key]=($event.target as HTMLInputElement).value" /></label></div>
+              <label class="pilot-field">Observación de la actividad<textarea v-model="taskNote" rows="2" maxlength="2000" placeholder="Observación opcional, solo información ficticia"></textarea></label>
+              <button class="primary-button" :disabled="portalBusy" @click="completePortalTask(task)">Completar actividad de prueba</button>
+            </template>
+            <div v-if="activeCase.side==='CONTRATANTE'&&task.side==='CONTRATISTA'&&task.state==='COMPLETED'" class="pilot-return">
+              <input v-model="returnReason" placeholder="Motivo de devolución (mínimo cinco caracteres)" maxlength="2000" />
+              <button class="ghost-button" :disabled="portalBusy||returnReason.trim().length<5" @click="returnPortalTask(task)">Solicitar corrección</button>
+            </div>
+          </div>
         </div>
       </section>
     </main>
