@@ -104,3 +104,9 @@ Repositorio privado: `andresmartalliance/smart-contract`. Proyecto Railway: `sma
 El usuario autorizó trabajar únicamente en este repositorio, proyecto Railway y carpeta Drive; esa limitación es una **política de ejecución** porque los conectores tienen alcance técnico más amplio. No modificar otros productos.
 
 Próxima versión integral: autenticación real y control multiempresa de configuración, guardado seguro de flujos, publicación con permisos, MAIRA conectada y procesamiento del workflow real cuando se reciba.
+
+## Favicon y marca visual · V6.1.1
+
+Smart Contract utiliza el icono aprobado del usuario: geometría abstracta de nube y tres barras ascendentes en azul sólido `#0040DB`, fondo transparente, sin degradado ni 3D. Está disponible como `web/public/favicon.svg` y `web/public/favicon-64.png`. `web/index.html` referencia SVG con respaldo PNG, y la marca de la barra lateral utiliza el mismo emblema en lugar de la S provisional. No afecta la identidad separada de MAIRA ni el backend.
+
+Entrega funcional: commit `d15d44dae6dfaf2ca3f03810a3b0ac916549f74b`; GitHub Actions PASS y Railway Web SUCCESS, API y Postgres sin cambios. La integración Gemini continúa pendiente de credenciales propias de Smart Contract. La marca de Google Auth Platform deberá llamarse `Smart Contract` y utilizar un OAuth Web Client con origen `https://web-development-80ecf771.up.railway.app`, sin redirección, dado que la app usa Google Identity Services por callback de JavaScript.
