@@ -264,3 +264,16 @@ def test_cannot_mix_inline_and_existing_party(portal):
        "title":"No duplicated subject","party_id":record["id"],
        "party":{"name":"Other","kind":"NATURAL","email":"other@example.com"}})
     assert mixed.status_code==422
+
+def test_registered_external_contact_can_login_before_workflow_but_sees_no_case(portal):
+    create_pilot(portal)
+    record=create_party_record(portal,name="Proveedor autónomo",email="usuario@example.com")
+    as_user("usuario@example.com")
+    session=portal.get("/api/v1/portal/session")
+    assert session.status_code==200
+    assert session.json()["registered_contact"] is True
+    assert session.json()["institutions"]==[]
+    assert portal.get("/api/v1/portal/my-cases").json()==[]
+    assert portal.get("/api/v1/portal/parties").status_code==403
+    assert portal.post("/api/v1/portal/cases",json={
+       "title":"Unauthorized draft","party_id":record["id"]}).status_code==403

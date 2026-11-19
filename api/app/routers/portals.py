@@ -137,11 +137,13 @@ def session(email: str=Depends(verify_google_email),db:Session=Depends(get_sessi
     memberships=_memberships(db,email)
     assignments=db.scalars(select(ContractCaseAccess).where(
       ContractCaseAccess.email==email, ContractCaseAccess.active.is_(True))).all()
-    if not memberships and not assignments and not _allowed_bootstrap(email):
-        raise HTTPException(403,"No invitation or institutional membership for this account")
+    registered=db.scalar(select(ContractParty.id).join(Tenant,Tenant.id==ContractParty.tenant_id).where(
+        ContractParty.contact_email==email,Tenant.active.is_(True)))
+    if not memberships and not assignments and not registered and not _allowed_bootstrap(email):
+        raise HTTPException(403,"No institution, registration or invitation for this account")
     return {"email":email,"institutions":[{"id":m.tenant_id,"roles":m.roles} for m in memberships],
-            "invited_cases":len(assignments),"can_setup":_allowed_bootstrap(email) and not memberships,
-            "pilot":True}
+            "invited_cases":len(assignments),"registered_contact":bool(registered),
+            "can_setup":_allowed_bootstrap(email) and not memberships,"pilot":True}
 
 @router.post("/demo/setup",status_code=201)
 def setup(payload:DemoSetup,email:str=Depends(verify_google_email),db:Session=Depends(get_session)):
