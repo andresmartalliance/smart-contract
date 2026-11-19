@@ -1,8 +1,12 @@
 # Smart Contract + MAIRA
 
-**V6.4 — Personas y empresas independientes de plantillas · Development**
+**V6.4.1 — MAIRA compacta con pulso discreto · Development**
 
 Smart Contract es una plataforma SaaS multiempresa con motor declarativo de workflows de contratación, campos, políticas y modalidades configurables. La primera aplicación es contratación de red prestadora de salud, sin codificar PGP, cápita ni evento como flujos obligatorios. El workflow institucional de Famisanar aún no ha sido recibido y no forma parte de esta versión.
+
+## V6.4.1 — MAIRA flotante compacta
+
+Ajuste exclusivamente visual aprobado: el botón persistente MAIRA se redujo a 50 px de alto y un ancho mínimo de 136 px (móvil 47 × 120), conservando el degradado original azul y la apertura del mismo panel contextual. La estrella queda dentro de un círculo discreto cuyo contorno respira cada 2,7 segundos, con cambios suaves de escala y opacidad. Se respeta `prefers-reduced-motion`; no hay animaciones obligatorias para usuarios que las deshabilitan. No se modifica el estado de Gemini, los contratos, los flujos, las credenciales ni los datos.
 
 ## V6.4 — Directorio de personas y empresas, independiente de los contratos
 

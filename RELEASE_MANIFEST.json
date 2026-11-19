@@ -1,8 +1,8 @@
 {
   "product": "smart-contract",
   "architecture": "5.0",
-  "package": "6.4-party-master-deferred-workflow",
-  "status": "V6_4_PARTY_REGISTRY_DRAFT_CASES_DEPLOYED_PILOT_ONLY",
+  "package": "6.4.1-maira-compact-pulse",
+  "status": "V6_4_1_BUILD_PENDING",
   "repository_target": "andresmartalliance/smart-contract",
   "railway_project_id": "1f226324-580b-4b1c-b235-12c717d70af8",
   "railway_development_environment_id": "6e8d45ca-d6f2-448c-a48a-63e5a2ab1806",
@@ -52,7 +52,9 @@
     "draft_case_without_template": "IMPLEMENTED_AND_TESTED",
     "attach_template_after_case_creation": "IMPLEMENTED_AND_TESTED",
     "existing_party_reuse": "IMPLEMENTED_AND_TESTED",
-    "registered_external_login": "GOOGLE_EMAIL_REGISTERED_WITHOUT_CASE_ALLOWED_TESTED_MOCK_IDENTITY"
+    "registered_external_login": "GOOGLE_EMAIL_REGISTERED_WITHOUT_CASE_ALLOWED_TESTED_MOCK_IDENTITY",
+    "maira_launcher": "SOURCE_IMPLEMENTED_BUILD_PENDING",
+    "maira_motion_accessibility": "PREFERS_REDUCED_MOTION_IMPLEMENTED"
   },
   "limitations": [
     "Open Development frontend is for fictitious data only",
@@ -101,7 +103,7 @@
   },
   "github_source_commit": "main (see Railway deployment commit and Drive context)",
   "railway_source_connection": "CONNECTED_MAIN",
-  "release_notes": "V6.4 decouples independent tenant-scoped person/company registry from contracting cases and workflow versions. Register without template, create draft case without workflow, later attach a published template, grant external access only when activated. Backfill 0003_party_registry without deleting existing cases. CI 45 PASS and Railway web/api success.",
+  "release_notes": "Compact persistent MAIRA button, subtle circular breathing halo around sparkle, approved existing blue palette, motion accessibility. Visual-only; no API or workflow changes.",
   "base_source_commit": "d176b0fe39017c226c499eb0a4ae6cef13b93df5",
   "visual_design_version": "1.0",
   "watch_patterns": {

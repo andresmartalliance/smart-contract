@@ -1206,8 +1206,8 @@ function simulateDraft(){
       </div>
     </aside>
     <button class="maira-launcher" type="button" aria-controls="maira-panel" :aria-expanded="mairaOpen" :aria-label="mairaOpen?'Cerrar MAIRA':'Abrir MAIRA'" @click="mairaOpen=!mairaOpen">
-      <span class="maira-launcher-spark" aria-hidden="true">✦</span>
-      <span>MAIRA</span>
+      <span class="maira-launcher-icon" aria-hidden="true"><span class="maira-launcher-spark">✦</span></span>
+      <span class="maira-launcher-label">MAIRA</span>
     </button>
   </div>
 </template>

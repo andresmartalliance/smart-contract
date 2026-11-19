@@ -1,4 +1,8 @@
-# Smart Contract V6.4 — Arquitectura integral y estado real
+# Smart Contract V6.4.1 — Arquitectura integral y estado real
+
+## UX MAIRA V6.4.1 — Pulse elegante
+
+El lanzador flotante `.maira-launcher` mantiene su comportamiento original y el estilo de marca aprobado, pero es más compacto: 136 × 50 px (mínimo, en escritorio), y 120 × 47 px en dispositivos móviles. El halo circular del icono usa `@keyframes maira-pulse` (2.7 s `ease-in-out`, iteración infinita), sin alterar botón, estado ni funciones de MAIRA. Respeta media query `prefers-reduced-motion` y conserva `aria-label` y `aria-expanded`. El despliegue modifica solo `web/src/App.vue` y `web/src/style.css`, además de documentación maestra.
 
 ## Estado arquitectónico integral V6.4
 
