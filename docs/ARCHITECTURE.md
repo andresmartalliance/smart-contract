@@ -1,4 +1,22 @@
-# Smart Contract V6.2 — Arquitectura integral y estado real
+# Smart Contract V6.3 — Arquitectura integral y estado real
+
+## Dos experiencias sobre el mismo motor — V6.3
+
+**Gestión Contractual:** experiencia de la entidad contratante, destinada al usuario con membresía y rol de `ADMIN`, `CONFIGURADOR` u `OPERADOR` dentro de una institución. Configura actividades, publica una plantilla manual de prueba y crea expedientes con invitaciones de correo. El piloto únicamente admite publicación de un grafo sin condiciones y con componentes manuales ejecutables. Acciones críticas quedan registradas en auditoría. Este permiso no se confiere por mera autenticación Google, sino por membresía de base de datos validada para cada petición.
+
+**Mi Contratación:** experiencia para personas naturales y jurídicas identificadas por su correo Google verificado y expresamente invitadas a un expediente. Solo muestra expedientes vinculados al correo invitado y las actividades del lado `CONTRATISTA`. No puede ver ni completar tareas internas; sí responder sus formularios y corregir una tarea devuelta. En el piloto no existen adjuntos, firma electrónica ni notificaciones de correo automáticas.
+
+**Modelo persistente:** se conservan `Tenant`, `Membership`, `WorkflowVersion`, `ContractCase` y `AuditEvent`. La migración Alembic `0002_portals` incorpora `ContractParty`, `ContractCaseAccess` y `ContractTask` para modelar la contraparte por institución, acceso por expediente y actividades con campos, estado y respuesta. Cada tabla nueva incluye `tenant_id` e índices/constraints relevantes. La API aplica el aislamiento mediante filtros tenant/expediente; **RLS PostgreSQL sigue sin verificarse/implementarse**. No usar esta versión con documentos reales.
+
+**Declaratividad:** el nodo del workflow define `config.actor_side` (`CONTRATANTE` o `CONTRATISTA`), además de responsable, campos y dependencias. Los nodos producen tareas automáticamente, sin pantallas especializadas por PGP, cápita, evento ni otra modalidad. La aplicación permite configurar la parte ejecutora en Propiedades. Para facilitar la primera validación incluye una **plantilla sintética de doble portal**, pero esta no sustituye el diagrama que MAIRA deberá interpretar cuando Gemini se habilite.
+
+**API piloto:** `GET /api/v1/portal/session` determina el acceso Google/membresías/invitaciones; `POST /demo/setup` crea únicamente institución ficticia y solo para el correo de la allowlist con feature flag habilitado; `GET /workflows` y `POST /workflows/publish`; `GET/POST /cases`; `GET /my-cases`; `GET /cases/{id}`; `POST /cases/{id}/tasks/{task_id}/complete` y `/return`. Publicación de piloto se limita a tipos de etapa manuales permitidos; no simula firma, integraciones, generación de documentos ni condiciones. Correo invitado obtiene acceso al expediente tras Google Sign-In sin enviar mensajes automáticos.
+
+**Control de estados:** desde `START` se habilitan tareas cuya totalidad de dependencias estén completadas; `END` se completa automáticamente al finalizar. La devolución solo se permite si una tarea de contratista terminó y ninguna tarea posterior no terminal ha sido completada. Las acciones dejan `AuditEvent` con institución y actor; no hay historial visible en frontend aún.
+
+**Pruebas y operación:** GitHub Actions final V6.3 pasó **37/37 tests backend** y frontend build; Railway web/API/Postgres online, servicio API tiene comando preDeploy `alembic upgrade head`. Se activó la bandera solo en Development `SMART_PORTAL_DEMO_ENABLED=true` para correo administrativo autorizado. No se han hecho pruebas con dos cuentas Google en navegador ni consulta independiente al esquema físico PostgreSQL; el éxito del despliegue no debe confundirse con E2E institucional. El login OAuth sigue dependiendo de que cualquier segundo correo invitado esté en Google Auth Platform como *test user*, mientras la aplicación esté en Testing.
+
+**Pendiente antes de uso institucional:** selección multi-tenant explícita para administradores con varias membresías; gestión de usuarios/invitaciones con expiración y aceptación; RLS real; identidad de usuarios externos no Google; adjuntos cifrados; versionado más rico de expedientes; mensajería; firma; automatizaciones; auditoría visible; SLA; controles contractuales y seguridad jurídica.
 
 ## Acceso Google y marca Smart V6.2
 

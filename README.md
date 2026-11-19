@@ -1,8 +1,27 @@
 # Smart Contract + MAIRA
 
-**V6.2 — Inicio de sesión Smart Contract con Google y marca corporativa · Development**
+**V6.3 — Gestión Contractual + Mi Contratación · piloto de doble portal · Development**
 
 Smart Contract es una plataforma SaaS multiempresa con motor declarativo de workflows de contratación, campos, políticas y modalidades configurables. La primera aplicación es contratación de red prestadora de salud, sin codificar PGP, cápita ni evento como flujos obligatorios. El workflow institucional de Famisanar aún no ha sido recibido y no forma parte de esta versión.
+
+## V6.3 — Piloto funcional entre contratante y contratista
+
+El mismo frontend ofrece **Gestión Contractual** (institución que contrata) y **Mi Contratación** (persona natural, proveedor o IPS invitada). No hay dos apps ni otro entorno. Ambos utilizan Google Sign-In, mismo backend FastAPI y PostgreSQL, con autorizaciones distintas en cada solicitud.
+
+Recorrido para la primera prueba con **información ficticia**:
+
+1. Ingresar a Smart Contract con el correo habilitado para administrar el piloto (`andres@wearesmart.co`). El primer acceso permite crear el espacio ficticio desde **Gestión Contractual** si la cuenta todavía no tiene institución.
+2. Abrir **Flujos → Ejemplo de doble portal**. El ejemplo incluye Inicio → Datos del contratista (formulario dinámico) → Revisión interna (aprobación simulada de trámite) → Fin. El configurador puede cambiar responsables y la parte que ejecuta cada etapa.
+3. Seleccionar **Publicar plantilla de prueba**. Esta versión se persiste en PostgreSQL y no es una aprobación jurídica.
+4. En **Gestión Contractual**, crear un expediente con nombre, correo invitado y tipo de persona (natural o jurídica). La aplicación concede acceso al correo designado; **no envía email**. Copiar y compartir manualmente el enlace.
+5. Abrir una sesión separada del navegador con la cuenta Google invitada (debe ser usuaria de prueba en Google Auth Platform → Audience si el OAuth sigue en Testing). En **Mi Contratación**, llenar la actividad asignada.
+6. Volver a la cuenta del contratante; revisar, devolver para corregir o completar la siguiente actividad. El historial técnico queda en `audit_events` de PostgreSQL. El expediente llega al estado `COMPLETED` cuando las etapas del piloto terminan.
+
+**Aislamiento:** la API valida el ID token Google, correo, membresía activa en la institución para acciones internas y acceso al expediente por invitación exacta para externos. Una contraparte solo recibe sus propias actividades, sin ver las respuestas internas. La interfaz oculta las secciones de configuración institucional a usuarios que solo fueron invitados. La separación se prueba desde backend con datos ficticios y no debe confundirse con RLS de PostgreSQL, que aún está pendiente.
+
+**Limitaciones explícitas:** piloto habilitado solo en Railway Development mediante `SMART_PORTAL_DEMO_ENABLED=true` y correo administrador autorizado. El flujo de trabajo ejecutable está restringido a etapas manuales sin condiciones; se rechazan firmas, integraciones, cálculos y generación documental como si fueran operaciones realizadas. Los documentos, notificaciones de invitación y firma electrónica productiva no están implementados. Tampoco hay selección de varias instituciones para un mismo administrador, permisos institucionales completos, RLS ni pruebas con dos cuentas Google reales verificadas en navegador. No cargar datos de pacientes, contratos o clientes.
+
+**Verificación:** GitHub Actions V6.3 aprobó 37 pruebas backend y la compilación Vue. Railway confirmó API/Web/PostgreSQL en línea con último despliegue del código V6.3 y migración Alembic 0002 configurada en preDeploy. La prueba interactiva de dos sesiones queda pendiente. Gemini aún no tiene clave configurada, por lo que MAIRA no ha interpretado documentos.
 
 ## Smart Contract V6.2 — Pantalla de acceso corporativo
 
