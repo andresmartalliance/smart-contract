@@ -370,3 +370,20 @@ nav button.active .nav-icon{stroke:#236ed3;transform:scale(1.03)}
 .pilot-task-note{font-size:12px;color:#7a5a41;background:#fff7ee;padding:10px 12px;border:1px solid #f7e4cf;border-radius:10px}
 .pilot-field{max-width:640px}.pilot-return{display:flex;gap:11px;flex-wrap:wrap}.pilot-return input{flex:1;min-width:170px}
 @media(max-width:770px){.contract-hero,.pilot-detail-top{flex-direction:column;align-items:flex-start}.pilot-form-grid{grid-template-columns:1fr}.pilot-panel,.contract-case-detail{padding:18px}.pilot-case-row{flex-direction:column;align-items:flex-start}}
+
+/* V6.4: independent person/company directory and deferred template association */
+.pilot-optional{font-size:11px;color:#8295a8;font-weight:500;margin-left:3px}
+.pilot-directory-header{display:flex;align-items:center;justify-content:space-between;gap:15px;flex-wrap:wrap}
+.pilot-directory-header input{min-width:220px;max-width:340px}
+.pilot-party-item{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:16px 17px;border:1px solid #e1ebf5;background:#fbfdff;border-radius:14px}
+.pilot-party-meta{display:grid;gap:6px;min-width:210px;flex:1}
+.pilot-party-meta strong{font-size:14px;color:#193c60}
+.pilot-party-meta small{font-size:12px;color:#748da6}
+.pilot-party-item .pilot-actions{display:flex;gap:9px;align-items:center}
+.pilot-edit-contact{display:flex;align-items:end;gap:10px;flex-wrap:wrap;width:100%;padding-top:13px;border-top:1px solid #e3eaf3}
+.pilot-edit-contact label{flex:1;min-width:220px}
+.pilot-draft-attach{display:grid;gap:15px;background:#f4f8ff;border:1px solid #cfe0f5;border-radius:15px;padding:20px}
+.pilot-draft-attach strong{color:#173d67;font-size:15px}
+.pilot-draft-attach p{font-size:12px;color:#617a94;line-height:1.6}
+.pilot-draft-attach .pilot-form-grid{max-width:550px}
+@media(max-width:650px){.pilot-directory-header input{max-width:100%;width:100%}.pilot-edit-contact label{min-width:100%}.pilot-party-item .pilot-actions{width:100%;justify-content:flex-start}}
