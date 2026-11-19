@@ -92,7 +92,8 @@ def _case_for_external(db: Session, id: str, email: str):
 
 def _internal_case(db: Session, c: ContractCase, email: str) -> bool:
     return bool(db.scalar(select(Membership.id).where(
-      Membership.tenant_id==c.tenant_id, Membership.user_id==email,Membership.active.is_(True))))
+      Membership.tenant_id==c.tenant_id, Membership.user_id==email,Membership.active.is_(True),
+      Membership.roles.is_not(None))))
 
 def _task_payload(task: ContractTask, external: bool=False) -> dict[str,Any]:
     # Never expose one side's answers, confidential notes, or fields to the other.
@@ -176,6 +177,14 @@ def publish(input:PublishInput,email:str=Depends(verify_google_email),db:Session
     if any(n.when is not None or n.policy=="CONDITIONAL" for n in wf.nodes) or any(e.when is not None for e in wf.edges):
         raise HTTPException(422,"Conditional routing is not executable in this pilot")
     if len(wf.nodes)>160: raise HTTPException(422,"Pilot limited to 160 nodes")
+    unsupported = sorted({n.kind for n in wf.nodes if n.enabled and n.kind not in
+       {"START","END","FORM","DOCUMENT_REQUEST","DOCUMENT_REVIEW","VALIDATION","APPROVAL","HUMAN_DECISION"}})
+    if unsupported:
+        raise HTTPException(422, "Pilot does not execute: " + ", ".join(unsupported))
+    if any(not n.enabled for n in wf.nodes):
+        raise HTTPException(422,"Disabled workflow nodes are not executable in this pilot")
+    if any(n.kind in ("FORM","DOCUMENT_REQUEST") and n.config.get("execution_mode") in ("AI_ASSISTED","API","RPA") for n in wf.nodes):
+        raise HTTPException(422,"Automated execution not enabled in this pilot")
     number=db.scalar(select(func.max(WorkflowVersion.version)).where(
         WorkflowVersion.tenant_id==m.tenant_id, WorkflowVersion.template_key==wf.key)) or 0
     w=WorkflowVersion(tenant_id=m.tenant_id,template_key=wf.key,version=number+1,

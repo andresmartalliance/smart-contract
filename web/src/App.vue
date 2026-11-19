@@ -234,7 +234,7 @@ async function acceptGoogleCredential(credential:string){
   loginEmail.value=payload.email
   portalSession.value=payload
   await refreshPortal()
-  if(!hasInstitution.value)current.value='prestadores'
+  if(!hasInstitution.value)current.value=payload.can_setup?'contrataciones':'prestadores'
  }catch(e){
   loginToken.value='';mairaGoogleToken.value='';loginEmail.value=''
   loginError.value=e instanceof Error?e.message:'No se pudo validar la sesión'
@@ -959,7 +959,7 @@ function simulateDraft(){
         <div class="status-panel"><div><strong>Workflow Studio ya disponible</strong><p>Mientras MAIRA se integra, puedes diseñar y simular procesos manualmente.</p></div><button class="ghost-button" @click="current='flujos'">Abrir Studio ↗</button></div>
       </section>
 
-      <section v-else-if="current==='contrataciones'&&hasInstitution" class="contract-space">
+      <section v-else-if="current==='contrataciones'&&(hasInstitution||portalSession?.can_setup)" class="contract-space">
         <div class="contract-hero"><div><span class="eyebrow">SMART CONTRACT · PILOTO</span><h2>Gestión Contractual</h2><p>Publica una plantilla de prueba, invita a una persona o empresa y gestiona las actividades desde aquí.</p></div><button class="ghost-button" @click="refreshPortal">Actualizar</button></div>
         <div class="pilot-notice">Ambiente de evaluación con datos sintéticos. No admite documentos confidenciales, firma válida ni contratación productiva.</div>
         <div v-if="portalError" class="pilot-error" role="alert">{{portalError}}</div>
@@ -967,7 +967,7 @@ function simulateDraft(){
         <div v-if="portalSession?.can_setup" class="pilot-panel">
           <h3>Crear institución de prueba</h3><p>Solo se crearán datos ficticios. El acceso queda vinculado a tu cuenta Google.</p>
           <label>Nombre del espacio<input v-model="pilotName" maxlength="150"/></label>
-          <button class="primary-button" :disabled="portalBusy" @click="setupPilot">Iniciar piloto</button>
+          <button class="primary-button" :disabled="portalBusy" @click="setupPilot">Crear espacio de prueba</button>
         </div>
         <template v-else>
           <div class="pilot-panel">
