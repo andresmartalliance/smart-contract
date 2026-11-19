@@ -1,8 +1,16 @@
 # Smart Contract + MAIRA
 
-**V6.1 — MAIRA: trazabilidad documental y aplicación segura · Development**
+**V6.2 — Inicio de sesión Smart Contract con Google y marca corporativa · Development**
 
 Smart Contract es una plataforma SaaS multiempresa con motor declarativo de workflows de contratación, campos, políticas y modalidades configurables. La primera aplicación es contratación de red prestadora de salud, sin codificar PGP, cápita ni evento como flujos obligatorios. El workflow institucional de Famisanar aún no ha sido recibido y no forma parte de esta versión.
+
+## Smart Contract V6.2 — Pantalla de acceso corporativo
+
+- Página de acceso Google con el mismo lenguaje visual de Smart Service Desk: fondo gris claro, tarjeta blanca centrada, logotipo Smart de la referencia, título Smart Contract, texto directo y un botón auténtico Google Identity Services.
+- Marca Smart con su wordmark multicolor y texto extraído y depurado de la imagen facilitada por el usuario. El logo aparece en el login y en la navegación. Se conserva el favicon azul sólido ya aprobado para el navegador.
+- La interfaz no muestra el espacio de trabajo sin identidad verificada. El servidor valida el ID token de Google, la audiencia y la lista de usuarios permitidos en GET /api/v1/maira/session; la sesión del piloto se mantiene únicamente en memoria (se pierde al recargar).
+- La carga con MAIRA reutiliza la sesión Google del login, sin segundo botón ni doble inicio de sesión.
+- **Límite:** este login es una puerta controlada para Development y la prueba MAIRA; NO confiere roles, pertenencia a tenant, RLS ni derechos de publicación institucional. Los endpoints multiempresa existentes siguen requiriendo sus propias credenciales. Sin Gemini aún no habrá interpretación documental.
 
 ## MAIRA V6.1 — Validaciones de procedencia y borradores
 

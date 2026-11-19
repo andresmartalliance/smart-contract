@@ -1,4 +1,12 @@
-# Smart Contract V6.1 — Arquitectura integral y estado real
+# Smart Contract V6.2 — Arquitectura integral y estado real
+
+## Acceso Google y marca Smart V6.2
+
+UI: login centralizado con Google Identity Services; no hay acceso al workspace hasta que la API verifique ID token y correo permitido. Se mantiene la credencial exclusivamente en memoria, sin localStorage ni cookies accesibles desde JavaScript para credenciales. Al salir se descarta el token. Las cargas de MAIRA reutilizan la identidad. Endpoint /api/v1/maira/session usa _verify_identity y devuelve correo y alcance restringido de piloto.
+
+La marca Smart se recortó de la captura entregada por el usuario (solo logo corporativo, PNG RGBA) y se coloca en login y sidebar. El favicon sólido azul sigue vigente.
+
+Seguridad: identidad Google no equivale a sesión institucional multiempresa, ni habilita el REST API de workflows protegido por JWT y membresía. No hay asignación tenant, RLS operativa ni autorización de publicar. No usar datos reales. Falta realizar prueba E2E de OAuth en navegador y configurar Gemini API Key propia de Smart Contract.
 
 ## Controles ampliados MAIRA V6.1
 

@@ -58,6 +58,11 @@ def capabilities():
             "executable_actions_enabled": False}
 
 
+@router.get("/session")
+def current_pilot_session(email: str = Depends(_verify_identity)):
+    return {"email": email, "scope": "MAIRA_PILOT_ONLY", "tenant_access": False}
+
+
 @router.get("/workflow-import/status")
 def import_status():
     client_id, allowed, key = _configuration()

@@ -100,3 +100,16 @@ def test_node_cannot_map_to_two_different_steps():
     raw["source_map"].append({"source_step":"2.2","node_id":"uno","source_excerpt":"AVISO AUTOMATICO"})
     with pytest.raises(ValueError,match="one node to multiple"):
         _parse_proposal(raw)
+
+def test_session_denies_requests_without_google_id_token(testing):
+    client,_=testing
+    response=client.get("/api/v1/maira/session")
+    assert response.status_code in (401,503)
+
+
+def test_session_requires_email_allowlist(testing, monkeypatch):
+    client,_=testing
+    monkeypatch.setenv("SMART_GOOGLE_CLIENT_ID","fake-web-client")
+    monkeypatch.setenv("SMART_MAIRA_ALLOWED_EMAILS","pilot@example.com")
+    response=client.get("/api/v1/maira/session",headers={"Authorization":"Bearer fake-token"})
+    assert response.status_code == 401

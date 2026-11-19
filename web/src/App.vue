@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, shallowRef, watch } from 'vue'
 import { VueFlow, type Node, type Edge, type Connection } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
@@ -94,13 +94,57 @@ const mairaImportInfo=ref('')
 const mairaSourceFile=ref<File|null>(null)
 const mairaProposal=ref<MairaProposal|null>(null)
 const mairaApplyConfirm=ref(false)
-const mairaGoogleMount=ref<HTMLElement|null>(null)
+const loginGoogleMount=ref<HTMLElement|null>(null)
+const loginEmail=ref('')
+const loginToken=ref('')
+const loginPending=ref(false)
+const loginError=ref('')
+const loginChecking=ref(true)
 const mairaGoogleToken=ref('')
 let mairaGoogleScript:Promise<void>|null=null
 type GoogleIdentity={
   initialize:(args:{client_id:string;callback:(data:{credential:string})=>void})=>void;
-  renderButton:(root:HTMLElement,options:{type:string;theme:string;size:string;text:string})=>void
+  renderButton:(root:HTMLElement,options:{type:string;theme:string;size:string;text:string})=>void;
+  disableAutoSelect?:()=>void
 }
+async function acceptGoogleCredential(credential:string){
+ loginPending.value=true;loginError.value=''
+ try{
+  const result=await fetch(MAIRA_API+'/api/v1/maira/session',{headers:{Authorization:'Bearer '+credential},cache:'no-store'})
+  const payload=await result.json() as {email?:string;detail?:string}
+  if(!result.ok)throw new Error(typeof payload.detail==='string'?payload.detail:'La cuenta no está habilitada para Smart Contract.')
+  if(!payload.email)throw new Error('Google no devolvió una cuenta verificada.')
+  loginToken.value=credential
+  mairaGoogleToken.value=credential
+  loginEmail.value=payload.email
+ }catch(e){
+  loginToken.value='';mairaGoogleToken.value='';loginEmail.value=''
+  loginError.value=e instanceof Error?e.message:'No se pudo validar la sesión'
+ }finally{loginPending.value=false}
+}
+function logoutGoogle(){
+ loginToken.value='';mairaGoogleToken.value='';loginEmail.value='';mairaImportOpen.value=false
+ googleIdentity()?.disableAutoSelect?.()
+ void nextTick(()=>{void initializeLoginGoogle()})
+}
+async function initializeLoginGoogle(){
+ await nextTick()
+ if(!loginGoogleMount.value||!mairaImportStatus.value?.google_enabled)return
+ try{
+  await loadGoogleIdentity()
+  const google=googleIdentity()
+  const client_id=mairaImportStatus.value.google_client_id
+  if(!google||!client_id)throw new Error('Google no está disponible')
+  google.initialize({client_id,callback:({credential})=>{void acceptGoogleCredential(credential)}})
+  loginGoogleMount.value.replaceChildren()
+  google.renderButton(loginGoogleMount.value,{type:'standard',theme:'outline',size:'large',text:'signin_with'})
+ }catch(e){loginError.value=e instanceof Error?e.message:'No se pudo abrir Google'}
+}
+onMounted(async()=>{
+ await loadMairaImportStatus()
+ loginChecking.value=false
+ await initializeLoginGoogle()
+})
 function googleIdentity():GoogleIdentity|null{
   return (window as unknown as {google?:{accounts?:{id?:GoogleIdentity}}}).google?.accounts?.id||null
 }
@@ -123,26 +167,10 @@ async function loadMairaImportStatus(){
   mairaImportStatus.value=await resp.json() as MairaStatus
  }catch(e){mairaImportStatus.value=null;mairaImportError.value=e instanceof Error?e.message:'No se pudo consultar MAIRA'}
 }
-async function initializeMairaGoogle(){
- if(!mairaImportOpen.value||!mairaImportStatus.value?.google_enabled)return
- await nextTick()
- if(!mairaGoogleMount.value)return
- try{
-  await loadGoogleIdentity()
-  const client_id=mairaImportStatus.value.google_client_id
-  if(!client_id)throw new Error('No hay cliente Google configurado')
-  const google=googleIdentity()
-  if(!google)throw new Error('Google Sign-In no disponible')
-  google.initialize({client_id,callback:({credential})=>{mairaGoogleToken.value=credential;mairaImportInfo.value='Credencial Google recibida. El servidor validará tu cuenta cuando envíes el documento.'}})
-  mairaGoogleMount.value.replaceChildren()
-  google.renderButton(mairaGoogleMount.value,{type:'standard',theme:'outline',size:'large',text:'signin_with'})
- }catch(e){mairaImportError.value=e instanceof Error?e.message:'No se pudo activar Google'}
-}
 async function openMairaDocumentImport(){
  current.value='flujos';mairaOpen.value=false;mairaImportOpen.value=true
  mairaImportError.value='';mairaImportInfo.value='';mairaProposal.value=null;mairaApplyConfirm.value=false
  await loadMairaImportStatus()
- await initializeMairaGoogle()
 }
 function chooseMairaSource(event:Event){
  const target=event.target as HTMLInputElement, file=target.files?.[0]||null
@@ -187,7 +215,7 @@ function applyMairaProposal(){
   mairaApplyConfirm.value=false
  }
 }
-watch(mairaImportOpen,open=>{if(!open){mairaSourceFile.value=null;mairaGoogleToken.value='';mairaProposal.value=null;mairaApplyConfirm.value=false}})
+watch(mairaImportOpen,open=>{if(!open){mairaSourceFile.value=null;mairaProposal.value=null;mairaApplyConfirm.value=false}})
 
 const nodes = shallowRef<Node[]>([])
 const edges = shallowRef<Edge[]>([])
@@ -580,11 +608,23 @@ function simulateDraft(){
 </script>
 
 <template>
-  <div class="shell">
+  <div v-if="!loginToken" class="login-screen">
+    <div class="login-panel">
+      <img src="/smart-wordmark.png" class="login-logo" alt="Smart" />
+      <h1>Smart Contract</h1>
+      <p>Inicia sesión con tu cuenta Google para acceder a la plataforma contractual.</p>
+      <div v-if="loginChecking" class="login-loading" role="status">Verificando acceso…</div>
+      <div v-else-if="!mairaImportStatus?.google_enabled" class="login-warning" role="status">El inicio de sesión aún no está configurado. Comprueba el servicio API de Smart Contract.</div>
+      <div v-else ref="loginGoogleMount" class="login-google-button" aria-label="Iniciar sesión con Google"></div>
+      <div v-if="loginPending" class="login-loading" role="status">Validando cuenta Google…</div>
+      <div v-if="loginError" class="login-warning" role="alert">{{loginError}}</div>
+    </div>
+  </div>
+  <div v-else class="shell">
     <aside class="sidebar">
       <div class="brand">
-        <div class="brand-mark"><img src="/favicon.svg" alt="" width="34" height="34"/></div>
-        <div><strong>Smart Contract</strong><small>INTELLIGENCE PLATFORM</small></div>
+        <img src="/smart-wordmark.png" class="sidebar-smart-logo" alt="Smart" />
+        <div class="sidebar-product-name"><strong>Smart Contract</strong><small>INTELLIGENCE PLATFORM</small></div>
       </div>
       <div class="nav-section">Workspace</div>
       <nav aria-label="Navegación principal">
@@ -601,7 +641,7 @@ function simulateDraft(){
     <main class="main">
       <header class="top-header">
         <div><small>Workspace / Smart Contract / {{screenTitle}}</small><h1>{{screenTitle}}</h1></div>
-        <div class="top-meta"><span class="top-product">Smart Contract · V5.3</span><span class="context-pill">Development</span></div>
+        <div class="top-meta"><span class="top-product">Smart Contract · V5.3</span><span class="context-pill">Development</span><button type="button" class="logout-button" @click="logoutGoogle" title="Cerrar sesión Google">Salir</button></div>
       </header>
       <section v-if="current==='flujos'" class="stack">
         <div class="heading"><div><span class="eyebrow">Diseño inteligente de procesos</span><h2>Workflow Studio</h2><p>Diseña, conecta y valida etapas configurables. Todos los cambios siguen siendo un borrador local.</p></div><div class="header-actions"><button class="primary-button" @click="openMairaDocumentImport">✧ Crear con MAIRA</button><button class="ghost-button" @click="newWorkflow">＋ Nuevo flujo</button><button class="ghost-button" @click="fileInput?.click()">↥ Importar</button><button class="primary-button" @click="exportDraft">↧ Exportar JSON</button></div></div>
@@ -620,10 +660,7 @@ function simulateDraft(){
                 <strong>{{!mairaImportStatus.google_enabled?'Google Sign-In':''}}{{!mairaImportStatus.google_enabled&&!mairaImportStatus.gemini_enabled?' y ':''}}{{!mairaImportStatus.gemini_enabled?'Gemini':''}}</strong>
                 en Smart Contract. No se permite enviar archivos sin autorización.
               </div>
-              <template v-if="mairaImportStatus?.google_enabled">
-                <div ref="mairaGoogleMount" class="maira-google-login"></div>
-                <p class="maira-import-fine">{{mairaGoogleToken?'Identidad Google recibida; será verificada por el servidor.':'Ingresa con una cuenta habilitada para la prueba.'}}</p>
-              </template>
+              <p class="maira-import-fine">Cuenta verificada: <strong>{{loginEmail}}</strong>. El análisis del documento usa esta sesión autorizada.</p>
               <label class="maira-file-label">Seleccionar diagrama de flujo
                 <input type="file" accept=".pdf,.png,.jpg,.jpeg,.txt,application/pdf,image/png,image/jpeg,text/plain" @change="chooseMairaSource"/>
               </label>
