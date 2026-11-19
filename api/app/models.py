@@ -97,3 +97,18 @@ class ContractTask(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=now_utc)
     __table_args__ = (UniqueConstraint("case_id","node_id",name="uq_case_task_node"),)
+
+class PartyProcessPreview(Base):
+    """Human-reviewed proposal scoped to registered party; source document not retained."""
+    __tablename__ = "party_process_previews"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(String(36), ForeignKey("tenants.id"), nullable=False, index=True)
+    party_id: Mapped[str] = mapped_column(String(36), ForeignKey("contract_parties.id"), nullable=False, index=True)
+    filename: Mapped[str] = mapped_column(String(140), nullable=False)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="DRAFT_REVIEW")
+    workflow: Mapped[dict] = mapped_column(JSON, nullable=False)
+    source_map: Mapped[list] = mapped_column(JSON, nullable=False)
+    questions: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    observations: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    created_by: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, nullable=False)

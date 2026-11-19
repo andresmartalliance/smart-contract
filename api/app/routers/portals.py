@@ -15,7 +15,7 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from ..database import get_session
-from ..models import Tenant, Membership, WorkflowVersion, ContractCase, ContractParty, ContractCaseAccess, ContractTask, AuditEvent, now_utc
+from ..models import Tenant, Membership, WorkflowVersion, ContractCase, ContractParty, ContractCaseAccess, ContractTask, PartyProcessPreview, AuditEvent, now_utc
 from ..workflow.schema import WorkflowDefinition
 from ..workflow.validator import topological_order, WorkflowInvalid
 
@@ -197,6 +197,77 @@ def publish(input:PublishInput,email:str=Depends(verify_google_email),db:Session
     _event(db,m.tenant_id,email,"PILOT_WORKFLOW_PUBLISHED",w.id,{"key":wf.key,"version":w.version})
     db.commit()
     return {"id":w.id,"version":w.version,"status":w.status,"pilot":True}
+
+
+# Draft previews are NOT invitations, templates, or approved executions.
+# Only users with tenant-level configuration authority may create them.
+class PreviewInput(BaseModel):
+    filename: str = Field(min_length=1,max_length=140)
+    workflow: WorkflowDefinition
+    source_map: list[dict[str,Any]] = Field(min_length=1,max_length=500)
+    questions: list[str] = Field(default_factory=list,max_length=120)
+    observations: list[str] = Field(default_factory=list,max_length=120)
+
+def _preview_payload(preview: PartyProcessPreview, include_workflow: bool = False) -> dict[str,Any]:
+    result={"id":preview.id,"party_id":preview.party_id,"filename":preview.filename,
+            "status":preview.status,"name":preview.workflow.get("name","Proceso por revisar"),
+            "source_steps":len(preview.source_map),"questions_count":len(preview.questions),
+            "created_at":preview.created_at.isoformat()}
+    if include_workflow:
+        result.update({"workflow":preview.workflow,"source_map":preview.source_map,
+                       "questions":preview.questions,"observations":preview.observations,
+                       "notice":"Vista previa para revisión; no crea actividades ni concede acceso al tercero"})
+    return result
+
+@router.post("/parties/{party_id}/process-previews",status_code=201)
+def save_process_preview(party_id:str,body:PreviewInput,
+            email:str=Depends(verify_google_email),db:Session=Depends(get_session)):
+    m=_configurator(db,email)
+    _party_record(db,m.tenant_id,party_id)
+    from .maira import _parse_proposal
+    try:
+        proposal=_parse_proposal({"workflow":body.workflow.model_dump(mode="json"),
+             "source_map":body.source_map,"questions":body.questions,
+             "observations":body.observations})
+    except ValueError as exc:
+        raise HTTPException(422,"Invalid documented proposal: "+str(exc)) from None
+    if len(str(proposal.model_dump(mode="json")))>500000:
+        raise HTTPException(413,"Preview proposal is too large")
+    record=PartyProcessPreview(
+        tenant_id=m.tenant_id,party_id=party_id,filename=body.filename,
+        workflow=proposal.workflow.model_dump(mode="json"),
+        source_map=[s.model_dump(mode="json") for s in proposal.source_map],
+        questions=proposal.questions,observations=proposal.observations,
+        created_by=email)
+    db.add(record);db.flush()
+    _event(db,m.tenant_id,email,"PARTY_PROCESS_PREVIEW_CREATED",record.id,
+         {"party_id":party_id,"mapped_steps":len(record.source_map),"published":False})
+    db.commit()
+    return _preview_payload(record,include_workflow=True)
+
+@router.get("/parties/{party_id}/process-previews")
+def list_process_previews(party_id:str,email:str=Depends(verify_google_email),
+                           db:Session=Depends(get_session)):
+    m=_operator(db,email)
+    _party_record(db,m.tenant_id,party_id)
+    rows=db.scalars(select(PartyProcessPreview).where(
+      PartyProcessPreview.tenant_id==m.tenant_id,
+      PartyProcessPreview.party_id==party_id)
+      .order_by(PartyProcessPreview.created_at.desc(),PartyProcessPreview.id.desc())
+      .limit(30)).all()
+    return [_preview_payload(p) for p in rows]
+
+@router.get("/parties/{party_id}/process-previews/{preview_id}")
+def get_process_preview(party_id:str,preview_id:str,email:str=Depends(verify_google_email),
+                          db:Session=Depends(get_session)):
+    m=_operator(db,email)
+    _party_record(db,m.tenant_id,party_id)
+    record=db.scalar(select(PartyProcessPreview).where(
+       PartyProcessPreview.id==preview_id,
+       PartyProcessPreview.party_id==party_id,
+       PartyProcessPreview.tenant_id==m.tenant_id))
+    if record is None:raise HTTPException(404,"Process preview not found")
+    return _preview_payload(record,include_workflow=True)
 
 class PartyInput(BaseModel):
     name: str = Field(min_length=2,max_length=250)
