@@ -1,4 +1,14 @@
-# Smart Contract V6.0 — Arquitectura integral y estado real
+# Smart Contract V6.1 — Arquitectura integral y estado real
+
+## Controles ampliados MAIRA V6.1
+
+La procedencia documental acompaña ahora al nodo (`config.source_step`, `config.source_excerpt`, `config.source_page`, `config.source_confidence`) durante la importación al frontend y la exportación. Las referencias se muestran en el inspector de propiedades. La API rechaza números de paso repetidos, varios pasos que apunten al mismo nodo y referencias contradictorias. Es control de consistencia del modelo; **no demuestra exhaustividad frente al PDF**: eso requiere comparar el resultado de IA con el documento original en una prueba real.
+
+Una propuesta no se aplica al flujo en un solo clic: antes se confirma que el borrador local será reemplazado. Si la validación falla, se restaura el flujo previo. El esquema de campos y reglas es el existente; no se ha creado persistencia institucional.
+
+La cuenta de prueba permitida está configurada en Railway como `SMART_MAIRA_ALLOWED_EMAILS=andres@wearesmart.co`. Todavía se requieren `SMART_GOOGLE_CLIENT_ID` (cliente web nuevo, origen HTTPS autorizado) y `SMART_GEMINI_API_KEY` (clave específica de Smart Contract); ni GitHub ni Drive deben recibir su valor.
+
+Commit funcional `89a92fb6708a9cdbd0b7e47d46849961b074dddf`: GitHub Actions CI exitoso, **26 pruebas backend**, frontend build exitoso; Railway Web/API SUCCESS, Postgres ONLINE sin alertas. Gemini E2E y prueba de navegador aún **NO** ejecutadas. No presentar workflow fabricado como prueba.
 
 ## Flujo de prueba MAIRA V6.0 — Documentos a workflows
 
@@ -9,7 +19,7 @@ API:
 - POST `/api/v1/maira/workflow-import`: multipart con Google ID token; PDF, PNG, JPG y TXT hasta 6 MB.
 - GET `/api/v1/maira/capabilities`: contrato de compatibilidad mantenido.
 
-Variables de Railway API requeridas: `SMART_GOOGLE_CLIENT_ID`, `SMART_MAIRA_ALLOWED_EMAILS`, `SMART_GEMINI_API_KEY`, opcional `SMART_GEMINI_MODEL`. **Ninguna de las tres obligatorias está configurada en el proyecto.** No copiarlas desde otros proyectos ni guardarlas en GitHub/Drive.
+Variables de Railway API requeridas: `SMART_GOOGLE_CLIENT_ID`, `SMART_MAIRA_ALLOWED_EMAILS`, `SMART_GEMINI_API_KEY`, opcional `SMART_GEMINI_MODEL`. **La lista de correos está configurada para el piloto; faltan el client ID OAuth y la clave Gemini.** No copiarlas desde otros proyectos ni guardarlas en GitHub/Drive.
 
 La primera prueba de archivo debe usar «Process Flowchart clico contract V2.pdf», con pasos numerados, correos, revisión jurídica, presupuestos, contrato/firma, póliza, ARL y acta de inicio. La IA no debe fingir que es un workflow de red prestadora de Famisanar. Su mapeo real no está comprobado porque faltan credenciales.
 

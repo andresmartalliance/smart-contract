@@ -1,14 +1,24 @@
 # Smart Contract + MAIRA
 
-**V6.0 — MAIRA: carga de documentos y propuesta de workflows · Development**
+**V6.1 — MAIRA: trazabilidad documental y aplicación segura · Development**
 
 Smart Contract es una plataforma SaaS multiempresa con motor declarativo de workflows de contratación, campos, políticas y modalidades configurables. La primera aplicación es contratación de red prestadora de salud, sin codificar PGP, cápita ni evento como flujos obligatorios. El workflow institucional de Famisanar aún no ha sido recibido y no forma parte de esta versión.
+
+## MAIRA V6.1 — Validaciones de procedencia y borradores
+
+- MAIRA registra el número de paso, cita original, página y confianza dentro de la configuración de cada nodo propuesto. Se muestran en **Propiedades** al seleccionar una etapa.
+- La API rechaza pasos de origen duplicados, nodos con mapeos contradictorios y referencias de origen incompatibles; conserva la validación del grafo acíclico.
+- **Aplicar propuesta** requiere una confirmación adicional para evitar sustituir el borrador que existe en el navegador. Si falla la validación local, restablece el estado anterior.
+- El inicio de sesión Google puede prepararse cuando el cliente OAuth esté configurado aunque Gemini siga pendiente.
+- GitHub Actions V6.1: 26 pruebas Python correctas y compilación Vue correcta; servicios Railway Web/API en SUCCESS. No se ha realizado la prueba de un documento real contra Gemini.
+
+**Estado de credenciales en Railway:** la lista de prueba `SMART_MAIRA_ALLOWED_EMAILS` está configurada para `andres@wearesmart.co`. Siguen ausentes `SMART_GOOGLE_CLIENT_ID` y `SMART_GEMINI_API_KEY`. No subir claves a repositorio, Drive ni al chat. Sin esas dos configuraciones el análisis queda correctamente bloqueado.
 
 ## MAIRA V6.0 — Primera prueba de interpretación (piloto limitado)
 
 Desde **Flujos → Crear con MAIRA** el Configurador puede seleccionar un archivo PDF, PNG, JPG o TXT (máximo 6 MB), autenticarse con una cuenta Google explícitamente permitida y solicitar que Gemini analice el documento. MAIRA propone un workflow declarativo con nodos y dependencias, una tabla de pasos originales con citas cortas, páginas, nivel de confianza y dudas para validación humana. El borrador debe revisarse antes de aplicarse al editor.
 
-**Estado actual:** UI y API desplegadas, GitHub Actions completa (22 pruebas) y Railway API/Web SUCCESS. El acceso Google y Gemini **NO** están configurados en este proyecto: el botón muestra una indicación de configuración pendiente y **no puede analizar ningún documento aún**. Esto es deliberado para no crear una carga pública de documentos. Variables requeridas en API: `SMART_GOOGLE_CLIENT_ID` (cliente OAuth Web del dominio Development), `SMART_MAIRA_ALLOWED_EMAILS` (lista de correos autorizados) y `SMART_GEMINI_API_KEY` (clave de Google AI Studio); opcional `SMART_GEMINI_MODEL` con valor predeterminado `gemini-2.5-flash`. No subir credenciales a GitHub ni a Drive.
+**Estado actual:** UI y API desplegadas, GitHub Actions completa (22 pruebas) y Railway API/Web SUCCESS. El cliente OAuth Google y la clave Gemini **NO** están configurados en este proyecto: el botón muestra una indicación de configuración pendiente y **no puede analizar ningún documento aún**. Esto es deliberado para no crear una carga pública de documentos. Variables requeridas en API: `SMART_GOOGLE_CLIENT_ID` (cliente OAuth Web del dominio Development), `SMART_MAIRA_ALLOWED_EMAILS` (lista de correos autorizados) y `SMART_GEMINI_API_KEY` (clave de Google AI Studio); opcional `SMART_GEMINI_MODEL` con valor predeterminado `gemini-2.5-flash`. No subir credenciales a GitHub ni a Drive.
 
 El análisis devuelve un borrador **sin persistencia en el servidor**; el archivo se envía a Gemini con el consentimiento del usuario autenticado, la carga se limita a tipos reconocidos, validación de cabeceras y tamaño, y la propuesta se valida con el motor existente. Al aceptar, se guarda únicamente en localStorage del navegador. Solo pruebas con documentos sintéticos/autorizados; faltan RLS, gobierno del tenant, retención institucional y revisión de seguridad.
 
