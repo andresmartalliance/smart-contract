@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, shallowRef, watch } from 'vue'
 import { VueFlow, type Node, type Edge, type Connection } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
@@ -69,8 +69,8 @@ const flowMessage = ref('')
 const errors = ref<string[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
 const showCatalog = ref(true)
-const nodes = ref<Node[]>([])
-const edges = ref<Edge[]>([])
+const nodes = shallowRef<Node[]>([])
+const edges = shallowRef<Edge[]>([])
 
 function nodeInfo(id:string, kind:Kind, label:string, x:number,y:number,role:string|null=null,policy:Policy='OPTIONAL'):Node {
   return {id,type:kind==='START'?'input':kind==='END'?'output':'default',position:{x,y},data:{label,kind,role,policy,enabled:true,config:{execution_mode:'MANUAL',fields:[]}},class:kind==='START'?'node-start':kind==='END'?'node-end':''}
@@ -188,7 +188,7 @@ function addBlock(kind:Kind){
   let outbound=edges.value.filter(e=>e.source===point?.id)
   if(point.type==='output'){
     const incoming=edges.value.filter(e=>e.target===point?.id)
-    if(incoming.length===1){point=nodes.value.find(n=>n.id===incoming[0].source)||point;outbound=edges.value.filter(e=>e.source===point.id)}
+    if(incoming.length===1){point=nodes.value.find(n=>n.id===incoming[0].source)||point;const anchorId=point.id;outbound=edges.value.filter(e=>e.source===anchorId)}
   }
   const newY=point.position.y+136
   const newX=point.position.x
