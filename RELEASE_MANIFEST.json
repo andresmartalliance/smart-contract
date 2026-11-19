@@ -2,7 +2,7 @@
   "product": "smart-contract",
   "architecture": "5.0",
   "package": "5.2-workflow-studio",
-  "status": "RELEASE_CANDIDATE_AWAITING_RAILWAY_BUILD",
+  "status": "RAILWAY_DEV_WORKFLOW_STUDIO_DEPLOYED_DRAFT_ONLY",
   "repository_target": "andresmartalliance/smart-contract",
   "railway_project_id": "1f226324-580b-4b1c-b235-12c717d70af8",
   "railway_development_environment_id": "6e8d45ca-d6f2-448c-a48a-63e5a2ab1806",
@@ -11,20 +11,22 @@
   "acceptance": {
     "backend_tests": "14/14 PASS local Python",
     "frontend_typescript_syntax": "PASS global TypeScript parser",
-    "frontend_vue_build": "PENDING_RAILWAY_BUILD",
+    "frontend_vue_build": "PASS_RAILWAY_VUE_TSC_VITE",
     "database_migration": "UNCHANGED_0001_BASELINE",
     "workflow_editor_persistence": "BROWSER_LOCAL_ONLY",
-    "railway_smoke": "PENDING_DEPLOYMENT",
-    "multi_tenant_operational": "NOT_READY_GOOGLE_OAUTH_AND_RLS_MISSING"
+    "railway_smoke": "RAILWAY_SERVICES_HEALTHY_EXTERNAL_HTTPS_UNVERIFIED",
+    "multi_tenant_operational": "NOT_READY_GOOGLE_OAUTH_AND_RLS_MISSING",
+    "web_editor_typescript_build": "PASS_RAILWAY_VUE_TSC_VITE",
+    "client_draft": "BROWSER_LOCALSTORAGE_ONLY",
+    "workflow_auth": "NOT_AVAILABLE_ON_FRONTEND"
   },
   "limitations": [
-    "No Google Sign-In or tenant safe frontend writes",
-    "No client-contract data permitted in open Development editor",
-    "MAIRA/Gemini not configured",
-    "No approval/publication or real contract execution",
-    "Frontend build verification pending Railway",
-    "Dependency security audit requires follow-up",
-    "Workflow example generic, institutional 128-step workflow not yet received"
+    "Open Development frontend is for fictitious data only",
+    "Google OAuth, RBAC UI, RLS, institutional persistence/publishing missing",
+    "MAIRA Gemini not configured",
+    "No real contract operations or customer data",
+    "External HTTPS not independently verified",
+    "GitHub Actions results not independently verified"
   ],
   "git_repository_access": "AUTHORIZED_PROJECT_ONLY_BY_POLICY",
   "source_of_truth": "andresmartalliance/smart-contract main; release Git SHA available from repository/CI; Drive master is context",
@@ -37,7 +39,8 @@
     "api": "api-development-18b59fbb.up.railway.app",
     "web": "web-development-80ecf771.up.railway.app"
   },
-  "github_source_commit": "PENDING_RELEASE_COMMIT",
+  "github_source_commit": "main (see Railway deployment commit and Drive context)",
   "railway_source_connection": "CONNECTED_MAIN",
-  "release_notes": "Editable visual workflow studio with browser-only drafts, condition branches, customizable form fields, role assignments, local simulation, import/export and upgraded backend graph validation."
+  "release_notes": "V5.2 editor visual, reglas, campos configurables, import/export, simulación local, autosave local; no multiempresa auth, no MAIRA.",
+  "base_source_commit": "13ca85e85aef1bb43cca2df67c9fd136c964b5ee"
 }

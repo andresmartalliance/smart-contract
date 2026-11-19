@@ -99,6 +99,7 @@ const selectedNode = computed(() => nodes.value.find(n=>n.id===selectedId.value)
 const selectedEdge = computed(() => edges.value.find(e=>e.id===selectedEdgeId.value))
 const selectedEdgeCondition = computed(() => (selectedEdge.value?.data as {when?:Condition}|undefined)?.when)
 const incidentEdges = computed(() => edges.value.filter(e=>e.source===selectedId.value||e.target===selectedId.value))
+function onNodeDragStop(){nodes.value=nodes.value.map(n=>({...n,position:{...n.position}}))}
 function labelFor(id:string){return String((nodes.value.find(n=>n.id===id)?.data as WorkNode|undefined)?.label||id)}
 function castValue(text:string):unknown{
  const trimmed=text.trim()
@@ -450,7 +451,7 @@ function simulateDraft(){
           <div class="diagram-panel">
             <div class="panel-title"><strong>Diagrama del proceso</strong><span class="flow-count">{{activeCount}} etapas activas</span></div>
             <div class="canvas-area">
-              <VueFlow v-model:nodes="nodes" v-model:edges="edges" :fit-view-on-init="true" :nodes-connectable="true" :nodes-draggable="true" :elements-selectable="true" :min-zoom="0.2" :max-zoom="2" @connect="onConnect" @node-click="({node}) => {selectedId=node.id;selectedEdgeId=null}" @edge-click="({edge}) => {selectedEdgeId=edge.id;selectedId=null}" @pane-click="() => {selectedId=null;selectedEdgeId=null}" />
+              <VueFlow v-model:nodes="nodes" v-model:edges="edges" :fit-view-on-init="true" :nodes-connectable="true" :nodes-draggable="true" :elements-selectable="true" :min-zoom="0.2" :max-zoom="2" @connect="onConnect" @node-click="({node}) => {selectedId=node.id;selectedEdgeId=null}" @edge-click="({edge}) => {selectedEdgeId=edge.id;selectedId=null}" @node-drag-stop="onNodeDragStop" @pane-click="() => {selectedId=null;selectedEdgeId=null}" />
             </div>
             <div class="canvas-footer"><span>Arrastra las etapas · Conecta los puntos · Selecciona para editar</span><div class="canvas-buttons"><button @click="validateDraft">Verificar</button><button @click="simulateDraft">Simular</button></div></div>
           </div>
