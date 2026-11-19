@@ -171,7 +171,7 @@ async function createPilotCase(){
    workflow_id:selectedWorkflowId.value,title:newCaseTitle.value,
    party:{name:newPartyName.value,email:newPartyEmail.value,kind:newPartyKind.value}
   })
-  portalMessage.value='Expediente de prueba creado. Comparte la dirección de Smart Contract con el correo invitado; aún no se envían emails automáticamente.'
+  portalMessage.value='Expediente de prueba creado y acceso concedido al correo indicado. Comparte el enlace manualmente: aún no se envían invitaciones por email.'
   await refreshPortal()
   await openCase(result.id)
  }catch(e){portalError.value=e instanceof Error?e.message:'No se pudo crear el expediente'}
@@ -187,7 +187,7 @@ async function completePortalTask(task:ContractTaskView){
  portalBusy.value=true;portalError.value=''
  const fields=task.fields||[]
  const data:Record<string,unknown>={}
- for(const field of fields){const v=answers.value[field.key];if(v!==undefined&&v!=='')data[field.key]=v}
+ for(const field of fields){const v=answers.value[field.key];if(v!==undefined&&v!=='')data[field.key]=field.type==='number'||field.type==='currency'?Number(v):field.type==='boolean'?v==='true':v}
  try{
   await portalRequest('/cases/'+activeCase.value.case.id+'/tasks/'+task.id+'/complete','POST',{data,note:taskNote.value})
   portalMessage.value='Actividad registrada con trazabilidad.'
@@ -207,7 +207,7 @@ async function returnPortalTask(task:ContractTaskView){
 }
 function inviteLink(){
  const url=window.location.origin+'/?view=mi-contratacion'
- if(!navigator.clipboard){portalMessage.value='Comparte esta dirección con el invitado: '+url;return}
+ if(!navigator.clipboard){portalMessage.value='Comparte esta dirección con el usuario invitado: '+url;return}
  void navigator.clipboard.writeText(url).then(()=>{portalMessage.value='Enlace copiado. El invitado debe usar el correo registrado en Google Testing.'}).catch(()=>{portalMessage.value='Comparte esta dirección con el invitado: '+url})
 }
 
@@ -1000,7 +1000,7 @@ function simulateDraft(){
               <label>Correo invitado<input v-model="newPartyEmail" type="email" placeholder="segundo-correo@gmail.com"/></label>
               <label>Tipo<select v-model="newPartyKind"><option value="JURIDICA">Persona jurídica</option><option value="NATURAL">Persona natural</option></select></label>
             </div>
-            <div class="pilot-actions"><button class="primary-button" :disabled="portalBusy||!selectedWorkflowId||!newCaseTitle||!newPartyName||!newPartyEmail" @click="createPilotCase">Crear expediente e invitar</button><button class="ghost-button" @click="current='flujos'">Diseñar plantilla</button></div>
+            <div class="pilot-actions"><button class="primary-button" :disabled="portalBusy||!selectedWorkflowId||!newCaseTitle||!newPartyName||!newPartyEmail" @click="createPilotCase">Crear expediente y habilitar acceso</button><button class="ghost-button" @click="current='flujos'">Diseñar plantilla</button></div>
             <p v-if="!templates.length" class="pilot-muted">No hay plantillas publicadas. Entra a Flujos, asigna quién ejecuta cada etapa y pulsa «Publicar plantilla de prueba».</p>
           </div>
           <div class="pilot-panel">
@@ -1048,7 +1048,14 @@ function simulateDraft(){
             <p class="pilot-muted">{{task.side==='CONTRATANTE'?'Entidad contratante':'Contratista'}} · {{task.kind}}</p>
             <p v-if="task.note" class="pilot-task-note">{{task.note}}</p>
             <template v-if="(task.state==='PENDING'||task.state==='RETURNED')&&activeCase.side===task.side&&task.kind!=='START'&&task.kind!=='END'">
-              <div v-for="field in task.fields" :key="field.key" class="pilot-field"><label>{{field.label}}{{field.required?' *':''}}<input :value="answers[field.key]||''" :type="field.type==='number'||field.type==='currency'?'number':field.type==='date'?'date':'text'" @input="answers[field.key]=($event.target as HTMLInputElement).value" /></label></div>
+              <div v-for="field in task.fields" :key="field.key" class="pilot-field">
+                <label>{{field.label}}{{field.required?' *':''}}
+                  <select v-if="field.type==='boolean'" :value="answers[field.key]??''" @change="answers[field.key]=($event.target as HTMLSelectElement).value">
+                    <option value="">Seleccionar</option><option value="true">Sí</option><option value="false">No</option>
+                  </select>
+                  <input v-else :value="answers[field.key]||''" :type="field.type==='number'||field.type==='currency'?'number':field.type==='date'?'date':'text'" @input="answers[field.key]=($event.target as HTMLInputElement).value" />
+                </label>
+              </div>
               <label class="pilot-field">Observación de la actividad<textarea v-model="taskNote" rows="2" maxlength="2000" placeholder="Observación opcional, solo información ficticia"></textarea></label>
               <button class="primary-button" :disabled="portalBusy" @click="completePortalTask(task)">Completar actividad de prueba</button>
             </template>
