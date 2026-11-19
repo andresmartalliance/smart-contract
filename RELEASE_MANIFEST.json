@@ -2,34 +2,43 @@
   "product": "smart-contract",
   "architecture": "5.0",
   "package": "5.1-bootstrap",
-  "status": "GITHUB_BASELINE_VERIFIED_RAILWAY_SOURCE_ACCESS_BLOCKED",
+  "status": "RAILWAY_DEV_BOOTSTRAP_DEPLOYED_NOT_OPERATIONAL",
   "repository_target": "andresmartalliance/smart-contract",
   "github_commit_sha": "b91193df330a40872ac0784aab015d8a5fdc80ee",
   "railway_project_id": "1f226324-580b-4b1c-b235-12c717d70af8",
   "railway_development_environment_id": "6e8d45ca-d6f2-448c-a48a-63e5a2ab1806",
-  "railway_deployment_id": null,
+  "railway_deployment_id": "4ab8d68f-8656-4204-abf8-30ce82532394",
   "google_drive_master_document_id": "1_7cuP7hS2nFZRZD33d9Svd1R8l334K2UTKak39Brxoo",
   "database_migration": "0001_baseline",
   "acceptance": {
     "workflow_engine_tests": "PASS_5_OF_5_TESTS",
     "tenancy_tests": "PASS_4_OF_4_TESTS",
-    "frontend_build": "UNVERIFIED_DEPENDENCY_INSTALL_TIMEOUT",
-    "railway_smoke": "NOT_RUN",
-    "database_migration": "PASS_SQLITE_SMOKE_ONLY_POSTGRES_PENDING"
+    "frontend_build": "PASS_RAILWAY_VUE_TSC_VITE",
+    "railway_smoke": "RAILWAY_HEALTH_API_200_AND_SERVICES_ONLINE_EXTERNAL_HTTPS_UNVERIFIED",
+    "database_migration": "ALEMBIC_PREDEPLOY_COMMAND_CONFIGURED_AND_DEPLOY_SUCCESS_SQL_READBACK_NOT_DONE"
   },
   "limitations": [
-    "JWT issuer provisioning absent",
-    "MAIRA provider not connected",
-    "PostgreSQL RLS not enabled",
-    "No operational contract workflow yet",
-    "Railway GitHub integration cannot yet access the private repository",
-    "GitHub Actions CI checks not yet confirmed",
-    "No Railway deployment; services have no source"
+    "MAIRA remains a scaffold; Gemini not integrated",
+    "Google OAuth and tenant production RLS not implemented",
+    "No actual contract operations or institutional workflow execution",
+    "External HTTPS URLs not independently checked; Railway reports online/healthy",
+    "GitHub Actions CI results not independently verified",
+    "Three moderate npm dependency advisories reported during frontend build",
+    "No user/customer data should be loaded into this Development bootstrap"
   ],
-  "git_repository_access": "GRANTED_TO_CHATGPT_GITHUB_APP",
   "railway_services": {
     "api": "c1ea4a30-1b3e-436d-b509-1919cb3f1857",
     "web": "03902694-12b6-4411-85be-970096f88f15"
   },
-  "railway_source_connection": "BLOCKED_RAILWAY_GITHUB_PERMISSION_PRIVATE_REPO"
+  "railway_source_connection": "CONNECTED_MAIN",
+  "github_source_commit": "71c5bf9817428714c2f774c0eb77c5812b2f4f9b",
+  "railway_deployments": {
+    "api": "4ab8d68f-8656-4204-abf8-30ce82532394",
+    "web": "6c2bec94-59e0-4477-8777-6195a10337fa",
+    "postgres": "40250447-815e-4fd7-b93f-e912ab912917"
+  },
+  "railway_domains": {
+    "api": "api-development-18b59fbb.up.railway.app",
+    "web": "web-development-80ecf771.up.railway.app"
+  }
 }
