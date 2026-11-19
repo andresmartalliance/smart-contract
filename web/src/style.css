@@ -394,3 +394,22 @@ nav button.active .nav-icon{stroke:#236ed3;transform:scale(1.03)}
 
 /* MAIRA motion accessibility: no pulsing when reduced motion is requested. */
 @media(prefers-reduced-motion:reduce){.maira-launcher-icon::before{animation:none;opacity:.25;transform:none}}
+
+/* Smart Contract — Maira entity-scoped preview, first-class but not live. */
+.maira-preview-card{width:100%;display:grid;gap:13px;background:linear-gradient(140deg,#f8fbff,#fff);border:1px solid #d8e5f3;border-radius:15px;padding:17px;min-width:0}
+.maira-preview-card>strong{font-size:15px;color:#173d67}
+.maira-preview-summary{display:flex;gap:9px;flex-wrap:wrap}
+.maira-preview-summary span{border-radius:11px;border:1px solid #d5e3f1;background:#fff;padding:8px 11px;color:#506f8f;font-size:12px}
+.maira-preview-summary b{font-size:18px;color:#0d5186;margin-right:5px}
+.maira-preview-task-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.maira-preview-tasks{max-height:400px;overflow:auto;display:grid;gap:8px;padding-right:4px}
+.maira-preview-task{display:flex;align-items:flex-start;gap:11px;background:#fff;border:1px solid #e4ecf5;border-radius:11px;padding:10px 11px;min-width:0}
+.maira-preview-number{font-size:12px;color:#0a6b9b;border-radius:9px;border:1px solid #cde4f4;background:#eaf8fc;font-weight:700;padding:6px 8px;min-width:34px;text-align:center;flex:none}
+.maira-preview-task>div{display:grid;gap:5px;min-width:0}
+.maira-preview-task strong{font-size:12px;line-height:1.4;color:#244562}
+.maira-preview-task small{font-size:11px;line-height:1.35;color:#68849b}
+.maira-preview-alert{background:#fff8ed;border:1px solid #efdcb6;border-radius:12px;padding:12px;color:#7a5934;font-size:12px;line-height:1.6}
+.maira-preview-alert p{margin:5px 0}
+.party-process-preview .eyebrow{font-size:10px;color:#5491b5}
+.party-process-preview .maira-preview-card{align-content:start;max-height:550px;overflow:auto}
+@media(max-width:840px){.maira-preview-task-grid{grid-template-columns:1fr}.maira-preview-card{padding:13px}}
