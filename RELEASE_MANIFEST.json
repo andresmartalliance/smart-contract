@@ -1,8 +1,8 @@
 {
   "product": "smart-contract",
   "architecture": "5.0",
-  "package": "5.6-maira-circular-emblem-blue",
-  "status": "RAILWAY_DEV_MAIRA_CIRCLE_DEPLOYED_NOT_GEMINI",
+  "package": "6.0-maira-document-to-workflow-pilot",
+  "status": "PENDING_DEPLOY_CONFIG_GOOGLE_GEMINI",
   "repository_target": "andresmartalliance/smart-contract",
   "railway_project_id": "1f226324-580b-4b1c-b235-12c717d70af8",
   "railway_development_environment_id": "6e8d45ca-d6f2-448c-a48a-63e5a2ab1806",
@@ -29,7 +29,10 @@
     "maira_brand": "PASS_VUE_TSC_VITE_RAILWAY_DEPLOY",
     "visual_screenshot": "NOT_AUTOMATED_BROWSER_VERIFIED",
     "hero_round": "SOURCE_UPDATED_RAILWAY_HEALTH_OK_NO_BROWSER_E2E",
-    "maira_original_color": "PRESERVED_HOME_GRADIENT_#10223f_#153968_#164578"
+    "maira_original_color": "PRESERVED_HOME_GRADIENT_#10223f_#153968_#164578",
+    "maira_document_import": "SOURCE_IMPLEMENTED_CREDENTIALS_NOT_SET",
+    "google_login": "PILOT_GOOGLE_ID_TOKEN_ALLOWLIST_NOT_YET_CONFIGURED",
+    "gemini": "SMART_GEMINI_API_KEY_NOT_YET_CONFIGURED"
   },
   "limitations": [
     "Open Development frontend is for fictitious data only",
@@ -43,7 +46,9 @@
     "MAIRA actions limited to existing local editor; no Gemini connection or institutional data",
     "MAIRA branding only; not a live Gemini assistant",
     "No independent browser visual screenshot verification of V5.5",
-    "MAIRA circular logo updated; visual screenshot / browser interaction not independently verified"
+    "MAIRA circular logo updated; visual screenshot / browser interaction not independently verified",
+    "No institutional tenancy/persistence for document analysis pilot",
+    "No client documents until Google auth + Gemini API set and end-to-end proven"
   ],
   "git_repository_access": "AUTHORIZED_PROJECT_ONLY_BY_POLICY",
   "source_of_truth": "andresmartalliance/smart-contract main; release Git SHA available from repository/CI; Drive master is context",
@@ -58,7 +63,7 @@
   },
   "github_source_commit": "main (see Railway deployment commit and Drive context)",
   "railway_source_connection": "CONNECTED_MAIN",
-  "release_notes": "V5.6: circular MAIRA / AI AGENT emblem replaces SMART square in Resumen, aligns agent palette to approved original Resumen deep blues, avoids overlaid square and keeps orbit chips external. Visual-only.",
+  "release_notes": "New upload in Flujos > Crear con MAIRA; Gemini document-to-workflow real API with Google allowlist protected upload, source mapping and human-reviewed import. Pilot requires environment credentials. No fake IA.",
   "base_source_commit": "d176b0fe39017c226c499eb0a4ae6cef13b93df5",
   "visual_design_version": "1.0",
   "watch_patterns": {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, ref, shallowRef, watch } from 'vue'
 import { VueFlow, type Node, type Edge, type Connection } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
@@ -81,6 +81,103 @@ const flowMessage = ref('')
 const errors = ref<string[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
 const showCatalog = ref(true)
+
+type MairaStatus={ready:boolean;google_enabled:boolean;gemini_enabled:boolean;google_client_id:string|null;max_mb:number;extensions:string[]}
+type MairaMapping={source_step:string;source_excerpt:string;node_id:string;page:number|null;confidence:string}
+type MairaProposal={workflow:Workflow;source_map:MairaMapping[];questions:string[];observations:string[];node_count:number;mapped_steps:number;notice:string}
+const MAIRA_API=import.meta.env.VITE_SMART_API_URL||'https://api-development-18b59fbb.up.railway.app'
+const mairaImportOpen=ref(false)
+const mairaImportStatus=ref<MairaStatus|null>(null)
+const mairaImportBusy=ref(false)
+const mairaImportError=ref('')
+const mairaImportInfo=ref('')
+const mairaSourceFile=ref<File|null>(null)
+const mairaProposal=ref<MairaProposal|null>(null)
+const mairaGoogleMount=ref<HTMLElement|null>(null)
+const mairaGoogleToken=ref('')
+let mairaGoogleScript:Promise<void>|null=null
+type GoogleIdentity={
+  initialize:(args:{client_id:string;callback:(data:{credential:string})=>void})=>void;
+  renderButton:(root:HTMLElement,options:{type:string;theme:string;size:string;text:string})=>void
+}
+function googleIdentity():GoogleIdentity|null{
+  return (window as unknown as {google?:{accounts?:{id?:GoogleIdentity}}}).google?.accounts?.id||null
+}
+function loadGoogleIdentity():Promise<void>{
+ if(googleIdentity())return Promise.resolve()
+ if(mairaGoogleScript)return mairaGoogleScript
+ mairaGoogleScript=new Promise<void>((resolve,reject)=>{
+  const script=document.createElement('script')
+  script.src='https://accounts.google.com/gsi/client';script.async=true;script.defer=true
+  script.onload=()=>googleIdentity()?resolve():reject(new Error('No se pudo iniciar Google Sign-In'))
+  script.onerror=()=>reject(new Error('No se pudo cargar Google Sign-In'))
+  document.head.appendChild(script)
+ }).catch(e=>{mairaGoogleScript=null;throw e})
+ return mairaGoogleScript
+}
+async function loadMairaImportStatus(){
+ try{
+  const resp=await fetch(MAIRA_API+'/api/v1/maira/workflow-import/status',{cache:'no-store'})
+  if(!resp.ok)throw new Error('La API MAIRA no está disponible')
+  mairaImportStatus.value=await resp.json() as MairaStatus
+ }catch(e){mairaImportStatus.value=null;mairaImportError=e instanceof Error?e.message:'No se pudo consultar MAIRA'}
+}
+async function initializeMairaGoogle(){
+ if(!mairaImportOpen.value||!mairaImportStatus.value?.ready)return
+ await nextTick()
+ if(!mairaGoogleMount.value)return
+ try{
+  await loadGoogleIdentity()
+  const client_id=mairaImportStatus.value.google_client_id
+  if(!client_id)throw new Error('No hay cliente Google configurado')
+  const google=googleIdentity()
+  if(!google)throw new Error('Google Sign-In no disponible')
+  google.initialize({client_id,callback:({credential})=>{mairaGoogleToken.value=credential;mairaImportInfo.value='Sesión Google validable. Puedes analizar el archivo seleccionado.'}})
+  mairaGoogleMount.value.replaceChildren()
+  google.renderButton(mairaGoogleMount.value,{type:'standard',theme:'outline',size:'large',text:'signin_with'})
+ }catch(e){mairaImportError=e instanceof Error?e.message:'No se pudo activar Google'}
+}
+async function openMairaDocumentImport(){
+ current.value='flujos';mairaOpen.value=false;mairaImportOpen.value=true
+ mairaImportError.value='';mairaImportInfo.value='';mairaProposal.value=null
+ await loadMairaImportStatus()
+ await initializeMairaGoogle()
+}
+function chooseMairaSource(event:Event){
+ const target=event.target as HTMLInputElement, file=target.files?.[0]||null
+ mairaImportError.value='';mairaProposal.value=null
+ if(file&&(file.size>6*1024*1024||!/\.(pdf|png|jpe?g|txt)$/i.test(file.name))){
+  mairaImportError.value='Formatos PDF, imagen o TXT, hasta 6 MB.';mairaSourceFile.value=null
+ }else mairaSourceFile.value=file
+}
+async function analyzeMairaDocument(){
+ if(!mairaImportStatus.value?.ready){mairaImportError.value='MAIRA no tiene Google y Gemini configurados.';return}
+ if(!mairaGoogleToken.value){mairaImportError.value='Inicia sesión en Google para continuar.';return}
+ if(!mairaSourceFile.value){mairaImportError.value='Selecciona un documento para analizar.';return}
+ mairaImportBusy.value=true;mairaImportError.value='';mairaProposal.value=null
+ try{
+  const data=new FormData();data.append('file',mairaSourceFile.value,mairaSourceFile.value.name)
+  const resp=await fetch(MAIRA_API+'/api/v1/maira/workflow-import',{method:'POST',headers:{Authorization:'Bearer '+mairaGoogleToken.value},body:data})
+  const response=await resp.json() as Record<string,unknown>
+  if(!resp.ok)throw new Error(typeof response.detail==='string'?response.detail:'MAIRA no pudo generar un flujo válido ('+resp.status+').')
+  mairaProposal.value=response as unknown as MairaProposal
+  mairaImportInfo.value='MAIRA generó una propuesta. Revisa los pasos antes de aplicarla.'
+ }catch(e){mairaImportError.value=e instanceof Error?e.message:'Error de análisis'}
+ finally{mairaImportBusy.value=false}
+}
+function applyMairaProposal(){
+ if(!mairaProposal.value)return
+ try{
+  loadDefinition(mairaProposal.value.workflow)
+  const valid=validateDraft()
+  if(!valid)throw new Error(errors.value.slice(0,3).join('; '))
+  flowMessage.value='Propuesta MAIRA importada como borrador LOCAL. Revisa todas las etapas antes de publicar.'
+  mairaImportOpen.value=false
+  mairaImportInfo.value=''
+ }catch(e){mairaImportError.value=e instanceof Error?e.message:'No se pudo aplicar la propuesta'}
+}
+watch(mairaImportOpen,open=>{if(!open){mairaSourceFile.value=null;mairaGoogleToken.value='';mairaProposal.value=null}})
+
 const nodes = shallowRef<Node[]>([])
 const edges = shallowRef<Edge[]>([])
 
@@ -492,7 +589,52 @@ function simulateDraft(){
         <div class="top-meta"><span class="top-product">Smart Contract · V5.3</span><span class="context-pill">Development</span></div>
       </header>
       <section v-if="current==='flujos'" class="stack">
-        <div class="heading"><div><span class="eyebrow">Diseño inteligente de procesos</span><h2>Workflow Studio</h2><p>Diseña, conecta y valida etapas configurables. Todos los cambios siguen siendo un borrador local.</p></div><div class="header-actions"><button class="ghost-button" @click="newWorkflow">＋ Nuevo flujo</button><button class="ghost-button" @click="fileInput?.click()">↥ Importar</button><button class="primary-button" @click="exportDraft">↧ Exportar JSON</button></div></div>
+        <div class="heading"><div><span class="eyebrow">Diseño inteligente de procesos</span><h2>Workflow Studio</h2><p>Diseña, conecta y valida etapas configurables. Todos los cambios siguen siendo un borrador local.</p></div><div class="header-actions"><button class="primary-button" @click="openMairaDocumentImport">✧ Crear con MAIRA</button><button class="ghost-button" @click="newWorkflow">＋ Nuevo flujo</button><button class="ghost-button" @click="fileInput?.click()">↥ Importar</button><button class="primary-button" @click="exportDraft">↧ Exportar JSON</button></div></div>
+
+        <div v-if="mairaImportOpen" class="maira-import-surface" role="region" aria-label="Crear flujo a partir de documento con MAIRA">
+          <div class="maira-import-head">
+            <div><span class="eyebrow">MAIRA · DE DOCUMENTO A WORKFLOW</span><h3>Crear flujo con MAIRA</h3><p>Carga un diagrama, MAIRA identificará los pasos y propondrá un workflow editable. No sustituye la revisión jurídica.</p></div>
+            <button type="button" class="ghost-button" @click="mairaImportOpen=false" aria-label="Cerrar creación con MAIRA">Cerrar ×</button>
+          </div>
+          <div class="maira-import-grid">
+            <div class="maira-import-card">
+              <strong>1. Identificación y documento</strong>
+              <p v-if="!mairaImportStatus" class="maira-import-warning">No se pudo verificar la disponibilidad de MAIRA.</p>
+              <div v-else-if="!mairaImportStatus.ready" class="maira-import-warning" role="status">
+                La prueba está preparada, pero aún requiere configurar
+                <strong>{{!mairaImportStatus.google_enabled?'Google Sign-In':''}}{{!mairaImportStatus.google_enabled&&!mairaImportStatus.gemini_enabled?' y ':''}}{{!mairaImportStatus.gemini_enabled?'Gemini':''}}</strong>
+                en Smart Contract. No se permite enviar archivos sin autorización.
+              </div>
+              <template v-if="mairaImportStatus?.ready">
+                <div ref="mairaGoogleMount" class="maira-google-login"></div>
+                <p class="maira-import-fine">{{mairaGoogleToken?'Identidad Google recibida; será verificada por el servidor.':'Ingresa con una cuenta habilitada para la prueba.'}}</p>
+              </template>
+              <label class="maira-file-label">Seleccionar diagrama de flujo
+                <input type="file" accept=".pdf,.png,.jpg,.jpeg,.txt,application/pdf,image/png,image/jpeg,text/plain" @change="chooseMairaSource"/>
+              </label>
+              <div v-if="mairaSourceFile" class="maira-import-selected">{{mairaSourceFile.name}} · {{(mairaSourceFile.size/1024).toFixed(0)}} KB</div>
+              <p class="maira-import-fine">PDF, imagen o TXT · Máximo 6 MB. Únicamente documentos sintéticos o autorizados. El archivo se envía a Gemini para su análisis y no se guarda en Smart Contract.</p>
+              <button type="button" class="primary-button" :disabled="!mairaImportStatus?.ready||!mairaGoogleToken||!mairaSourceFile||mairaImportBusy" @click="analyzeMairaDocument">
+                {{mairaImportBusy?'MAIRA está analizando…':'Analizar documento con MAIRA'}}
+              </button>
+            </div>
+            <div class="maira-import-card">
+              <strong>2. Resultado de MAIRA</strong>
+              <div v-if="mairaImportError" class="maira-import-error" role="alert">{{mairaImportError}}</div>
+              <div v-if="mairaImportInfo" class="maira-import-notice" role="status">{{mairaImportInfo}}</div>
+              <template v-if="mairaProposal">
+                <div class="maira-import-metrics"><span><b>{{mairaProposal.node_count}}</b> nodos</span><span><b>{{mairaProposal.mapped_steps}}</b> pasos identificados</span><span><b>{{mairaProposal.questions.length}}</b> preguntas</span></div>
+                <div class="maira-import-mapping">
+                  <div v-for="(mapped,i) in mairaProposal.source_map.slice(0,80)" :key="i" class="maira-import-step"><strong>{{mapped.source_step}}</strong><span>{{mapped.source_excerpt}}<small>→ {{mapped.node_id}} · {{mapped.confidence}}{{mapped.page?' · pág. '+mapped.page:''}}</small></span></div>
+                </div>
+                <div v-if="mairaProposal.questions.length"><strong>Dudas que requieren revisión</strong><p v-for="(question,i) in mairaProposal.questions" :key="i">• {{question}}</p></div>
+                <div v-if="mairaProposal.observations.length"><strong>Observaciones</strong><p v-for="(item,i) in mairaProposal.observations" :key="i">• {{item}}</p></div>
+                <button type="button" class="primary-button" @click="applyMairaProposal">Aplicar propuesta al diseñador</button>
+              </template>
+              <p v-else class="maira-import-fine">MAIRA mostrará aquí el mapeo de pasos originales a etapas, dependencias, dudas y observaciones. Nada se aplica sin tu revisión.</p>
+            </div>
+          </div>
+        </div>
         <input ref="fileInput" type="file" accept="application/json,.json" class="hidden-input" @change="importDraft" />
         <div class="workflow-meta">
           <label>Nombre del proceso<input v-model="workflowName" maxlength="200" aria-label="Nombre del proceso" /></label>

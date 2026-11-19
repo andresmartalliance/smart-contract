@@ -287,3 +287,28 @@ nav button.active .nav-icon{stroke:#236ed3;transform:scale(1.03)}
 @media(max-width:1080px){.maira-identity-layout{grid-template-columns:minmax(230px,.9fr) minmax(0,1.1fr)}.maira-identity-card{min-height:340px}.maira-identity-copy{padding:20px 8px}}
 @media(max-width:760px){.maira-identity-layout{grid-template-columns:1fr;gap:17px;padding:14px}.maira-identity-card{min-height:280px}.maira-identity-rings{width:200px;height:200px}.maira-identity-tagline{margin-top:19px!important}.maira-identity-copy{padding:15px 9px 20px}.maira-identity-copy h2{font-size:36px}.maira-identity-copy .maira-full-name{font-size:20px}}
 @media(prefers-reduced-motion:reduce){.maira-identity-layout *{transition:none}}
+
+/* V6 — MAIRA document intake, audit-first visual proposal */
+.maira-import-surface{padding:24px;border:1px solid #cddff3;border-radius:24px;background:linear-gradient(125deg,#f6f9ff,#fff);box-shadow:0 12px 40px rgba(25,60,120,.07)}
+.maira-import-head{display:flex;align-items:start;justify-content:space-between;gap:15px;margin-bottom:19px}
+.maira-import-head h3{font-size:25px;margin:6px 0;color:#173a64}
+.maira-import-head p{font-size:13px;color:#657f9c;line-height:1.6}
+.maira-import-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:18px}
+.maira-import-card{display:flex;flex-direction:column;align-items:flex-start;gap:12px;padding:20px;border:1px solid #dae6f4;border-radius:18px;background:white;min-width:0}
+.maira-import-card>strong{color:#173e66;font-size:16px}
+.maira-import-card p{font-size:12px;line-height:1.6;color:#607b96;margin:0}
+.maira-import-warning,.maira-import-error,.maira-import-notice{padding:12px 13px;border-radius:12px;width:100%;font-size:12px;line-height:1.55}
+.maira-import-warning{background:#fff7eb;border:1px solid #f0d8a5;color:#6d4e1f}
+.maira-import-error{background:#fff0ef;border:1px solid #f4c4c3;color:#9d3337}
+.maira-import-notice{background:#eef8ff;border:1px solid #c6e3f6;color:#245679}
+.maira-google-login{min-height:39px}
+.maira-file-label{display:flex;flex-direction:column;gap:9px;width:100%;font-size:12px;color:#285274;font-weight:650}
+.maira-file-label input{width:100%;font-size:12px;color:#527390;border:1px dashed #adc9e6;border-radius:12px;padding:14px;max-width:100%}
+.maira-import-selected{font-size:12px;color:#225e8c;background:#eff7ff;border-radius:9px;padding:10px;word-break:break-word}
+.maira-import-fine{font-size:11px!important;color:#8193a7!important}
+.maira-import-card button:disabled{opacity:.45;cursor:not-allowed}
+.maira-import-metrics{display:flex;flex-wrap:wrap;gap:9px}.maira-import-metrics span{border:1px solid #dde9f6;border-radius:9px;padding:9px 12px;color:#496783;font-size:12px}.maira-import-metrics b{color:#114f86;font-size:16px}
+.maira-import-mapping{width:100%;max-height:240px;overflow:auto;border:1px solid #e3ebf4;border-radius:12px}
+.maira-import-step{display:flex;align-items:flex-start;gap:12px;padding:9px 12px;border-bottom:1px solid #edf2f7}.maira-import-step strong{font-size:12px;color:#174f7d;min-width:36px}.maira-import-step span{font-size:11px;color:#38556e}.maira-import-step small{display:block;color:#7b94a8;margin-top:3px}
+@media(max-width:1000px){.maira-import-grid{grid-template-columns:1fr}}
+@media(max-width:650px){.maira-import-head{flex-direction:column}.maira-import-surface{padding:13px}.maira-import-card{padding:14px}}
