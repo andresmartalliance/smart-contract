@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import asyncio
+import io
 import json
 import os
 import logging
@@ -394,20 +395,22 @@ def _provider_failure(code: int, body: Any) -> HTTPException:
     return HTTPException(502, detail)
 
 
-async def _post_gemini(request: dict[str, Any], api_key: str, model: str, timeout: float) -> dict[str, Any]:
-    """One bounded retry for transient provider HTTP 502/503/504 errors.
+async def _post_gemini(request: dict[str, Any], api_key: str, model: str, timeout: float,
+                       fallback_request: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Maximum two calls: normal transient retry, or lower-weight text request.
 
-    This is intentionally not retried for quota (429), bad credentials, 4xx
-    validation failures, or network timeouts. Never record source documents
-    or provider response bodies in logs.
+    An extractable PDF can supply a different request for attempt two.
+    Never retry quota/auth failures. Never store/log payloads or credentials.
     """
     async with httpx.AsyncClient(timeout=timeout) as client:
         for attempt in (1, 2):
+            using_fallback = attempt == 2 and fallback_request is not None
+            request_payload = fallback_request if using_fallback else request
             try:
                 response = await client.post(
                     f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
                     headers={"x-goog-api-key": api_key, "content-type": "application/json"},
-                    json=request)
+                    json=request_payload)
             except httpx.TimeoutException:
                 logger.warning("Gemini generateContent timed out: model=%s", model)
                 raise HTTPException(504, "Gemini tardó demasiado en responder. Puedes repetir el análisis.") from None
@@ -416,7 +419,8 @@ async def _post_gemini(request: dict[str, Any], api_key: str, model: str, timeou
                 raise HTTPException(502, "No fue posible conectar con Gemini desde Railway. Verifica la conectividad del servicio API.") from None
 
             if response.status_code in (502, 503, 504) and attempt == 1:
-                logger.warning("Gemini transient error: HTTP=%s; retrying once", response.status_code)
+                logger.warning("Gemini transient error: HTTP=%s; recovery=%s",
+                               response.status_code, "TEXT_ONLY" if fallback_request else "RETRY")
                 await asyncio.sleep(2)
                 continue
 
@@ -427,12 +431,15 @@ async def _post_gemini(request: dict[str, Any], api_key: str, model: str, timeou
             if response.status_code >= 400:
                 failure = _provider_failure(response.status_code, body)
                 if response.status_code == 503 and attempt == 2:
+                    recovery = "tras intentar también el texto extraído del PDF" if fallback_request else "después de un reintento automático"
                     raise HTTPException(502,
-                        "Gemini sigue temporalmente indisponible (HTTP 503) después de un reintento automático. "
-                        "El documento no fue modificado; puedes volver a analizarlo.") from None
+                        "Gemini sigue temporalmente indisponible (HTTP 503) " + recovery
+                        + ". No se aplicaron cambios. La plataforma está operativa; el proveedor no ha completado la inferencia.") from None
                 raise failure
             if not isinstance(body, dict):
                 raise HTTPException(502, "Gemini devolvió una respuesta ilegible.")
+            if using_fallback:
+                body["_maira_fallback_used"] = True
             return body
 
     raise HTTPException(502, "No se obtuvo una respuesta válida de Gemini.")
@@ -455,6 +462,38 @@ async def check_gemini_connection(email: str = Depends(_verify_identity)):
     return {"connected": True, "model": model, "message": "Gemini respondió correctamente. Ya puedes analizar el documento."}
 
 
+def _pdf_text_for_fallback(data: bytes) -> str | None:
+    """Extract only user-provided PDF text; never OCR, store or guess arrows.
+
+    Image-only diagrams stay on the multimodal path and are retried normally.
+    """
+    try:
+        from pypdf import PdfReader
+        reader = PdfReader(io.BytesIO(data), strict=False)
+        if len(reader.pages) > 12:
+            return None
+        pages = []
+        for number, page in enumerate(reader.pages, start=1):
+            text = (page.extract_text(extraction_mode="layout") or "").strip()
+            if text:
+                pages.append(f"--- PAGINA {number} ---\\n{text[:12000]}")
+        joined = "\\n\\n".join(pages)[:30000]
+        if len(re.sub(r"\\s+", "", joined)) < 150:
+            return None
+        return joined
+    except Exception as exc:
+        logger.info("MAIRA PDF has no extractable fallback text: category=%s", type(exc).__name__)
+        return None
+
+
+TEXT_FALLBACK_NOTICE = (
+    "Este resultado procede de una segunda lectura textual del PDF, porque Gemini "
+    "no pudo procesar el documento completo. El orden, las flechas y las dependencias "
+    "NO se verificaron visualmente: todas las conexiones son provisionales. "
+    "Revisar el diagrama original antes de guardar o publicar."
+)
+
+
 async def _call_gemini(data: bytes, suffix: str, filename: str, api_key: str,
                        party_kind: str | None = None) -> Proposal:
     context = (
@@ -473,7 +512,33 @@ async def _call_gemini(data: bytes, suffix: str, filename: str, api_key: str,
     model = _gemini_model()
     req = {"contents": [{"role": "user", "parts": parts}],
            "generationConfig": {"responseMimeType": "application/json", "temperature": 0.1, "maxOutputTokens": 24000}}
-    response_json = await _post_gemini(req, api_key, model, timeout=110.0)
+    fallback_req = None
+    if suffix == ".pdf":
+        extracted_text = _pdf_text_for_fallback(data)
+        if extracted_text:
+            text_instructions = (
+                PROMPT + context
+                + "\\n\\nMODO DE RECUPERACION DE TEXTO: se extrajo una capa "
+                  "textual del PDF, no las flechas del diagrama. El orden espacial "
+                  "de columnas puede estar mezclado. Reconoce solo pasos con numero "
+                  "legible; citas literales del texto recibido; rol solo si esta "
+                  "inequivocamente asociado. No inventes etapas, roles, flechas "
+                  "ni condiciones. En TODOS los pasos deja depends_on=null, "
+                  "incluso si crees conocer el orden, y usa confidence=baja "
+                  "cuando haya dudas.\\n\\nDocumento: " + filename
+                + "\\n" + extracted_text
+            )
+            fallback_req = {
+                "contents": [{"role": "user", "parts": [{"text": text_instructions}]}],
+                "generationConfig": {"responseMimeType": "application/json",
+                                     "temperature": 0.1, "maxOutputTokens": 10000},
+            }
+    if fallback_req:
+        response_json = await _post_gemini(req, api_key, model, timeout=110.0,
+                                          fallback_request=fallback_req)
+    else:
+        response_json = await _post_gemini(req, api_key, model, timeout=110.0)
+    text_fallback_used = bool(response_json.get("_maira_fallback_used"))
     candidates = response_json.get("candidates") or []
     if not isinstance(candidates,list) or not candidates:
         raise HTTPException(422, "Gemini no devolvió una propuesta. Verifica el documento y vuelve a analizar.")
@@ -493,6 +558,16 @@ async def _call_gemini(data: bytes, suffix: str, filename: str, api_key: str,
         raise HTTPException(422, "Gemini devolvió un JSON incompleto o ilegible; no se aplicaron cambios.") from None
     try:
         if isinstance(parsed,dict) and "steps" in parsed:
+            if text_fallback_used:
+                # A text layer cannot prove flowchart arrows, even if Gemini guesses.
+                for step in parsed["steps"]:
+                    if isinstance(step, dict):
+                        step["depends_on"] = None
+                        if step.get("confidence") == "alta":
+                            step["confidence"] = "media"
+                parsed.setdefault("observations", [])
+                if isinstance(parsed["observations"], list):
+                    parsed["observations"].append(TEXT_FALLBACK_NOTICE)
             result = _compile_source_extraction(parsed)
         else:
             # Keep support for older Gemini payloads with a complete workflow.
