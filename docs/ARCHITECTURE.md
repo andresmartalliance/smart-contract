@@ -1,4 +1,21 @@
-# Smart Contract V6.5.3 — Arquitectura integral y estado real
+# Smart Contract V6.5.4 — Arquitectura integral y estado real
+
+## V6.5.4 — Extractor documental y compilador determinista de workflows
+
+La inferencia real del 19 nov 2026 con Gemini 3.6 Flash y PDF ~50 KB terminó en HTTP 422 después de ~53.6 s. La API recibía un objeto JSON del proveedor, pero la etapa de validación de grafo/estructura no lo aceptaba. No se guarda el cuerpo del proveedor (privacidad), así que la causa exacta de ese objeto no se conoce.
+
+**Responsabilidades separadas:**
+
+1. \`PROMPT\` pide lista \`steps\` con \`source_step\` (número visible), \`source_excerpt\` literal, \`label\`, \`role\`, \`kind\`, \`page\`, \`confidence\`, \`depends_on\` y \`questions/observations\`. No pide un grafo ejecutable ni IDs de frontend.
+2. \`ExtractedDocument/ExtractedStep\` validan campos mínimos y duplicaciones; no eliminan pasos.
+3. \`_compile_source_extraction\` genera nodos \`START/END\` y uno por cada paso citado; construye \`source_map\` coherente, conserva numeración/página/confianza, determina \`actor_side\` solo para roles conocidos explícitamente, y usa \`HUMAN_DECISION\` para una aprobación sin rol.
+4. Si \`depends_on\` es null se usa el paso anterior como secuencia **provisional**, agregando aviso visible en observaciones. Dependencias declaradas deben apuntar a números existentes; se rechazan ciclos o referencias inexistentes. No se inventan anexos, ni se reinterpretan correos como tareas del destinatario.
+5. \`_parse_proposal\` sigue siendo el validador final de integridad y conexión DAG, adjunta trazabilidad al nodo y prepara el layout; las versiones previas con workflow completo siguen funcionando.
+6. La API devuelve **422 con motivo acotado en español** cuando la extracción está incompleta o supera límites, evitando el mensaje genérico previo. Los logs no incluyen documento, secretos, correo ni contenido de la respuesta.
+
+**Seguridad y producto:** la importación conserva autorización Google allowlist, los previews por tercero se almacenan solo tras guardar explícitamente y validación de pertenencia al tenant. No existe ejecución autónoma ni firma. No hay inferencia que garantice cumplimiento jurídico; todo es borrador para revisión.
+
+**Validación técnica:** CI run 44580869574 (68/68 pruebas API + Vue build PASS), API Railway SUCCESS commit 7867cc06a244ecd084123af75d80e7a4dad94c3d. Se verificó compilación simulada de 23 pasos con source excerpts, tipos de tarea, roles y dependencias, no una ejecución real de la IA con el PDF original. **Prueba final pendiente**: misma carga desde Hospital Smart, evaluación humana del número y contenido de pasos; no marcar como aceptado antes.
 
 ## V6.5.3 — Selección explícita de modelo Gemini operativo
 

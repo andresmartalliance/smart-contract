@@ -1,8 +1,20 @@
 # Smart Contract + MAIRA
 
-**V6.5.3 — Modelo Gemini estable configurado · Development**
+**V6.5.4 — Construcción de workflows desde evidencia documental · Development**
 
 Smart Contract es una plataforma SaaS multiempresa con motor declarativo de workflows de contratación, campos, políticas y modalidades configurables. La primera aplicación es contratación de red prestadora de salud, sin codificar PGP, cápita ni evento como flujos obligatorios. El workflow institucional de Famisanar aún no ha sido recibido y no forma parte de esta versión.
+
+## V6.5.4 — Maira extrae pasos y Smart Contract compila el workflow
+
+**Incidente reproducido:** el usuario cargó «Process Flowchart clico contract V2.pdf» en Hospital Smart con Gemini 3.6 Flash el 19 nov 2026. La solicitud tardó ~53,6 s y la API devolvió HTTP **422** («MAIRA could not build a valid workflow»). Esto confirma que Gemini generó una respuesta, pero el parser anterior rechazó su estructura. El motivo específico dentro del JSON no quedó registrado: no se debe afirmar que fuera una dependencia en particular. No se creó propuesta, expediente ni se activó tarea.
+
+**Cambio estructural:** el prompt de Maira ya no exige producir un grafo Pydantic perfecto. Gemini devuelve **steps** (número literal del diagrama, título, cita original, responsable, tipo, página, confianza y dependencias explícitas si son legibles) más dudas y observaciones. Smart Contract crea START/END técnicos, asigna IDs seguros, construye el DAG, valida evidencia por nodo, conserva \`source_map\`, y exige un borrador revisable. El código de compilación se concentra en \`_compile_source_extraction\` y reutiliza \`_parse_proposal\` para controles de integridad; la forma antigua completa sigue siendo compatible con vistas previas históricas. No se almacena el PDF ni se crean expedientes.
+
+**Garantías:** no se inventan ni descartan pasos en la construcción; el número extraído por Gemini se preserva, y se rechazan números duplicados o referencias a dependencias inexistentes. Cuando las flechas no están claras se propone una secuencia conservadora por orden de lectura, **marcada expresamente como dependencia provisional para revisión humana**, nunca como certeza documental. Un rol no reconocido no se asigna automáticamente al prestador; una aprobación sin responsable queda como HUMAN_DECISION con pregunta de asignación. Firma, integración y notificaciones siguen siendo propuestas, NO tareas ejecutadas.
+
+**Calidad:** GitHub Actions \`44580869574\`: **68 pruebas backend aprobadas** y compilación Vue aprobada; Railway API Development desplegada correctamente desde commit \`7867cc06a244ecd084123af75d80e7a4dad94c3d\`. La prueba simulada incluye 23 pasos con sus citas y verifica trazabilidad, separación contratante/contratista y restricciones. El frontend es el mismo V6.5.3, ya que este cambio es exclusivamente de API. No se ha ejecutado de nuevo el PDF real con este compilador; **la prueba real sigue pendiente**.
+
+**Siguiente prueba:** Personas y empresas → Hospital Smart → Crear proceso con Maira → seleccionar el mismo PDF → Analizar documento con Maira. Revisar cuántas actividades extrajo, cotejar las 23 del archivo, las citas, roles y preguntas. Solo después usar Guardar vista previa; no publicar ni compartir tareas hasta corregir incertidumbres.
 
 ## V6.5.3 — Reemplazo del modelo Gemini 2.5 Flash que retorna 404
 
