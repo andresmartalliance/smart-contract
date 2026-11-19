@@ -28,7 +28,7 @@ def test_numbered_pdf_layout_groups_source_roles_without_generating_arrows(monke
     class FakeReader:
         pages = [FakePage()]
     import pypdf
-    monkeypatch.setattr(pypdf, "PdfReader", lambda _: FakeReader())
+    monkeypatch.setattr(pypdf, "PdfReader", lambda *args, **kwargs: FakeReader())
     steps = maira._numbered_pdf_steps(b"%PDF-1.4 synthetic")
     assert [step["source_step"] for step in steps] == ["1", "2"]
     assert [step["role"] for step in steps] == ["ASPIRANTE", "JURIDICO"]
