@@ -97,6 +97,7 @@ function newWorkflow(){
 loadExample()
 const selectedNode = computed(() => nodes.value.find(n=>n.id===selectedId.value))
 const selectedEdge = computed(() => edges.value.find(e=>e.id===selectedEdgeId.value))
+const selectedEdgeCondition = computed(() => (selectedEdge.value?.data as {when?:Condition}|undefined)?.when)
 const incidentEdges = computed(() => edges.value.filter(e=>e.source===selectedId.value||e.target===selectedId.value))
 function labelFor(id:string){return String((nodes.value.find(n=>n.id===id)?.data as WorkNode|undefined)?.label||id)}
 function castValue(text:string):unknown{
@@ -484,9 +485,9 @@ function simulateDraft(){
             <template v-else-if="selectedEdge">
                <p class="panel-caption">Conexión entre etapas</p>
                <div class="edge-label">{{labelFor(selectedEdge.source)}} → {{labelFor(selectedEdge.target)}}</div>
-               <label class="inspector-field">Condición de ruta (campo)<input :value="(selectedEdge.data as {when?:Condition}|undefined)?.when?.field||''" placeholder="Ej. acuerdo.requires_approval" @input="editEdge('field',($event.target as HTMLInputElement).value)" /></label>
-               <label v-if="(selectedEdge.data as {when?:Condition}|undefined)?.when?.field" class="inspector-field">Operador<select :value="(selectedEdge.data as {when?:Condition}|undefined)?.when?.op||'eq'" @change="editEdge('operator',($event.target as HTMLSelectElement).value)"><option v-for="op in conditionOperators" :key="op.value" :value="op.value">{{op.label}}</option></select></label>
-               <label v-if="(selectedEdge.data as {when?:Condition}|undefined)?.when?.field&&(selectedEdge.data as {when?:Condition}|undefined)?.when?.op!=='exists'" class="inspector-field">Valor<input :value="conditionValueText((selectedEdge.data as {when?:Condition}|undefined)?.when?.value)" @input="editEdge('value',($event.target as HTMLInputElement).value)" /></label>
+               <label class="inspector-field">Condición de ruta (campo)<input :value="selectedEdgeCondition?.field||''" placeholder="Ej. acuerdo.requires_approval" @input="editEdge('field',($event.target as HTMLInputElement).value)" /></label>
+               <label v-if="selectedEdgeCondition?.field" class="inspector-field">Operador<select :value="selectedEdgeCondition?.op||'eq'" @change="editEdge('operator',($event.target as HTMLSelectElement).value)"><option v-for="op in conditionOperators" :key="op.value" :value="op.value">{{op.label}}</option></select></label>
+               <label v-if="selectedEdgeCondition?.field&&selectedEdgeCondition?.op!=='exists'" class="inspector-field">Valor<input :value="conditionValueText(selectedEdgeCondition?.value)" @input="editEdge('value',($event.target as HTMLInputElement).value)" /></label>
                <button class="delete-button" @click="removeEdge(selectedEdge.id)">Quitar conexión</button>
              </template>
              <div v-else class="select-message"><div>◇</div><p>Selecciona una etapa o conexión para configurar sus datos y reglas.</p></div>
