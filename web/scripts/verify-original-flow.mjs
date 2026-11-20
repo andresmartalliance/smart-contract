@@ -49,7 +49,7 @@ console.log('Original PDF verified: 23 numbered tasks, 25 nodes, 24 edges, 21/2 
 // Connected diagram regression: its links are generated from actual workflow edges.
 assert.ok(app.includes('const directedChain=computed('))
 assert.ok(app.includes('edges.value.length!==ordered.length-1'))
-assert.ok(app.includes('const compactSavedPositions=computed('))
+assert.ok(app.includes('const compactSavedPositions=computed<'))
 assert.ok(app.includes('<CompactWorkflowDiagram v-if="!freeformMode"'))
 assert.ok(app.includes('@select-edge="selectCompactEdge"'))
 assert.ok(!app.includes('Editar conexión</span>'),'remove repeated edge editing pills')
