@@ -143,7 +143,7 @@ def session(email: str=Depends(verify_google_email),db:Session=Depends(get_sessi
         raise HTTPException(403,"No institution, registration or invitation for this account")
     return {"email":email,"institutions":[{"id":m.tenant_id,"roles":m.roles} for m in memberships],
             "invited_cases":len(assignments),"registered_contact":bool(registered),
-            "can_setup":_allowed_bootstrap(email) and not memberships,"pilot":True
+            "can_setup":_allowed_bootstrap(email) and not memberships,"pilot":True}
 
 @router.post("/demo/setup",status_code=201)
 def setup(payload:DemoSetup,email:str=Depends(verify_google_email),db:Session=Depends(get_session)):

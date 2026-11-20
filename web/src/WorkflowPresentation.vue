@@ -37,6 +37,16 @@ function kindName(kind:string){
 }
 function select(id:string){selectedId.value=id;draftValues.value={}}
 function value(key:string,next:string){draftValues.value={...draftValues.value,[key]:next}}
+function optionValue(opt:unknown):string{
+ if(typeof opt==='string'||typeof opt==='number')return String(opt)
+ if(opt&&typeof opt==='object'&&'value' in opt)return String((opt as {value:unknown}).value??'')
+ return ''
+}
+function optionLabel(opt:unknown):string{
+ if(typeof opt==='string'||typeof opt==='number')return String(opt)
+ if(opt&&typeof opt==='object'&&'label' in opt)return String((opt as {label:unknown}).label??'')
+ return ''
+}
 </script>
 <template>
  <section class="presentation">
@@ -78,7 +88,7 @@ function value(key:string,next:string){draftValues.value={...draftValues.value,[
           </select>
           <select v-else-if="field.type==='select'" :value="draftValues[field.key]||''" @change="value(field.key,($event.target as HTMLSelectElement).value)">
             <option value="">Seleccionar</option>
-            <option v-for="(opt,i) in field.options||[]" :key="i" :value="typeof opt==='string'?opt:String((opt as {value?:unknown}).value||'')">{{typeof opt==='string'?opt:String((opt as {label?:unknown}).label||'')}</option>
+            <option v-for="(opt,i) in field.options||[]" :key="i" :value="optionValue(opt)">{{optionLabel(opt)}}</option>
           </select>
           <input v-else :type="field.type==='date'?'date':field.type==='number'||field.type==='currency'?'number':'text'"
             :value="draftValues[field.key]||''" placeholder="Campo en vista previa"
