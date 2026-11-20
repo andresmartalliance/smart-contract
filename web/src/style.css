@@ -487,3 +487,27 @@ nav button.active .nav-icon{stroke:#236ed3;transform:scale(1.03)}
 .maira-dialogue-done p,.maira-dialogue-record{font-size:12px;line-height:1.6;color:#54728c;margin:0}
 .maira-dialogue-done button{justify-self:start}
 @media(max-width:650px){.maira-dialogue-choices{grid-template-columns:1fr}.maira-dialogue{padding:12px}}
+
+/* Document questions belong INSIDE the graph frame, not just a counter. */
+.maira-workflow-visual-canvas{height:auto;min-height:620px;display:flex;flex-direction:column}
+.maira-workflow-map-body{flex:1;position:relative;height:560px;min-height:420px}
+.maira-workflow-map-body .vue-flow{height:100%;width:100%}
+.maira-flow-questions{flex:none;display:grid;gap:10px;padding:14px 18px;background:#fffbf4;border-bottom:1px solid #e9dcc0}
+.maira-flow-questions-title{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center}
+.maira-flow-questions-title strong{font-size:12px;color:#76552d}
+.maira-flow-questions-title span{font-size:11px;color:#907d61}
+.maira-flow-questions-items{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:9px;max-height:150px;overflow-y:auto}
+.maira-flow-question{background:#fff;border:1px solid #efdcad;border-radius:11px;padding:10px 12px;display:flex;gap:10px;align-items:flex-start}
+.maira-flow-question-icon{display:grid;place-items:center;flex:none;width:24px;height:24px;border-radius:50%;background:#eab96b;color:#67440f;font-weight:800;font-size:14px}
+.maira-flow-question div{display:grid;gap:4px;min-width:0}
+.maira-flow-question strong{color:#674923;font-size:11px;line-height:1.5;font-weight:650}
+.maira-flow-question small{color:#9b815c;font-size:10px;line-height:1.4}
+.maira-workflow-visual-canvas .vue-flow__node.preview-review-marked{border:2px solid #daa55e;background:#fff8ea;box-shadow:0 0 0 3px rgba(218,165,94,.12)}
+.maira-workflow-visual-canvas .vue-flow__node.preview-decision-node{border-style:dashed;border-color:#8c7bd9}
+.maira-review-graphic-disclaimer{margin:0;font-size:11px;color:#866735;line-height:1.6}
+.maira-studio-questions{display:grid;gap:7px;padding:12px 14px;background:#fffaf0;border-bottom:1px solid #e8d7b5;max-height:175px;overflow-y:auto}
+.maira-studio-questions>strong{color:#76552d;font-size:12px}
+.maira-studio-questions p{font-size:11px;color:#644c31;line-height:1.5;margin:0}
+.maira-studio-questions p span{font-weight:800;margin-right:7px;color:#b3793e}
+.maira-studio-questions small{font-size:10px;color:#917f66;line-height:1.5}
+@media(max-width:700px){.maira-workflow-map-body{height:470px;min-height:360px}.maira-flow-questions-items{grid-template-columns:1fr}}

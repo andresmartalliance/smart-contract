@@ -188,7 +188,7 @@ const sourceOnlyPreview=computed(()=>mairaProposal.value?.workflow.metadata?.sou
 
 // MAIRA: ask about intended process before treating a generated graph as final.
 type MairaIntent='KEEP_ORIGINAL'|'ADAPT_TO_ENTITY'|''
-type MairaDialogue={scope_decision:MairaIntent;completed:boolean;questions_total:number;answers:{question:string;answer:string}[]}
+type MairaDialogue={scope_decision:MairaIntent;scope_question?:string;completed:boolean;questions_total:number;answers:{question:string;answer:string}[]}
 const mairaIntent=ref<MairaIntent>('')
 const mairaQuestionCursor=ref(0)
 const mairaAnswerText=ref('')
@@ -226,7 +226,7 @@ function mairaAnswer(){
  mairaAnswerText.value=mairaAnswers.value[mairaCurrentQuestion.value]||''
 }
 function mairaDialogue():MairaDialogue{return {
- scope_decision:mairaIntent.value,completed:mairaQuestionsDone.value,questions_total:mairaTotalQuestions.value,
+ scope_decision:mairaIntent.value,scope_question:mairaScopePrompt.value,completed:mairaQuestionsDone.value,questions_total:mairaTotalQuestions.value,
  answers:mairaQuestions.value.slice(1).map(question=>({question:question.slice(0,700),
   answer:(mairaAnswers.value[question]||'').trim().slice(0,650)}))
 }}
@@ -235,6 +235,12 @@ function workflowWithMairaDialogue(p:MairaProposal):Workflow{
  return {...wf,metadata:{...wf.metadata,maira_dialogue:mairaDialogue()}}
 }
 const studioMairaDialogue=computed(()=>workflowMetadata.value.maira_dialogue as MairaDialogue|undefined)
+const studioReviewQuestions=computed(()=>{
+ const original=workflowMetadata.value.maira_review_questions
+ const raw=Array.isArray(original)?original.filter((q):q is string=>typeof q==='string'&&q.trim().length>0):[]
+ const scope=studioMairaDialogue.value?.scope_question
+ return [...(typeof scope==='string'&&scope.trim()?[scope]:[]),...raw]
+})
 
 
 /** The visual preview uses the actual MAIRA nodes, edges and source references. */
@@ -242,7 +248,9 @@ function workflowWithEvidence(proposal:{workflow:Workflow;source_map:MairaMappin
  const byNode=new Map(proposal.source_map.map(m=>[m.node_id,m]))
  return {...proposal.workflow,
   metadata:{...proposal.workflow.metadata,source:'maira-document-import',draft:true,
-    requires_review:true,review_confirmed:false},
+    requires_review:true,review_confirmed:false,
+    maira_review_questions:('questions' in proposal&&Array.isArray(proposal.questions))?
+      proposal.questions:proposal.workflow.metadata?.maira_review_questions||[]},
   nodes:proposal.workflow.nodes.map(n=>{
    const ref=byNode.get(n.id)
    const applicant=partyKind==='JURIDICA'&&(n.role||'').trim().toUpperCase()==='ASPIRANTE'
@@ -258,6 +266,29 @@ function mairaGraphPosition(index:number,total:number){
  const col=row%2===0?index%cols:cols-1-index%cols
  return {x:col*295+28,y:row*165+24}
 }
+
+type MairaGraphicQuestion={text:string;step:string|null;node_id:string|null}
+function assignDiagramReviewQuestions(questions:string[],sources:MairaMapping[]):MairaGraphicQuestion[]{
+ const byStep=new Map(sources.map(source=>[source.source_step,source.node_id]))
+ return questions.filter(q=>typeof q==='string'&&q.trim()).map(text=>{
+  // Explicit references only. Semantic keyword guesses are not reliable enough
+  // to attach a legal review issue to a specific executable task.
+  const match=text.match(/\b(?:paso|etapa|actividad)\s*(\d+(?:\.\d+)*)\b/i)
+  const step=match&&byStep.has(match[1])?match[1]:null
+  return {text,step,node_id:step?byStep.get(step)||null:null}
+ })
+}
+const mairaGraphReviewQuestions=computed(()=>mairaProposal.value?
+ assignDiagramReviewQuestions(mairaQuestions.value,mairaProposal.value.source_map):[])
+const mairaGraphReviewMarkers=computed(()=>
+ new Set(mairaGraphReviewQuestions.value.map(q=>q.node_id).filter((id):id is string=>Boolean(id))))
+const mairaVerifiedBranchCount=computed(()=>{
+ const p=mairaProposal.value
+ if(!p)return 0
+ return p.workflow.nodes.filter(n=>n.kind==='HUMAN_DECISION'&&
+  p.workflow.edges.filter(e=>e.source===n.id).length>1).length
+})
+
 const mairaDiagram=computed(()=>{
  const p=mairaProposal.value
  if(!p)return {nodes:[] as Node[],edges:[] as Edge[]}
@@ -283,8 +314,11 @@ const mairaDiagram=computed(()=>{
    position:mairaGraphPosition(i,count),
    sourcePosition:last?Position.Bottom:(forward?Position.Right:Position.Left),
    targetPosition:col===0?Position.Top:(forward?Position.Left:Position.Right),
-   class:'maira-preview-node '+(n.kind==='START'?'preview-start':n.kind==='END'?'preview-end':''),
-   data:{label:fullLabel.length>84?fullLabel.slice(0,81)+'…':fullLabel,
+   class:'maira-preview-node '+(n.kind==='START'?'preview-start':n.kind==='END'?'preview-end':'')+
+    (mairaGraphReviewMarkers.value.has(n.id)?' preview-review-marked':'')+
+    (n.kind==='HUMAN_DECISION'?' preview-decision-node':''),
+   data:{label:(mairaGraphReviewMarkers.value.has(n.id)?'❓ ':'')+
+      (fullLabel.length>84?fullLabel.slice(0,81)+'…':fullLabel),
     original_role:n.role,source_step:citation?.source_step}}
  })
  const ids=new Set(graphNodes.map(n=>n.id))
@@ -1347,11 +1381,32 @@ function simulateDraft(){
               <button type="button" class="primary-button" :disabled="!mairaQuestionsDone" @click="applyMairaProposal">Abrir workflow en diseñador</button>
             </div>
             <div class="maira-workflow-visual-canvas">
-              <VueFlow :key="'maira-map-'+mairaDiagramVersion" id="maira-generated-diagram"
-                       :nodes="mairaDiagram.nodes" :edges="mairaDiagram.edges" :fit-view-on-init="true"
-                       :nodes-draggable="false" :nodes-connectable="false" :edges-updatable="false"
-                       :min-zoom="0.22" :max-zoom="1.7" :elements-selectable="true"/>
+              <div v-if="mairaGraphReviewQuestions.length" class="maira-flow-questions" aria-label="Preguntas señaladas en el diagrama">
+                <div class="maira-flow-questions-title">
+                  <strong>Preguntas pendientes en este proceso ({{mairaGraphReviewQuestions.length}})</strong>
+                  <span>No son decisiones de ejecución hasta validar sus condiciones y ramas.</span>
+                </div>
+                <div class="maira-flow-questions-items">
+                  <div v-for="(item,i) in mairaGraphReviewQuestions" :key="'graph-question-'+i" class="maira-flow-question">
+                    <span class="maira-flow-question-icon">?</span>
+                    <div><strong>{{item.text}}</strong>
+                      <small>{{item.step?'Vinculada al paso '+item.step:'Consulta general del proceso · no vinculada automáticamente a una etapa'}}</small>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="maira-workflow-map-body">
+                <VueFlow :key="'maira-map-'+mairaDiagramVersion" id="maira-generated-diagram"
+                         :nodes="mairaDiagram.nodes" :edges="mairaDiagram.edges" :fit-view-on-init="true"
+                         :nodes-draggable="false" :nodes-connectable="false" :edges-updatable="false"
+                         :min-zoom="0.22" :max-zoom="1.7" :elements-selectable="true"/>
+              </div>
             </div>
+            <p v-if="mairaGraphReviewQuestions.length" class="maira-review-graphic-disclaimer">
+              MAIRA identificó {{mairaGraphReviewQuestions.length}} pregunta(s) de revisión y
+              {{mairaVerifiedBranchCount}} decisión(es) con más de una salida en el workflow propuesto.
+              Una pregunta pendiente no crea por sí sola una bifurcación.
+            </p>
             <p class="maira-workflow-visual-note">Las conexiones representan el workflow propuesto por MAIRA. Debes confirmar las flechas, responsables y condiciones con el documento original antes de publicar.</p>
           </section>
         <input ref="fileInput" type="file" accept="application/json,.json" class="hidden-input" @change="importDraft" />
@@ -1384,6 +1439,11 @@ function simulateDraft(){
           </div>
           <div class="diagram-panel">
             <div class="panel-title"><strong>Diagrama del proceso</strong><span class="flow-count">{{activeCount}} etapas activas</span></div>
+            <div v-if="sourceReviewRequired&&studioReviewQuestions.length" class="maira-studio-questions">
+              <strong>Preguntas pendientes del documento · {{studioReviewQuestions.length}}</strong>
+              <p v-for="(question,index) in studioReviewQuestions" :key="index"><span>?</span> {{question}}</p>
+              <small>Las preguntas de aclaración se registran por separado de los nodos de ejecución. No se han creado ramas ni tareas adicionales sin evidencia documental.</small>
+            </div>
             <div class="canvas-area">
               <VueFlow :key="'studio-'+studioDiagramVersion" v-model:nodes="nodes" v-model:edges="edges" :fit-view-on-init="true" :nodes-connectable="true" :nodes-draggable="true" :elements-selectable="true" :min-zoom="0.2" :max-zoom="2" @connect="onConnect" @node-click="({node}) => {selectedId=node.id;selectedEdgeId=null}" @edge-click="({edge}) => {selectedEdgeId=edge.id;selectedId=null}" @node-drag-stop="onNodeDragStop" @pane-click="() => {selectedId=null;selectedEdgeId=null}" />
             </div>
