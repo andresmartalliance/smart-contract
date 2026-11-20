@@ -586,3 +586,5 @@ nav button.active .nav-icon{stroke:#236ed3;transform:scale(1.03)}
 .party-record-presentation{display:grid;gap:14px;border-top:1px solid #d9e4f1;padding-top:18px}
 .party-record-presentation h4{font-size:16px;margin:5px 0;color:#244a71}
 @media(max-width:800px){.party-directory-summary,.party-record-asset{align-items:flex-start;flex-direction:column}.party-record-detail{padding:15px}.party-directory-summary{padding:15px}.party-directory-summary>button,.party-record-asset button{width:100%}}
+
+.linked-draft-caption{color:#307a6a!important;font-weight:700}

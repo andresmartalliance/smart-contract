@@ -415,10 +415,10 @@ const savedSourceOnly=computed(()=>partyPreview.value?.workflow.metadata?.source
 const mairaApplyConfirm=ref(false)
 const loginGoogleMount=ref<HTMLElement|null>(null)
 const loginEmail=ref('')
-type PortalSession={email:string;institutions:{id:string;roles:string[]}[];invited_cases:number;can_setup:boolean;pilot:boolean}
+type PortalSession={email:string;institutions:{id:string;roles:string[]}[];invited_cases:number;can_setup:boolean;pilot:boolean;original_flow_preload_enabled?:boolean}
 type CaseSummary={id:string;title:string;state:string;workflow_version_id:string|null;party_id:string|null;party_name:string|null;party_email?:string|null;invited:boolean;total:number;completed:number}
 type PartyProcessIndex={id:string;name:string;status:string;kind:'PROPOSAL'|'PRESENTATION'|'DESIGN';activity_count:number;created_at:string;source?:string|null}
-type PartyRecord={id:string;name:string;kind:'NATURAL'|'JURIDICA';email:string|null;case_count:number;process_count?:number;latest_process?:PartyProcessIndex|null}
+type PartyRecord={id:string;name:string;kind:'NATURAL'|'JURIDICA';email:string|null;case_count:number;process_count?:number;has_original_first_flow?:boolean;latest_process?:PartyProcessIndex|null}
 type PartyPortfolio={party:PartyRecord;cases:CaseSummary[];processes:PartyProcessIndex[]}
 type ContractTaskView={id:string;node_id:string;label:string;kind:string;side:string;state:string;fields:WorkField[];answer?:Record<string,unknown>;note?:string}
 type CaseView={case:CaseSummary;side:'CONTRATANTE'|'CONTRATISTA';tasks:ContractTaskView[]}
@@ -438,6 +438,8 @@ const showNewPartyForm=ref(false)
 const expandedPartyId=ref('')
 const partyPortfolio=ref<PartyPortfolio|null>(null)
 const partyPortfolioBusy=ref(false)
+const editingLinkedDraft=ref<{partyId:string;draftId:string;partyName:string}|null>(null)
+const draftSaving=ref(false)
 const partyPresentationPreview=ref<SharedPresentationDetail|null>(null)
 const partyPreviewSide=ref<'CONTRATANTE'|'CONTRATISTA'>('CONTRATANTE')
 function processTypeLabel(p:PartyProcessIndex){
@@ -522,18 +524,22 @@ async function openPartyExistingProcess(party:PartyRecord,item:PartyProcessIndex
    const record=await portalRequest<{workflow:Workflow}>(
      '/parties/'+party.id+'/workflow-drafts/'+item.id)
    loadDefinition(record.workflow)
-   studioTab.value='pantallas';current.value='flujos'
-   flowMessage.value='Borrador guardado de '+party.name+' abierto desde su ficha. No se ha publicado.'
+   editingLinkedDraft.value={partyId:party.id,draftId:item.id,partyName:party.name}
+   studioTab.value='editor';current.value='flujos'
+   flowMessage.value='Diagrama de '+party.name+' abierto para edición. Usa «Guardar cambios» para conservar tu trabajo.'
  }catch(e){portalError.value=e instanceof Error?e.message:'No se pudo abrir el proceso guardado'}
 }
 async function saveCurrentWorkflowForParty(party:PartyRecord){
  portalPartySaving.value=true;portalError.value='';portalMessage.value=''
  try{
-  const saved=await portalRequest<{name:string}>('/parties/'+party.id+'/workflow-drafts',
-    'POST',{workflow:definition()})
+  const linked=editingLinkedDraft.value?.partyId===party.id?editingLinkedDraft.value:null
+  const saved=await portalRequest<{id:string;name:string}>(
+    '/parties/'+party.id+'/workflow-drafts'+(linked?'/'+linked.draftId:''),
+    linked?'PATCH':'POST',{workflow:definition()})
+  editingLinkedDraft.value={partyId:party.id,draftId:saved.id,partyName:party.name}
   await refreshPortal()
   await togglePartyRecord(party,true)
-  portalMessage.value='«'+saved.name+'» quedó guardado en '+party.name+' como borrador. No se creó un contrato ni se envió al prestador.'
+  portalMessage.value='«'+saved.name+'» está guardado en '+party.name+' como borrador editable. No se creó un contrato.'
  }catch(e){portalError.value=e instanceof Error?e.message:'No se pudo guardar el flujo en este registro'}
  finally{portalPartySaving.value=false}
 }
@@ -542,6 +548,40 @@ async function openPartyExistingCase(id:string){
  if(activeCase.value?.case.id===id){
    current.value='contrataciones'
    portalMessage.value='Expediente «'+activeCase.value.case.title+'» abierto desde Personas y empresas.'
+ }
+}
+
+
+async function saveLinkedWorkflowDraft(){
+ const linked=editingLinkedDraft.value
+ if(!linked)return
+ draftSaving.value=true
+ try{
+  const result=await portalRequest<{id:string;name:string}>(
+    '/parties/'+linked.partyId+'/workflow-drafts/'+linked.draftId,
+    'PATCH',{workflow:definition()})
+  flowMessage.value='Cambios guardados en '+linked.partyName+': '+result.name+
+    '. El proceso sigue en borrador; no se ha activado ningún contrato.'
+  await refreshPortal()
+ }catch(e){flowMessage.value='No se pudieron guardar los cambios: '+(e instanceof Error?e.message:'error de conexión')}
+ finally{draftSaving.value=false}
+}
+
+async function preloadFirstOriginalWorkflow(){
+ if(!portalSession.value?.original_flow_preload_enabled)return
+ const hospital=partyRecords.value.find(p=>p.name.trim().toLocaleLowerCase('es-CO')==='hospital smart')
+ if(!hospital||hospital.has_original_first_flow)return
+ // The exact source definition is used, not a potentially changed local draft.
+ const workflow=buildOriginalContractFlow()
+ const result=await portalRequest<{id:string;already_exists:boolean}>(
+   '/parties/'+hospital.id+'/workflow-drafts','POST',
+   {workflow,initialize_original:true})
+ partyRecords.value=await portalRequest<PartyRecord[]>('/parties')
+ if(expandedPartyId.value===hospital.id){
+  partyPortfolio.value=await portalRequest<PartyPortfolio>('/parties/'+hospital.id+'/portfolio')
+ }
+ if(!result.already_exists){
+  portalMessage.value='El diagrama original de 23 actividades quedó precargado en Hospital Smart como borrador editable.'
  }
 }
 
@@ -568,6 +608,7 @@ async function refreshPortal(){
   if(hasInstitution.value){
    templates.value=await portalRequest<TemplateOption[]>('/workflows')
    partyRecords.value=await portalRequest<PartyRecord[]>('/parties')
+   await preloadFirstOriginalWorkflow()
    internalCases.value=await portalRequest<CaseSummary[]>('/cases')
   }else{templates.value=[];partyRecords.value=[];internalCases.value=[]}
  }catch(e){portalError.value=e instanceof Error?e.message:'No se pudo consultar la plataforma'}
@@ -997,6 +1038,7 @@ function loadOriginalContractFlowDraft(){
  flowMessage.value='Flujo original del PDF cargado: 23 actividades, 25 nodos y 24 conexiones. Puedes revisar ambos portales sin publicar.'
 }
 function newWorkflow(){
+ editingLinkedDraft.value=null
  workflowMetadata.value={source:'smart-contract-workflow-studio',draft:true};resetSourceReview()
   workflowName.value='Nuevo proceso de contratación';workflowKey.value='NUEVO_PROCESO';modalityKey.value=''
   nodes.value=[nodeInfo('inicio','START','Inicio',230,60,null,'ORG_REQUIRED'),nodeInfo('fin','END','Finalización',230,270,null,'ORG_REQUIRED')]
@@ -1242,6 +1284,7 @@ function exportDraft(){
   flowMessage.value='Borrador exportado. No se ha guardado en el servidor.'
 }
 function loadDefinition(parsed:Partial<Workflow>){
+ editingLinkedDraft.value=null
  if(!parsed.key||!parsed.name||!Array.isArray(parsed.nodes)||!Array.isArray(parsed.edges)||parsed.nodes.length>2000||parsed.edges.length>6000)throw new Error('El archivo no contiene un workflow válido.')
  const validKinds=new Set<Kind>(['START','FORM','DOCUMENT_REQUEST','DOCUMENT_REVIEW','VALIDATION','APPROVAL','NEGOTIATION','CALCULATION','DOCUMENT_GENERATION','SIGNATURE','NOTIFICATION','INTEGRATION','TIMER','JOIN','HUMAN_DECISION','END'])
  const validPolicies=new Set<Policy>(['LEGAL_LOCKED','ORG_REQUIRED','CONDITIONAL','OPTIONAL'])
@@ -1466,7 +1509,7 @@ function simulateDraft(){
         <div class="top-meta"><span class="top-product">Smart Contract · Primer flujo</span><span class="context-pill">Development</span><button type="button" class="logout-button" @click="logoutGoogle" title="Cerrar sesión Google">Salir</button></div>
       </header>
       <section v-if="current==='flujos'&&hasInstitution" class="stack">
-        <div class="heading"><div><span class="eyebrow">Diseño inteligente de procesos</span><h2>Workflow Studio</h2><p>Diseña, conecta y valida etapas configurables. Todos los cambios siguen siendo un borrador local.</p></div><div class="header-actions"><button class="primary-button" @click="studioTab='editor';openMairaDocumentImport()">✧ Crear con MAIRA</button><button class="ghost-button" @click="loadOriginalContractFlowDraft">Flujo original · 23 actividades</button><button class="ghost-button" @click="newWorkflow">＋ Nuevo flujo</button><button class="ghost-button" @click="fileInput?.click()">↥ Importar</button><button class="primary-button" @click="exportDraft">↧ Exportar JSON</button><button class="ghost-button" :disabled="portalBusy" @click="publishPilot">Publicar plantilla</button></div></div>
+        <div class="heading"><div><span class="eyebrow">Diseño inteligente de procesos</span><h2>Workflow Studio</h2><p>{{editingLinkedDraft?'Editando un diagrama guardado en '+editingLinkedDraft.partyName+'. Los cambios se conservan al guardar.':'Diseña y revisa un flujo antes de asociarlo o publicarlo.'}}</p></div><div class="header-actions"><button v-if="editingLinkedDraft" class="primary-button" :disabled="draftSaving" @click="saveLinkedWorkflowDraft">{{draftSaving?'Guardando…':'Guardar cambios · '+editingLinkedDraft.partyName}}</button><button class="primary-button" @click="studioTab='editor';openMairaDocumentImport()">✧ Crear con MAIRA</button><button class="ghost-button" @click="loadOriginalContractFlowDraft">Flujo original · 23 actividades</button><button class="ghost-button" @click="newWorkflow">＋ Nuevo flujo</button><button class="ghost-button" @click="fileInput?.click()">↥ Importar</button><button class="primary-button" @click="exportDraft">↧ Exportar JSON</button><button class="ghost-button" :disabled="portalBusy" @click="publishPilot">Publicar plantilla</button></div></div>
 
         <div class="workflow-mode-select" role="group" aria-label="Modo de visualización del proceso">
           <button type="button" :class="{active:studioTab==='pantallas'}" @click="studioTab='pantallas'">Vista operativa</button>
@@ -1475,7 +1518,8 @@ function simulateDraft(){
         <div class="workflow-source-banner">
           <div><span class="eyebrow">PROCESO SELECCIONADO</span><strong>{{workflowName}}</strong>
             <small v-if="isOriginalFirstFlow">Documento original de 2 páginas · Roles y campos pendientes de confirmar</small>
-            <small v-else>Borrador local · La vista muestra exactamente la definición seleccionada</small></div>
+            <small v-else>Borrador local · La vista muestra exactamente la definición seleccionada</small>
+            <small v-if="editingLinkedDraft" class="linked-draft-caption">Asociado a {{editingLinkedDraft.partyName}} · Borrador editable</small></div>
           <div class="workflow-source-actions">
             <button type="button" class="ghost-button" @click="loadOriginalContractFlowDraft">Abrir flujo original</button>
             <button v-if="archivedPilotDraft" type="button" class="ghost-button" @click="openArchivedPilotDraft">Ver ejercicio anterior</button>
@@ -1901,7 +1945,7 @@ function simulateDraft(){
                     <div><strong>{{process.name}}</strong>
                       <small>{{processTypeLabel(process)}} · {{process.activity_count}} actividades · {{process.status==='PREVIEW_SHARED'?'Compartida en modo lectura':'No publicado'}}</small>
                     </div>
-                    <button type="button" class="ghost-button" @click="openPartyExistingProcess(party,process)">Abrir flujo</button>
+                    <button type="button" class="ghost-button" @click="openPartyExistingProcess(party,process)">{{process.kind==='DESIGN'?'Editar diagrama':process.kind==='PROPOSAL'?'Revisar propuesta':'Ver proceso'}}</button>
                   </div>
                 </div>
                 <div class="party-record-section">
