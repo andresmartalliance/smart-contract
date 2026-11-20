@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, ref, shallowRef, watch } from 'vue'
 import { VueFlow, Position, type Node, type Edge, type Connection } from '@vue-flow/core'
 import ProviderPortal from './ProviderPortal.vue'
 import WorkflowPresentation from './WorkflowPresentation.vue'
+import CompactWorkflowDiagram from './CompactWorkflowDiagram.vue'
 import { buildOriginalContractFlow } from './originalContractFlow'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
@@ -1036,9 +1037,10 @@ const directedChain=computed(()=>{
  return ordered.every((n,i)=>i===ordered.length-1||
    edges.value.some(e=>e.source===n.id&&e.target===ordered[i+1].id))
 })
-function selectChainConnection(source:string,target:string){
- const edge=edges.value.find(e=>e.source===source&&e.target===target)
- if(edge){selectedId.value=null;selectedEdgeId.value=edge.id}
+function selectCompactEdge(edgeId:string){
+ if(!edges.value.some(e=>e.id===edgeId))return
+ selectedId.value=null
+ selectedEdgeId.value=edgeId
 }
 
 const guidedPage=ref(0)
@@ -1890,49 +1892,20 @@ function simulateDraft(){
             </div>
             <div v-else class="canvas-area studio-canvas-readable">
               <div class="studio-map-tools studio-map-switch">
+                <strong>{{directedChain&&!freeformMode?'Diagrama completo · '+guidedOrderedNodes.length+' nodos':'Editor libre de nodos'}}</strong>
+                <span>{{directedChain&&!freeformMode
+                  ?'Selecciona una tarjeta o una flecha para editar sus propiedades.'
+                  :'Arrastra para ajustar posiciones y crea conexiones desde los puntos de cada nodo.'}}</span>
                 <button v-if="directedChain" type="button" @click="freeformMode=!freeformMode">
-                  {{freeformMode?'Ver conexiones continuas':'Mover nodos libremente'}}
+                  {{freeformMode?'Volver al diagrama':'Diseño libre'}}
                 </button>
                 <button v-if="freeformMode&&workflowKey==='SMART_CICLO_CONTRATACION_V2'"
-                  type="button" @click="organizeOriginalCanvas">Ordenar posiciones</button>
-                <span>{{directedChain&&!freeformMode
-                  ?'Las líneas representan exactamente las dependencias del workflow; selecciona una actividad o conexión para editarla.'
-                  :'Lienzo libre para mover nodos y crear bifurcaciones.'}}</span>
+                  type="button" @click="organizeOriginalCanvas">Ordenar</button>
               </div>
-              <div v-if="directedChain&&!freeformMode" class="connected-diagram"
-                role="region" aria-label="Diagrama completo con conexiones continuas">
-                <div class="connected-diagram-list">
-                  <template v-for="(node,i) in guidedOrderedNodes" :key="node.id">
-                    <button type="button"
-                      :class="['connected-diagram-node',{
-                        active:selectedId===node.id,
-                        endpoint:(node.data as WorkNode).kind==='START'||(node.data as WorkNode).kind==='END'
-                      }]"
-                      :aria-pressed="selectedId===node.id"
-                      @click="selectGuidedStage(node.id)">
-                      <span v-if="(node.data as WorkNode).config?.source_step" class="connected-diagram-count">
-                        {{(node.data as WorkNode).config.source_step}}
-                      </span>
-                      <span v-else class="connected-diagram-count">{{i===0?'INICIO':'FIN'}}</span>
-                      <span class="connected-diagram-label">
-                        <strong>{{(node.data as WorkNode).label}}</strong>
-                        <small v-if="(node.data as WorkNode).kind!=='START'&&(node.data as WorkNode).kind!=='END'">
-                          {{(node.data as WorkNode).role||'Por definir'}} · {{guidedSide(node)}}
-                        </small>
-                      </span>
-                      <span class="connected-diagram-edit">Editar</span>
-                    </button>
-                    <div v-if="i<guidedOrderedNodes.length-1" class="connected-diagram-link">
-                      <button type="button" class="connected-diagram-edge"
-                        :class="{active:selectedEdgeId===edges.find(e=>e.source===node.id&&e.target===guidedOrderedNodes[i+1].id)?.id}"
-                        :aria-label="'Editar conexión entre '+String((node.data as WorkNode).label)+' y '+String((guidedOrderedNodes[i+1].data as WorkNode).label)"
-                        @click="selectChainConnection(node.id,guidedOrderedNodes[i+1].id)">
-                        <span class="connected-diagram-edge-caption">Editar conexión</span>
-                      </button>
-                    </div>
-                  </template>
-                </div>
-              </div>
+              <CompactWorkflowDiagram v-if="directedChain&&!freeformMode"
+                :ordered-nodes="guidedOrderedNodes" :edges="edges"
+                :selected-node-id="selectedId" :selected-edge-id="selectedEdgeId"
+                @select-node="selectGuidedStage" @select-edge="selectCompactEdge"/>
               <VueFlow v-else :key="'studio-'+studioDiagramVersion" v-model:nodes="nodes"
                 v-model:edges="edges" :fit-view-on-init="false"
                 :default-viewport="{x:90,y:35,zoom:0.9}"

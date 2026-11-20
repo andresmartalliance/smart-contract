@@ -50,5 +50,44 @@ console.log('Original PDF verified: 23 numbered tasks, 25 nodes, 24 edges, 21/2 
 assert.ok(app.includes('const directedChain=computed('))
 assert.ok(app.includes('edges.value.length!==ordered.length-1'))
 assert.ok(app.includes('v-if="directedChain&&!freeformMode"'))
-assert.ok(app.includes('connected-diagram-link'))
-assert.ok(app.includes('selectChainConnection(node.id,guidedOrderedNodes[i+1].id)'))
+assert.ok(app.includes('<CompactWorkflowDiagram v-if="directedChain&&!freeformMode"'))
+assert.ok(app.includes('@select-edge="selectCompactEdge"'))
+assert.ok(!app.includes('Editar conexión</span>'),'remove repeated edge editing pills')
+
+
+// Geometry regression: compact snake positions; every route touches two actual nodes.
+const compactSource=fs.readFileSync(new URL('../src/compactFlowLayout.ts',import.meta.url),'utf8')
+const compactJS=ts.transpileModule(compactSource,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText
+const compactExports={exports:{}}
+vm.runInNewContext(compactJS,{exports:compactExports.exports,module:compactExports},{timeout:5000})
+const {buildCompactLayout,COMPACT_CARD_WIDTH,COMPACT_CARD_HEIGHT,COMPACT_GAP_X,COMPACT_GAP_Y}=compactExports.exports
+const ids=flow.nodes.map(n=>n.id)
+const edges=flow.edges.map((e,i)=>({id:'edge_'+i,source:e.source,target:e.target}))
+const diagram=buildCompactLayout(ids,edges)
+assert.equal(diagram.points.length,25)
+assert.equal(diagram.segments.length,24)
+assert.equal(diagram.width,971)
+assert.ok(diagram.height<1200,'compact view must fit within ~7 rows')
+assert.equal(diagram.points[0].row,0)
+assert.equal(diagram.points[3].col,3)
+assert.equal(diagram.points[4].col,3,'snake must turn vertically at row boundary')
+assert.equal(diagram.points[7].col,0)
+for(const [i,edge] of diagram.segments.entries()){
+ const first=diagram.points[i],next=diagram.points[i+1]
+ assert.equal(edge.source,first.id)
+ assert.equal(edge.target,next.id)
+ assert.equal(edge.id,'edge_'+i)
+ assert.equal(edge.orientation,first.row===next.row?'horizontal':'vertical')
+ if(first.row===next.row){
+   assert.equal(Math.abs(edge.to.x-edge.from.x),COMPACT_GAP_X)
+   assert.equal(edge.from.y,first.y+COMPACT_CARD_HEIGHT/2)
+   assert.equal(edge.to.y,next.y+COMPACT_CARD_HEIGHT/2)
+ }else{
+   assert.equal(edge.from.y,first.y+COMPACT_CARD_HEIGHT)
+   assert.equal(edge.to.y,next.y)
+   assert.equal(edge.to.y-edge.from.y,COMPACT_GAP_Y)
+   assert.equal(first.col,next.col)
+ }
+}
+assert.ok(fs.readFileSync(new URL('../src/CompactWorkflowDiagram.vue',import.meta.url),'utf8').includes('compact-flow-arrows'))
+console.log('Compact flow verified: 25 readable cards, 24 actual continuous routes, 7 rows, no intersections.')
