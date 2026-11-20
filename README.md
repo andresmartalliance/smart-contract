@@ -1,5 +1,16 @@
 # Smart Contract + MAIRA
 
+## V6.6.0 — Famisanar, primer caso de red prestadora y portal separado para IPS
+
+**Cierre del ejercicio anterior:** el prototipo de contratación de aspirantes y el ejemplo de doble portal pasan a referencia histórica. Se retiró el botón de ejemplo y ya no es el flujo de entrada. No se eliminaron expedientes ni se activaron contratos.
+
+**Primer caso Famisanar (borrador):** proviene de `Libro1 2.xlsx / Hoja1`, celdas A3, A4, A5, A6, A8, A11 y A12. Incluye diez nodos (inicio, siete actividades, salida negativa y continuación). La única finalización negativa explícita es la de prefactibilidad en A6; el campo booleano y las conexiones son **propuestos, no autorizados**. Los roles quedan por revisar, sin modalidades fijas. La lista de aclaraciones está disponible dentro de Workflow Studio y se registra en metadata del borrador, sin producir automatizaciones.
+
+**Frontend de la IPS:** ruta `/prestador` en el dominio existente de Railway, con interfaz separada, autenticación Google y acceso únicamente a `my-cases`, detalle y tareas autorizadas por la API actual. Muestra avance, solicitudes, estados y registro de respuestas con validación. No habilita firma ni archivos; no sustituye los controles del backend. El enlace de invitación se actualizó a esa ruta. No hay nuevo entorno ni servicio paralelo.
+
+**Verificación:** GitHub Actions run 44689687801 SUCCESS (backend tests y frontend build) y Railway Development API, Web y PostgreSQL SUCCESS. La interfaz necesita prueba visual autenticada desde dos cuentas. No existe plantilla Famisanar publicada ni expediente real iniciado.
+
+**Fuentes y límites:** ver `docs/FAMISANAR_CASO_01.md` y `docs/ARCHIVO_EJERCICIO_ANTERIOR.md`. Los pasos fuera del primer caso, incluido proveedores administrativos, no se incorporaron todavía.
 ## V6.5.9 — Vista documental sin Gemini ante indisponibilidad
 
 La API ofrece una alternativa explícita y autenticada: `POST /api/v1/maira/workflow-import/source-preview`. Para PDF con texto seleccionable, reconstruye posiciones de cajas numeradas a partir de la capa de texto con `pypdf`, extrayendo etiquetas y roles por proximidad, sin ejecutar ni llamar a un modelo. Ordena las actividades por número y crea dependencias **provisionales**, sin atribuir lectura de flechas a la máquina. Mantiene la evidencia textual y la página; la revisión humana es obligatoria. No se activa contrato ni se guarda el PDF. El usuario elige `Extraer pasos sin Gemini` en el mismo formulario si la API de Gemini no responde. No añade ambientes ni dependencias.

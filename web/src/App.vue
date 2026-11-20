@@ -259,6 +259,27 @@ function workflowWithMairaDialogue(p:MairaProposal):Workflow{
  return {...wf,metadata:{...wf.metadata,maira_dialogue:mairaDialogue()}}
 }
 const studioMairaDialogue=computed(()=>workflowMetadata.value.maira_dialogue as MairaDialogue|undefined)
+
+const famisanarScopeChoice=ref<'KEEP_ORIGINAL'|'ADAPT_TO_ENTITY'|''>('')
+const famisanarClarificationAnswers=ref<Record<string,string>>({})
+const isFamisanarCase=computed(()=>workflowMetadata.value.source==='famisanar-documental')
+function saveFamisanarClarifications(){
+ if(!isFamisanarCase.value)return
+ if(!famisanarScopeChoice.value){
+  flowMessage.value='Define primero si conservarás o adaptarás el procedimiento fuente de Famisanar.';return
+ }
+ const questions=studioReviewQuestions.value
+ const answers=questions.map(question=>({question,answer:(famisanarClarificationAnswers.value[question]||'').trim()}))
+ if(answers.some(item=>item.answer.length<4)){
+  flowMessage.value='Responde todas las preguntas. Si el dato no está confirmado, indícalo explícitamente como pendiente.';return
+ }
+ const dialogue:MairaDialogue={scope_decision:famisanarScopeChoice.value,completed:true,
+  questions_total:answers.length+1,answers}
+ workflowMetadata.value={...workflowMetadata.value,maira_dialogue:dialogue,review_confirmed:false}
+ resetSourceReview()
+ flowMessage.value='Respuestas documentadas en el borrador local. No se cambiaron las tareas ni las condiciones. Revisa la estructura antes de publicar.'
+}
+
 const studioReviewQuestions=computed(()=>{
  const original=workflowMetadata.value.maira_review_questions
  const raw=Array.isArray(original)?original.filter((q):q is string=>typeof q==='string'&&q.trim().length>0):[]
@@ -854,6 +875,7 @@ function nodeInfo(id:string, kind:Kind, label:string, x:number,y:number,role:str
   return {id,type:kind==='START'?'input':kind==='END'?'output':'default',position:{x,y},data:{label,kind,role,policy,enabled:true,config:{execution_mode:'MANUAL',fields:[]}},class:kind==='START'?'node-start':kind==='END'?'node-end':'node-'+kind.toLowerCase()}
 }
 function loadFamisanarCaseDraft(){
+ famisanarScopeChoice.value='';famisanarClarificationAnswers.value={}
  const draft=buildFamisanarFirstCase()
  loadDefinition(draft)
  selectedId.value='fam_a6';selectedEdgeId.value=null
@@ -1459,6 +1481,27 @@ function simulateDraft(){
         <section v-if="sourceReviewRequired" class="maira-review-gate">
           <strong>Revisión documental obligatoria</strong>
           <p>El proceso conserva los datos del documento, pero no verifica automáticamente los responsables ni las flechas. Comprueba cada etapa en el diseñador antes de confirmar.</p>
+          <div v-if="isFamisanarCase" class="famisanar-review-form">
+            <div class="famisanar-review-heading"><strong>Definiciones pendientes · Famisanar</strong><span>Fuente: Hoja1 · A3–A12</span></div>
+            <p>MAIRA necesita estas definiciones para configurar el caso. Las respuestas quedan en el borrador, pero no ejecutan cambios ni sustituyen la aprobación de Famisanar.</p>
+            <label>¿Qué alcance tendrá el procedimiento?
+              <select v-model="famisanarScopeChoice">
+                <option value="">Seleccionar</option>
+                <option value="KEEP_ORIGINAL">Conservar el procedimiento fuente</option>
+                <option value="ADAPT_TO_ENTITY">Adaptarlo para una configuración específica</option>
+              </select>
+            </label>
+            <label v-for="(question,index) in studioReviewQuestions" :key="index">
+              <span>{{index+1}}. {{question}}</span>
+              <textarea :value="famisanarClarificationAnswers[question]||''" rows="2" maxlength="650"
+                 placeholder="Respuesta o información por confirmar"
+                 @input="famisanarClarificationAnswers={...famisanarClarificationAnswers,[question]:($event.target as HTMLTextAreaElement).value}"></textarea>
+            </label>
+            <button class="ghost-button" type="button" @click="saveFamisanarClarifications">
+              Registrar aclaraciones del caso
+            </button>
+            <span v-if="studioMairaDialogue?.completed" class="famisanar-review-complete">Aclaraciones registradas para este borrador. Debes verificar las tareas y los roles antes de cualquier publicación.</span>
+          </div>
           <p v-if="studioMairaDialogue?.completed" class="maira-dialogue-record">MAIRA registró {{studioMairaDialogue.questions_total}} decisiones. Alcance: {{studioMairaDialogue.scope_decision==='ADAPT_TO_ENTITY'?'Adaptar a la entidad':'Conservar el proceso original'}}. Las respuestas no modifican automáticamente el workflow.</p>
           <label><input type="checkbox" v-model="reviewRolesConfirmed" /> Revisé responsables, contratante/contratista y pertinencia para esta persona o empresa.</label>
           <label><input type="checkbox" v-model="reviewRoutesConfirmed" /> Revisé las dependencias, secuencia y condiciones contra el diagrama original.</label>
