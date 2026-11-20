@@ -170,9 +170,18 @@ def workflows(email:str=Depends(verify_google_email),db:Session=Depends(get_sess
         WorkflowVersion.status=="PUBLISHED").order_by(WorkflowVersion.created_at.desc())).all()
     return [{"id":w.id,"name":w.definition.get("name"),"key":w.template_key,"version":w.version} for w in rows]
 
+def _requires_source_review(wf: WorkflowDefinition) -> bool:
+    source_nodes = any(bool(n.config.get("source_step")) for n in wf.nodes)
+    return (wf.metadata.get("source") == "maira-document-import" or source_nodes) and (
+        wf.metadata.get("review_confirmed") is not True
+    )
+
+
 @router.post("/workflows/publish",status_code=201)
 def publish(input:PublishInput,email:str=Depends(verify_google_email),db:Session=Depends(get_session)):
     m=_configurator(db,email);wf=input.workflow
+    if _requires_source_review(wf):
+        raise HTTPException(422,"Antes de publicar, revisa responsables y conexiones del documento y confirma la revisión en Workflow Studio.")
     try: topological_order(wf)
     except WorkflowInvalid as exc: raise HTTPException(422,{"problems":exc.problems})
     # Do not silently execute conditional branches, external APIs, or signatures as valid legal acts.

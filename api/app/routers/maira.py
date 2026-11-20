@@ -809,6 +809,11 @@ async def local_pdf_source_preview(
         })
     except ValueError as error:
         raise HTTPException(422, str(error)[:460]) from None
+    proposal.workflow.metadata.update({
+        "source_method": "PDF_TEXT_ONLY", "requires_review": True,
+        "roles_verified": False, "dependencies_verified": False,
+        "party_scope_verified": False,
+    })
     result = _document_result(proposal, name, party_kind)
     result["analysis_method"] = "PDF_TEXT_ONLY"
     result["notice"] = ("Vista documental de revisión, generada sin Gemini. "

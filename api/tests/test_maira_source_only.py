@@ -61,6 +61,9 @@ def test_source_only_route_auth_no_gemini_calls(testing, monkeypatch):
         assert payload["analysis_method"] == "PDF_TEXT_ONLY"
         assert payload["mapped_steps"] == 2
         assert payload["status"] == "DRAFT_FOR_HUMAN_REVIEW"
+        assert payload["workflow"]["metadata"]["source_method"] == "PDF_TEXT_ONLY"
+        assert payload["workflow"]["metadata"]["roles_verified"] is False
+        assert payload["workflow"]["metadata"]["dependencies_verified"] is False
         assert payload["workflow"]["metadata"]["draft"] is True
         assert payload["workflow"]["metadata"]["inferred_dependency_count"] == 1
         assert any("sin Gemini" in note for note in payload["observations"])
@@ -86,3 +89,14 @@ def test_source_only_requires_google_auth(testing, monkeypatch):
     response = client.post("/api/v1/maira/workflow-import/source-preview",
                            files={"file": ("flow.pdf", b"%PDF-1.4 sample", "application/pdf")})
     assert response.status_code == 503
+
+def test_document_sources_cannot_publish_without_review():
+    from app.routers.portals import _requires_source_review
+    from app.workflow.schema import WorkflowDefinition
+    from tests.test_maira_import import valid_proposal
+    raw = valid_proposal()["workflow"]
+    raw["nodes"][1].setdefault("config", {})["source_step"] = "2.1"
+    workflow = WorkflowDefinition.model_validate(raw)
+    assert _requires_source_review(workflow)
+    workflow.metadata["review_confirmed"] = True
+    assert not _requires_source_review(workflow)
