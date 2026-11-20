@@ -557,3 +557,32 @@ nav button.active .nav-icon{stroke:#236ed3;transform:scale(1.03)}
 .workflow-source-banner small{font-size:11px;color:#7c91a5;line-height:1.5}
 .workflow-source-actions{display:flex;flex-wrap:wrap;gap:9px}
 .workflow-source-actions button{white-space:normal}
+
+/* Party register: show existing resources first, new actions only on demand. */
+.party-directory-panel{display:grid;gap:14px}
+.party-directory-card{border:1px solid #dce7f2;background:#fff;border-radius:15px;overflow:hidden}
+.party-directory-summary{padding:19px 21px;display:flex;align-items:center;justify-content:space-between;gap:22px}
+.party-directory-identity{min-width:0;display:grid;gap:7px}
+.party-directory-identity>strong{color:#234b70;font-size:17px;line-height:1.3}
+.party-directory-identity>small{font-size:12px;color:#8498ae;overflow-wrap:anywhere;line-height:1.5}
+.party-directory-stats{display:flex;gap:8px;flex-wrap:wrap;margin:3px 0}
+.party-directory-stats span{border-radius:20px;padding:5px 10px;font-size:11px;font-weight:650;background:#f1f6fc;color:#467192}
+.party-directory-latest{margin:0;font-size:11px;line-height:1.55;color:#71899f}
+.party-directory-latest b{color:#4e7191}
+.party-directory-summary>button{flex-shrink:0}
+.party-record-detail{border-top:1px solid #e5edf5;background:#fbfdff;padding:18px 21px;display:grid;gap:20px}
+.party-record-section{display:grid;gap:10px}
+.party-record-section>h4{font-size:13px;color:#295479;margin:0;display:flex;align-items:center;gap:8px}
+.party-record-section>h4 span{font-size:11px;color:#507f9e;padding:3px 8px;border-radius:10px;background:#e8f2fa}
+.party-record-empty{background:#fff;border:1px dashed #e0e9f2;color:#8799aa;padding:14px;font-size:12px;line-height:1.6;border-radius:10px}
+.party-record-asset{display:flex;align-items:center;justify-content:space-between;gap:15px;border:1px solid #e4ecf5;border-radius:11px;background:white;padding:13px 15px}
+.party-record-asset>div{display:grid;gap:6px;min-width:0}
+.party-record-asset strong{color:#355574;font-size:12px;line-height:1.45}
+.party-record-asset small{font-size:11px;color:#8b9dad;line-height:1.5}
+.party-record-asset button{flex-shrink:0}
+.party-record-secondary{padding-top:15px;border-top:1px solid #e5edf5}
+.party-record-secondary>strong{font-size:12px;color:#436581}
+.party-record-secondary>p{font-size:11px;color:#8194a6;line-height:1.6;margin:7px 0 13px}
+.party-record-presentation{display:grid;gap:14px;border-top:1px solid #d9e4f1;padding-top:18px}
+.party-record-presentation h4{font-size:16px;margin:5px 0;color:#244a71}
+@media(max-width:800px){.party-directory-summary,.party-record-asset{align-items:flex-start;flex-direction:column}.party-record-detail{padding:15px}.party-directory-summary{padding:15px}.party-directory-summary>button,.party-record-asset button{width:100%}}

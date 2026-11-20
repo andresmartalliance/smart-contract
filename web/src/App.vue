@@ -417,7 +417,9 @@ const loginGoogleMount=ref<HTMLElement|null>(null)
 const loginEmail=ref('')
 type PortalSession={email:string;institutions:{id:string;roles:string[]}[];invited_cases:number;can_setup:boolean;pilot:boolean}
 type CaseSummary={id:string;title:string;state:string;workflow_version_id:string|null;party_id:string|null;party_name:string|null;party_email?:string|null;invited:boolean;total:number;completed:number}
-type PartyRecord={id:string;name:string;kind:'NATURAL'|'JURIDICA';email:string|null;case_count:number}
+type PartyProcessIndex={id:string;name:string;status:string;kind:'PROPOSAL'|'PRESENTATION'|'DESIGN';activity_count:number;created_at:string;source?:string|null}
+type PartyRecord={id:string;name:string;kind:'NATURAL'|'JURIDICA';email:string|null;case_count:number;process_count?:number;latest_process?:PartyProcessIndex|null}
+type PartyPortfolio={party:PartyRecord;cases:CaseSummary[];processes:PartyProcessIndex[]}
 type ContractTaskView={id:string;node_id:string;label:string;kind:string;side:string;state:string;fields:WorkField[];answer?:Record<string,unknown>;note?:string}
 type CaseView={case:CaseSummary;side:'CONTRATANTE'|'CONTRATISTA';tasks:ContractTaskView[]}
 type TemplateOption={id:string;name:string;key:string;version:number}
@@ -432,6 +434,18 @@ const partyKind=ref<'NATURAL'|'JURIDICA'>('JURIDICA')
 const selectedPartyId=ref('')
 const selectedParty=computed(()=>partyRecords.value.find(x=>x.id===selectedPartyId.value)||null)
 const filteredParties=computed(()=>partyRecords.value.filter(p=>(p.name+' '+(p.email||'')).toLocaleLowerCase('es-CO').includes(partySearch.value.toLocaleLowerCase('es-CO'))))
+const showNewPartyForm=ref(false)
+const expandedPartyId=ref('')
+const partyPortfolio=ref<PartyPortfolio|null>(null)
+const partyPortfolioBusy=ref(false)
+const partyPresentationPreview=ref<SharedPresentationDetail|null>(null)
+const partyPreviewSide=ref<'CONTRATANTE'|'CONTRATISTA'>('CONTRATANTE')
+function processTypeLabel(p:PartyProcessIndex){
+ return p.kind==='DESIGN'?'Borrador del diseñador':p.kind==='PRESENTATION'?'Vista compartida':'Propuesta de MAIRA'
+}
+function caseStateLabel(value:string){
+ return ({DRAFT:'Borrador',IN_PROGRESS:'En curso',COMPLETED:'Finalizado',CANCELLED:'Cancelado'} as Record<string,string>)[value]||value
+}
 const editingPartyId=ref('')
 const editingPartyEmail=ref('')
 const draftWorkflowId=ref('')
@@ -477,6 +491,60 @@ const selectedWorkflowId=ref('')
 const answers=ref<Record<string,string>>({})
 const taskNote=ref('')
 const returnReason=ref('')
+
+async function togglePartyRecord(party:PartyRecord,force=false){
+ if(!force&&expandedPartyId.value===party.id){
+   expandedPartyId.value='';partyPortfolio.value=null
+   partyPreview.value=null;partyPresentationPreview.value=null
+   return
+ }
+ expandedPartyId.value=party.id;partyPortfolioBusy.value=true
+ partyPortfolio.value=null;partyPreview.value=null;partyPreviewTarget.value=null
+ partyPresentationPreview.value=null;portalError.value=''
+ try{
+   partyPortfolio.value=await portalRequest<PartyPortfolio>('/parties/'+party.id+'/portfolio')
+ }catch(e){portalError.value=e instanceof Error?e.message:'No se pudo abrir la ficha del registro'}
+ finally{partyPortfolioBusy.value=false}
+}
+async function openPartyExistingProcess(party:PartyRecord,item:PartyProcessIndex){
+ portalError.value='';partyPresentationPreview.value=null
+ if(item.kind==='PROPOSAL'){
+   await viewPartyProcessPreview(party,item.id)
+   return
+ }
+ try{
+   if(item.kind==='PRESENTATION'){
+     partyPresentationPreview.value=await portalRequest<SharedPresentationDetail>(
+       '/parties/'+party.id+'/workflow-presentations/'+item.id)
+     partyPreview.value=null;partyPreviewTarget.value=null
+     return
+   }
+   const record=await portalRequest<{workflow:Workflow}>(
+     '/parties/'+party.id+'/workflow-drafts/'+item.id)
+   loadDefinition(record.workflow)
+   studioTab.value='pantallas';current.value='flujos'
+   flowMessage.value='Borrador guardado de '+party.name+' abierto desde su ficha. No se ha publicado.'
+ }catch(e){portalError.value=e instanceof Error?e.message:'No se pudo abrir el proceso guardado'}
+}
+async function saveCurrentWorkflowForParty(party:PartyRecord){
+ portalPartySaving.value=true;portalError.value='';portalMessage.value=''
+ try{
+  const saved=await portalRequest<{name:string}>('/parties/'+party.id+'/workflow-drafts',
+    'POST',{workflow:definition()})
+  await refreshPortal()
+  await togglePartyRecord(party,true)
+  portalMessage.value='«'+saved.name+'» quedó guardado en '+party.name+' como borrador. No se creó un contrato ni se envió al prestador.'
+ }catch(e){portalError.value=e instanceof Error?e.message:'No se pudo guardar el flujo en este registro'}
+ finally{portalPartySaving.value=false}
+}
+async function openPartyExistingCase(id:string){
+ await openCase(id)
+ if(activeCase.value?.case.id===id){
+   current.value='contrataciones'
+   portalMessage.value='Expediente «'+activeCase.value.case.title+'» abierto desde Personas y empresas.'
+ }
+}
+
 async function portalRequest<T>(path:string,method='GET',payload?:unknown):Promise<T>{
  const response=await fetch(MAIRA_API+'/api/v1/portal'+path,{
   method,headers:{Authorization:'Bearer '+loginToken.value,...(payload!==undefined?{'Content-Type':'application/json'}:{})},
@@ -861,17 +929,23 @@ async function saveMairaPreview(){
   partyPreview.value=preview
   partyPreviewTarget.value=mairaTargetParty.value
   mairaImportInfo.value='Vista previa guardada en '+mairaTargetParty.value.name+'. No se han activado tareas ni publicado el proceso.'
+  await refreshPortal()
+  if(expandedPartyId.value===id)await togglePartyRecord(mairaTargetParty.value,true)
  }catch(e){mairaImportError.value=e instanceof Error?e.message:'No se pudo guardar la vista previa'}
  finally{mairaPreviewSaving.value=false}
 }
-async function viewPartyProcessPreview(party:PartyRecord){
+async function viewPartyProcessPreview(party:PartyRecord,previewId?:string){
  partyPreviewTarget.value=party;partyPreview.value=null;partyPreviewBusy.value=true
  portalError.value=''
  try{
-  const items=await portalRequest<{id:string}[]>('/parties/'+party.id+'/process-previews')
-  if(!items.length){portalMessage.value='Todavía no hay vistas previas para '+party.name+'. Carga un documento con Maira.';return}
-  partyPreview.value=await portalRequest<PartyProcessPreview>('/parties/'+party.id+'/process-previews/'+items[0].id)
- }catch(e){portalError.value=e instanceof Error?e.message:'No se pudo consultar la vista previa'}
+  let id=previewId
+  if(!id){
+   const items=await portalRequest<{id:string}[]>('/parties/'+party.id+'/process-previews')
+   id=items[0]?.id
+  }
+  if(!id){portalMessage.value='Este registro no tiene una propuesta de MAIRA guardada.';return}
+  partyPreview.value=await portalRequest<PartyProcessPreview>('/parties/'+party.id+'/process-previews/'+id)
+ }catch(e){portalError.value=e instanceof Error?e.message:'No se pudo consultar el proceso guardado'}
  finally{partyPreviewBusy.value=false}
 }
 function openReviewInDesigner(){
@@ -1790,36 +1864,93 @@ function simulateDraft(){
       </section>
 
       <section v-else-if="current==='personas'&&hasInstitution" class="contract-space">
-        <div class="contract-hero"><div><span class="eyebrow">SMART CONTRACT · DIRECTORIO</span><h2>Personas y empresas</h2><p>Registra contratistas, proveedores y prestadores una sola vez. Los contratos y las plantillas se vinculan después.</p></div><button class="ghost-button" @click="refreshPortal">Actualizar</button></div>
-        <div class="pilot-notice">Registrar una persona o empresa no crea una cuenta Google ni concede acceso. Los permisos se habilitan por expediente, al activar un proceso.</div>
+        <div class="contract-hero"><div><span class="eyebrow">SMART CONTRACT · DIRECTORIO</span><h2>Personas y empresas</h2><p>Consulta los procesos y expedientes asociados a cada persona o empresa.</p></div><div class="pilot-actions"><button class="ghost-button" @click="refreshPortal">Actualizar</button><button class="primary-button" @click="showNewPartyForm=!showNewPartyForm">{{showNewPartyForm?'Cerrar registro':'＋ Nuevo registro'}}</button></div></div>
+        <div class="pilot-notice">Los flujos guardados y los expedientes son elementos distintos. Abre una ficha para consultar lo existente; crear algo nuevo es opcional.</div>
         <div v-if="portalError" class="pilot-error" role="alert">{{portalError}}</div><div v-if="portalMessage" class="pilot-success" role="status">{{portalMessage}}</div>
-        <div class="pilot-panel">
-          <h3>Registrar persona o empresa</h3><p>No necesitas una plantilla ni un expediente para registrar a alguien.</p>
-          <div class="pilot-form-grid">
-            <label>Nombre o razón social<input v-model="partyName" maxlength="250" placeholder="Ej. Hospital de demostración" /></label>
-            <label>Tipo de persona<select v-model="partyKind"><option value="JURIDICA">Persona jurídica</option><option value="NATURAL">Persona natural</option></select></label>
-            <label>Correo de contacto <span class="pilot-optional">opcional por ahora</span><input v-model="partyEmail" type="email" maxlength="255" placeholder="contacto@ejemplo.com" /></label>
+
+        <div class="pilot-panel party-directory-panel">
+          <div class="pilot-directory-header"><div><h3>Personas y empresas <span class="pilot-count">{{partyRecords.length}}</span></h3>
+            <p class="pilot-muted">Abre un registro para consultar sus flujos, vistas previas y expedientes.</p></div>
+            <input v-if="partyRecords.length" v-model="partySearch" type="search" placeholder="Buscar persona o empresa" aria-label="Buscar persona o empresa"/>
           </div>
-          <div class="pilot-actions"><button class="primary-button" :disabled="portalPartySaving||partyName.trim().length<2" @click="registerParty">Guardar registro</button></div>
-          <p class="pilot-muted">Necesitarás un correo autorizado para habilitar un workflow e invitar al usuario. Utiliza exclusivamente datos ficticios en el piloto.</p>
+          <div v-if="!filteredParties.length" class="pilot-empty">{{partyRecords.length?'No hay registros para esta búsqueda.':'Todavía no hay personas o empresas registradas.'}}</div>
+          <div v-for="party in filteredParties" :key="party.id" class="party-directory-card">
+            <div class="party-directory-summary">
+              <div class="party-directory-identity">
+                <strong>{{party.name}}</strong>
+                <small>{{party.kind==='JURIDICA'?'Persona jurídica':'Persona natural'}} · {{party.email||'Sin correo de contacto'}}</small>
+                <div class="party-directory-stats">
+                  <span>{{party.process_count||0}} {{party.process_count===1?'flujo registrado':'flujos registrados'}}</span>
+                  <span>{{party.case_count}} {{party.case_count===1?'expediente':'expedientes'}}</span>
+                </div>
+                <p v-if="party.latest_process" class="party-directory-latest"><b>Último flujo:</b> {{party.latest_process.name}} · {{processTypeLabel(party.latest_process)}}</p>
+                <p v-else class="party-directory-latest">Aún no hay procesos guardados en este registro.</p>
+              </div>
+              <button type="button" class="primary-button" :aria-expanded="expandedPartyId===party.id"
+                :disabled="partyPortfolioBusy&&expandedPartyId===party.id" @click="togglePartyRecord(party)">
+                {{expandedPartyId===party.id?'Cerrar ficha':'Abrir ficha'}}
+              </button>
+            </div>
+            <div v-if="expandedPartyId===party.id" class="party-record-detail">
+              <p v-if="partyPortfolioBusy" class="pilot-muted">Cargando procesos y expedientes de {{party.name}}…</p>
+              <template v-else-if="partyPortfolio?.party.id===party.id">
+                <div class="party-record-section">
+                  <h4>Flujos y vistas previas <span>{{partyPortfolio.processes.length}}</span></h4>
+                  <div v-if="!partyPortfolio.processes.length" class="party-record-empty">No hay procesos guardados para este registro. Un borrador local de Workflow Studio no se asocia automáticamente a una empresa.</div>
+                  <div v-for="process in partyPortfolio.processes" :key="process.id" class="party-record-asset">
+                    <div><strong>{{process.name}}</strong>
+                      <small>{{processTypeLabel(process)}} · {{process.activity_count}} actividades · {{process.status==='PREVIEW_SHARED'?'Compartida en modo lectura':'No publicado'}}</small>
+                    </div>
+                    <button type="button" class="ghost-button" @click="openPartyExistingProcess(party,process)">Abrir flujo</button>
+                  </div>
+                </div>
+                <div class="party-record-section">
+                  <h4>Expedientes <span>{{partyPortfolio.cases.length}}</span></h4>
+                  <div v-if="!partyPortfolio.cases.length" class="party-record-empty">Este registro todavía no tiene expedientes contractuales.</div>
+                  <div v-for="record in partyPortfolio.cases" :key="record.id" class="party-record-asset">
+                    <div><strong>{{record.title}}</strong>
+                      <small>{{caseStateLabel(record.state)}} · {{record.workflow_version_id?'Con workflow vinculado':'Sin workflow vinculado'}} · {{record.completed}} / {{record.total}} actividades completadas</small>
+                    </div>
+                    <button type="button" class="ghost-button" @click="openPartyExistingCase(record.id)">Abrir expediente</button>
+                  </div>
+                </div>
+                <div class="party-record-secondary">
+                  <strong>Otras acciones</strong>
+                  <p>Flujo actualmente seleccionado en el diseñador: <b>{{workflowName}}</b>. No se vincula a {{party.name}} hasta que lo guardes aquí.</p>
+                  <div class="pilot-actions">
+                    <button type="button" class="ghost-button" :disabled="portalPartySaving" @click="saveCurrentWorkflowForParty(party)">Guardar flujo actual en este registro</button>
+                    <button type="button" class="ghost-button" @click="openMairaDocumentImport(party.id)">Crear con MAIRA</button>
+                    <button type="button" class="ghost-button" @click="selectPartyForContract(party)">Nuevo expediente</button>
+                    <button type="button" class="ghost-button" @click="editingPartyId=party.id;editingPartyEmail=party.email||''">Editar contacto</button>
+                  </div>
+                </div>
+                <div v-if="editingPartyId===party.id" class="pilot-edit-contact">
+                  <label>Correo de contacto <input v-model="editingPartyEmail" type="email" maxlength="255" placeholder="persona@ejemplo.com"/></label>
+                  <button class="primary-button" :disabled="portalPartySaving" @click="savePartyEmail(party.id)">Guardar contacto</button>
+                  <button class="ghost-button" @click="editingPartyId=''">Cancelar</button>
+                </div>
+              </template>
+              <div v-if="partyPresentationPreview" class="party-record-presentation">
+                <div class="pilot-detail-top"><div><span class="eyebrow">VISTA PREVIA GUARDADA</span><h4>{{partyPresentationPreview.name}}</h4></div>
+                  <button class="ghost-button" @click="partyPresentationPreview=null">Cerrar vista</button></div>
+                <div class="workflow-side-toggle" role="group" aria-label="Ver proceso por participante">
+                  <button :class="{selected:partyPreviewSide==='CONTRATANTE'}" @click="partyPreviewSide='CONTRATANTE'">Contratante</button>
+                  <button :class="{selected:partyPreviewSide==='CONTRATISTA'}" @click="partyPreviewSide='CONTRATISTA'">Contratista</button>
+                </div>
+                <WorkflowPresentation :workflow="partyPresentationPreview.workflow" :side="partyPreviewSide"/>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="pilot-panel">
-          <div class="pilot-directory-header"><h3>Registros <span class="pilot-count">{{partyRecords.length}}</span></h3><input v-model="partySearch" type="search" placeholder="Buscar persona o empresa" aria-label="Buscar persona o empresa"/></div>
-          <div v-if="!filteredParties.length" class="pilot-empty">{{partyRecords.length?'No hay resultados para esta búsqueda.':'Todavía no hay personas o empresas registradas.'}}</div>
-          <div v-for="party in filteredParties" :key="party.id" class="pilot-party-item">
-            <div class="pilot-party-meta"><strong>{{party.name}}</strong><small>{{party.kind==='JURIDICA'?'Persona jurídica':'Persona natural'}} · {{party.email||'Correo pendiente'}} · {{party.case_count}} expediente(s)</small></div>
-            <div class="pilot-actions">
-              <button class="ghost-button" @click="editingPartyId=party.id;editingPartyEmail=party.email||''">Editar contacto</button>
-              <button class="ghost-button" @click="viewPartyProcessPreview(party)">Vista previa</button>
-              <button class="ghost-button" @click="openMairaDocumentImport(party.id)">Crear proceso con Maira</button>
-              <button class="primary-button" @click="selectPartyForContract(party)">Crear expediente</button>
-            </div>
-            <div v-if="editingPartyId===party.id" class="pilot-edit-contact">
-              <label>Correo de contacto<input v-model="editingPartyEmail" type="email" maxlength="255" placeholder="persona@ejemplo.com"/></label>
-              <button class="primary-button" :disabled="portalPartySaving" @click="savePartyEmail(party.id)">Guardar contacto</button>
-              <button class="ghost-button" @click="editingPartyId=''">Cancelar</button>
-            </div>
+        <div v-if="showNewPartyForm" class="pilot-panel">
+          <h3>Nuevo registro</h3><p>Registrar una persona o empresa no crea expedientes ni envía invitaciones.</p>
+          <div class="pilot-form-grid">
+            <label>Nombre o razón social<input v-model="partyName" maxlength="250" placeholder="Nombre de la persona o empresa"/></label>
+            <label>Tipo de persona<select v-model="partyKind"><option value="JURIDICA">Persona jurídica</option><option value="NATURAL">Persona natural</option></select></label>
+            <label>Correo de contacto <span class="pilot-optional">opcional</span><input v-model="partyEmail" type="email" maxlength="255" placeholder="contacto@ejemplo.com"/></label>
           </div>
+          <div class="pilot-actions"><button class="primary-button" :disabled="portalPartySaving||partyName.trim().length<2" @click="registerParty">Guardar registro</button>
+            <button class="ghost-button" @click="showNewPartyForm=false">Cancelar</button></div>
         </div>
                 <div v-if="partyPreviewTarget&&partyPreview" class="pilot-panel party-process-preview">
           <div class="pilot-detail-top">
