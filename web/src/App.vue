@@ -524,6 +524,8 @@ async function openPartyExistingProcess(party:PartyRecord,item:PartyProcessIndex
    const record=await portalRequest<{workflow:Workflow}>(
      '/parties/'+party.id+'/workflow-drafts/'+item.id)
    loadDefinition(record.workflow)
+   studioCanvasMode.value='guided'
+   guidedPage.value=0
    editingLinkedDraft.value={partyId:party.id,draftId:item.id,partyName:party.name}
    studioTab.value='editor';current.value='flujos'
    flowMessage.value='Diagrama de '+party.name+' abierto para edición. Usa «Guardar cambios» para conservar tu trabajo.'
@@ -1025,11 +1027,100 @@ watch(mairaImportOpen,open=>{if(!open){mairaSourceFile.value=null;mairaProposal.
 
 const nodes = shallowRef<Node[]>([])
 const edges = shallowRef<Edge[]>([])
+const studioCanvasMode=ref<'guided'|'canvas'>('guided')
+const guidedPage=ref(0)
+const guidedPageSize=5
+const guidedOrderedNodes=computed(()=>{
+ const ordered:Node[]=[]
+ const byId=new Map(nodes.value.map(n=>[n.id,n]))
+ const rank=new Map(nodes.value.map((n,i)=>[n.id,i]))
+ const incoming=new Map(nodes.value.map(n=>[n.id,0]))
+ const outgoing=new Map(nodes.value.map(n=>[n.id,[] as string[]]))
+ for(const edge of edges.value){
+   if(incoming.has(edge.target)&&incoming.has(edge.source)){
+     incoming.set(edge.target,(incoming.get(edge.target)||0)+1)
+     outgoing.get(edge.source)?.push(edge.target)
+   }
+ }
+ const available=nodes.value.filter(n=>incoming.get(n.id)===0).sort((a,b)=>(rank.get(a.id)||0)-(rank.get(b.id)||0))
+ while(available.length){
+   const currentNode=available.shift()!
+   ordered.push(currentNode)
+   for(const to of outgoing.get(currentNode.id)||[]){
+     incoming.set(to,(incoming.get(to)||1)-1)
+     if(incoming.get(to)===0){
+       const candidate=byId.get(to)
+       if(candidate){available.push(candidate);available.sort((a,b)=>(rank.get(a.id)||0)-(rank.get(b.id)||0))}
+     }
+   }
+ }
+ return ordered.length===nodes.value.length?ordered:nodes.value
+})
+const guidedActivities=computed(()=>guidedOrderedNodes.value.filter(n=>{
+ const kind=(n.data as WorkNode).kind
+ return kind!=='START'&&kind!=='END'
+}))
+const guidedPages=computed(()=>Math.max(1,Math.ceil(guidedActivities.value.length/guidedPageSize)))
+const guidedCurrentPage=computed(()=>Math.min(guidedPage.value,guidedPages.value-1))
+const guidedVisible=computed(()=>guidedActivities.value.slice(guidedCurrentPage.value*guidedPageSize,
+ (guidedCurrentPage.value+1)*guidedPageSize))
+function selectGuidedStage(id:string){
+ selectedId.value=id;selectedEdgeId.value=null
+}
+function guidedSide(n:Node){
+ const side=(n.data as WorkNode).config?.actor_side
+ return side==='CONTRATANTE'?'Contratante':side==='CONTRATISTA'?'Contratista':'Por confirmar'
+}
+function guidedStageLabel(n:Node){
+ const type=(n.data as WorkNode).kind
+ return blocks.find(b=>b.kind===type)?.title||'Actividad'
+}
+function guidedHasDirectEdge(source:string,target:string){
+ return edges.value.some(e=>e.source===source&&e.target===target)
+}
+function changeGuidedPage(page:number){
+ guidedPage.value=Math.max(0,Math.min(guidedPages.value-1,page))
+ const first=guidedVisible.value[0]
+ if(first)selectGuidedStage(first.id)
+}
+function originalPoint(i:number){
+ return {x:260,y:i*152+48}
+}
+function isLegacySerpentineOriginal(nodesList:Node[]){
+ if(workflowKey.value!=='SMART_CICLO_CONTRATACION_V2'||
+   workflowMetadata.value.source!=='smart-contract-original-pdf'||nodesList.length!==25)return false
+ let matching=0
+ for(let i=0;i<nodesList.length;i++){
+   const col=i%5
+   const row=Math.floor(i/5)
+   const oldX=(row%2===0?col:4-col)*315+35
+   const oldY=row*175+30
+   if(Math.abs(nodesList[i].position.x-oldX)<3&&Math.abs(nodesList[i].position.y-oldY)<3)matching++
+ }
+ return matching>=23
+}
+function organizeOriginalCanvas(){
+ // Positions only, never changes the 23 activities, roles, metadata or edges.
+ if(workflowKey.value!=='SMART_CICLO_CONTRATACION_V2')return
+ const ordered=guidedOrderedNodes.value
+ const placement=new Map(ordered.map((n,i)=>[n.id,originalPoint(i)]))
+ nodes.value=nodes.value.map(n=>{
+   const p=placement.get(n.id)
+   return p?{...n,position:p,targetPosition:Position.Top,sourcePosition:Position.Bottom}:n
+ })
+ edges.value=edges.value.map(e=>({...e,type:'smoothstep'}))
+ studioDiagramVersion.value++
+ flowMessage.value='Organización vertical aplicada a la vista. Las 23 actividades y las 24 conexiones permanecen intactas. Guarda los cambios para conservar las posiciones.'
+}
+watch(guidedPages,()=>{guidedPage.value=Math.min(guidedPage.value,guidedPages.value-1)})
+
 
 function nodeInfo(id:string, kind:Kind, label:string, x:number,y:number,role:string|null=null,policy:Policy='OPTIONAL'):Node {
   return {id,type:kind==='START'?'input':kind==='END'?'output':'default',position:{x,y},data:{label,kind,role,policy,enabled:true,config:{execution_mode:'MANUAL',fields:[]}},class:kind==='START'?'node-start':kind==='END'?'node-end':'node-'+kind.toLowerCase()}
 }
 function loadOriginalContractFlowDraft(){
+ studioCanvasMode.value='guided'
+ guidedPage.value=0
  studioTab.value='pantallas'
  originalScopeChoice.value='';originalClarificationAnswers.value={}
  const draft=buildOriginalContractFlow()
@@ -1330,7 +1421,21 @@ function loadDefinition(parsed:Partial<Workflow>){
  workflowKey.value=parsed.key;workflowName.value=parsed.name;modalityKey.value=parsed.modality_key||''
  workflowMetadata.value={...(parsed.metadata||{}),draft:true}
  resetSourceReview()
- nodes.value=imported;edges.value=parsedEdges;selectedId.value=null;selectedEdgeId.value=null;simulationVisible.value=false
+ // Old two-dimensional serpentine diagram caused unreadable crossings when
+ // rendered with Vue Flow's default vertical input/output handles.
+ const originalKey=parsed.key==='SMART_CICLO_CONTRATACION_V2' &&
+   parsed.metadata?.source==='smart-contract-original-pdf'
+ const legacySerpentine=originalKey&&imported.length===25&&imported.every((n,i)=>{
+    const col=i%5, row=Math.floor(i/5)
+    return Math.abs(n.position.x-((row%2===0?col:4-col)*315+35))<3 &&
+      Math.abs(n.position.y-(row*175+30))<3
+ })
+ nodes.value=legacySerpentine?imported.map((n,i)=>({...n,
+   position:originalPoint(i),sourcePosition:Position.Bottom,targetPosition:Position.Top})):
+   imported.map(n=>originalKey?{...n,sourcePosition:Position.Bottom,targetPosition:Position.Top}:n)
+ edges.value=originalKey?parsedEdges.map(e=>({...e,type:'smoothstep'})):parsedEdges
+ selectedId.value=null;selectedEdgeId.value=null;simulationVisible.value=false
+ guidedPage.value=0
  nodeCounter.value=imported.length+1;errors.value=[];studioDiagramVersion.value++
 }
 async function importDraft(event:Event){
@@ -1725,39 +1830,6 @@ function simulateDraft(){
           <label>Identificador<input v-model="workflowKey" maxlength="120" aria-label="Identificador del proceso" /></label>
           <label>Modalidad <span class="field-hint">opcional</span><input v-model="modalityKey" placeholder="Definida por la entidad" maxlength="120" aria-label="Modalidad configurable" /></label>
         </div>
-        <section v-if="studioTab==='editor'&&sourceReviewRequired" class="maira-review-gate">
-          <strong>Revisión documental obligatoria</strong>
-          <p>El proceso conserva los datos del documento, pero no verifica automáticamente los responsables ni las flechas. Comprueba cada etapa en el diseñador antes de confirmar.</p>
-          <div v-if="isOriginalFirstFlow" class="original-review-form">
-            <div class="original-review-heading"><strong>Definiciones pendientes · Primer flujo</strong><span>Fuente: Ciclo de contratación v2 · PDF</span></div>
-            <p>MAIRA necesita estas definiciones para completar la configuración del primer proceso. Las respuestas quedan en el borrador; no activan contrataciones.</p>
-            <label>¿Qué alcance tendrá el procedimiento?
-              <select v-model="originalScopeChoice">
-                <option value="">Seleccionar</option>
-                <option value="KEEP_ORIGINAL">Conservar el procedimiento fuente</option>
-                <option value="ADAPT_TO_ENTITY">Adaptarlo para una configuración específica</option>
-              </select>
-            </label>
-            <label v-for="(question,index) in studioReviewQuestions" :key="index">
-              <span>{{index+1}}. {{question}}</span>
-              <textarea :value="originalClarificationAnswers[question]||''" rows="2" maxlength="650"
-                 placeholder="Respuesta o información por confirmar"
-                 @input="originalClarificationAnswers={...originalClarificationAnswers,[question]:($event.target as HTMLTextAreaElement).value}"></textarea>
-            </label>
-            <button class="ghost-button" type="button" @click="saveOriginalFlowClarifications">
-              Registrar aclaraciones del caso
-            </button>
-            <span v-if="studioMairaDialogue?.completed" class="original-review-complete">Aclaraciones registradas para este borrador. Debes verificar las tareas y los roles antes de cualquier publicación.</span>
-          </div>
-          <p v-if="studioMairaDialogue?.completed" class="maira-dialogue-record">MAIRA registró {{studioMairaDialogue.questions_total}} decisiones. Alcance: {{studioMairaDialogue.scope_decision==='ADAPT_TO_ENTITY'?'Adaptar a la entidad':'Conservar el proceso original'}}. Las respuestas no modifican automáticamente el workflow.</p>
-          <label><input type="checkbox" v-model="reviewRolesConfirmed" /> Revisé responsables, contratante/contratista y pertinencia para esta persona o empresa.</label>
-          <label><input type="checkbox" v-model="reviewRoutesConfirmed" /> Revisé las dependencias, secuencia y condiciones contra el diagrama original.</label>
-          <div class="pilot-actions">
-            <button type="button" class="ghost-button" :disabled="!reviewRolesConfirmed||!reviewRoutesConfirmed" @click="confirmSourceReview">Confirmar revisión del borrador</button>
-            <span v-if="sourceReviewConfirmed" class="maira-review-ok">Revisión registrada para esta versión. Si editas el flujo, habrá que confirmar de nuevo.</span>
-            <span v-else class="maira-review-pending">Publicación bloqueada hasta completar la revisión.</span>
-          </div>
-        </section>
         <div v-show="studioTab==='editor'" class="studio-layout">
           <div class="studio-catalog">
             <div class="panel-title"><strong>Componentes</strong><button class="tiny-link" @click="loadOriginalContractFlowDraft">Restaurar flujo original</button></div>
@@ -1769,16 +1841,65 @@ function simulateDraft(){
             </div>
           </div>
           <div class="diagram-panel">
-            <div class="panel-title"><strong>Diagrama del proceso</strong><span class="flow-count">{{activeCount}} etapas activas</span></div>
-            <div v-if="sourceReviewRequired&&studioReviewQuestions.length" class="maira-studio-questions">
-              <strong>Preguntas pendientes del documento · {{studioReviewQuestions.length}}</strong>
-              <p v-for="(question,index) in studioReviewQuestions" :key="index"><span>?</span> {{question}}</p>
-              <small>Las preguntas de aclaración se registran por separado de los nodos de ejecución. No se han creado ramas ni tareas adicionales sin evidencia documental.</small>
+            <div class="panel-title studio-visual-header">
+              <div><strong>Diagrama del proceso</strong><small>{{guidedActivities.length}} actividades · {{edges.length}} conexiones</small></div>
+              <div class="studio-view-switch" role="group" aria-label="Modo de edición del diagrama">
+                <button type="button" :class="{selected:studioCanvasMode==='guided'}" @click="studioCanvasMode='guided'">Recorrido</button>
+                <button type="button" :class="{selected:studioCanvasMode==='canvas'}" @click="studioCanvasMode='canvas'">Lienzo</button>
+              </div>
             </div>
-            <div class="canvas-area">
-              <VueFlow :key="'studio-'+studioDiagramVersion" v-model:nodes="nodes" v-model:edges="edges" :fit-view-on-init="true" :nodes-connectable="true" :nodes-draggable="true" :elements-selectable="true" :min-zoom="0.2" :max-zoom="2" @connect="onConnect" @node-click="({node}) => {selectedId=node.id;selectedEdgeId=null}" @edge-click="({edge}) => {selectedEdgeId=edge.id;selectedId=null}" @node-drag-stop="onNodeDragStop" @pane-click="() => {selectedId=null;selectedEdgeId=null}" />
+            <div v-if="studioCanvasMode==='guided'" class="guided-flow" role="region" aria-label="Recorrido editable">
+              <div class="guided-flow-helper">
+                <div><strong>Recorrido del proceso</strong><p>Selecciona una actividad para editarla en el panel de propiedades. El recorrido conserva las conexiones del workflow.</p></div>
+                <span>Página {{guidedCurrentPage+1}} de {{guidedPages}}</span>
+              </div>
+              <div v-if="!guidedVisible.length" class="guided-flow-empty">No hay actividades. Agrégalas desde el catálogo.</div>
+              <div v-for="(step,i) in guidedVisible" :key="step.id" class="guided-flow-row">
+                <button type="button" :class="['guided-flow-card',{active:selectedId===step.id}]"
+                  :aria-pressed="selectedId===step.id" @click="selectGuidedStage(step.id)">
+                  <span class="guided-flow-index">{{guidedCurrentPage*guidedPageSize+i+1}}</span>
+                  <span class="guided-flow-card-copy">
+                    <strong>{{(step.data as WorkNode).label}}</strong>
+                    <small>{{guidedStageLabel(step)}} · {{(step.data as WorkNode).role||'Responsable no definido'}}</small>
+                  </span>
+                  <span class="guided-flow-owner">{{guidedSide(step)}}</span>
+                  <span class="guided-flow-edit">Editar</span>
+                </button>
+                <div v-if="i<guidedVisible.length-1" class="guided-flow-connector"
+                  :class="{uncertain:!guidedHasDirectEdge(step.id,guidedVisible[i+1].id)}" aria-hidden="true">
+                  <span>{{guidedHasDirectEdge(step.id,guidedVisible[i+1].id)?'↓':'⋯'}}</span>
+                </div>
+              </div>
+              <div class="guided-flow-foot">
+                <span>Inicio <template v-if="guidedCurrentPage>0">· Continúa de la página anterior</template></span>
+                <span>Fin del proceso al completar todas las etapas</span>
+              </div>
             </div>
-            <div class="canvas-footer"><span>Arrastra las etapas · Conecta los puntos · Selecciona para editar</span><div class="canvas-buttons"><button @click="validateDraft">Verificar</button><button @click="simulateDraft">Simular</button></div></div>
+            <div v-else class="canvas-area studio-canvas-readable">
+              <div class="studio-map-tools" v-if="workflowKey==='SMART_CICLO_CONTRATACION_V2'">
+                <button type="button" @click="organizeOriginalCanvas">Ordenar diagrama</button>
+                <span>Desplázate para recorrer las etapas. Arrastra los nodos para reorganizarlos.</span>
+              </div>
+              <VueFlow :key="'studio-'+studioDiagramVersion" v-model:nodes="nodes" v-model:edges="edges"
+                :fit-view-on-init="false" :default-viewport="{x:90,y:35,zoom:0.9}"
+                :nodes-connectable="true" :nodes-draggable="true" :elements-selectable="true"
+                :pan-on-scroll="true" :zoom-on-scroll="false" :zoom-on-pinch="true"
+                :min-zoom="0.55" :max-zoom="1.6" @connect="onConnect"
+                @node-click="({node}) => {selectedId=node.id;selectedEdgeId=null}"
+                @edge-click="({edge}) => {selectedEdgeId=edge.id;selectedId=null}"
+                @node-drag-stop="onNodeDragStop" @pane-click="() => {selectedId=null;selectedEdgeId=null}" />
+            </div>
+            <div class="canvas-footer">
+              <span v-if="studioCanvasMode==='guided'">Selecciona cada etapa y edita su nombre, responsable, campos y condiciones a la derecha.</span>
+              <span v-else>Desplaza el lienzo para explorar · Arrastra y conecta los nodos</span>
+              <div class="canvas-buttons" v-if="studioCanvasMode==='guided'">
+                <button type="button" :disabled="guidedCurrentPage===0" @click="changeGuidedPage(guidedCurrentPage-1)">Anterior</button>
+                <button type="button" :disabled="guidedCurrentPage>=guidedPages-1" @click="changeGuidedPage(guidedCurrentPage+1)">Siguiente</button>
+              </div>
+              <div class="canvas-buttons" v-else>
+                <button @click="validateDraft">Verificar</button><button @click="simulateDraft">Simular</button>
+              </div>
+            </div>
           </div>
           <div class="inspector-panel">
             <div class="panel-title"><strong>Propiedades</strong><span class="inspector-icon">⚙</span></div>
@@ -1826,6 +1947,42 @@ function simulateDraft(){
              <div v-else class="select-message"><div>◇</div><p>Selecciona una etapa o conexión para configurar sus datos y reglas.</p></div>
           </div>
         </div>
+        <details v-if="studioTab==='editor'&&sourceReviewRequired" class="maira-review-gate studio-review-details">
+          <summary><span>Revisión del documento · {{studioReviewQuestions.length}} aclaraciones pendientes</span><small>Expandir preguntas y confirmar responsables</small></summary>
+          <div class="studio-review-detail-body">
+          <strong>Revisión documental obligatoria</strong>
+          <p>El proceso conserva los datos del documento, pero no verifica automáticamente los responsables ni las flechas. Comprueba cada etapa en el diseñador antes de confirmar.</p>
+          <div v-if="isOriginalFirstFlow" class="original-review-form">
+            <div class="original-review-heading"><strong>Definiciones pendientes · Primer flujo</strong><span>Fuente: Ciclo de contratación v2 · PDF</span></div>
+            <p>MAIRA necesita estas definiciones para completar la configuración del primer proceso. Las respuestas quedan en el borrador; no activan contrataciones.</p>
+            <label>¿Qué alcance tendrá el procedimiento?
+              <select v-model="originalScopeChoice">
+                <option value="">Seleccionar</option>
+                <option value="KEEP_ORIGINAL">Conservar el procedimiento fuente</option>
+                <option value="ADAPT_TO_ENTITY">Adaptarlo para una configuración específica</option>
+              </select>
+            </label>
+            <label v-for="(question,index) in studioReviewQuestions" :key="index">
+              <span>{{index+1}}. {{question}}</span>
+              <textarea :value="originalClarificationAnswers[question]||''" rows="2" maxlength="650"
+                 placeholder="Respuesta o información por confirmar"
+                 @input="originalClarificationAnswers={...originalClarificationAnswers,[question]:($event.target as HTMLTextAreaElement).value}"></textarea>
+            </label>
+            <button class="ghost-button" type="button" @click="saveOriginalFlowClarifications">
+              Registrar aclaraciones del caso
+            </button>
+            <span v-if="studioMairaDialogue?.completed" class="original-review-complete">Aclaraciones registradas para este borrador. Debes verificar las tareas y los roles antes de cualquier publicación.</span>
+          </div>
+          <p v-if="studioMairaDialogue?.completed" class="maira-dialogue-record">MAIRA registró {{studioMairaDialogue.questions_total}} decisiones. Alcance: {{studioMairaDialogue.scope_decision==='ADAPT_TO_ENTITY'?'Adaptar a la entidad':'Conservar el proceso original'}}. Las respuestas no modifican automáticamente el workflow.</p>
+          <label><input type="checkbox" v-model="reviewRolesConfirmed" /> Revisé responsables, contratante/contratista y pertinencia para esta persona o empresa.</label>
+          <label><input type="checkbox" v-model="reviewRoutesConfirmed" /> Revisé las dependencias, secuencia y condiciones contra el diagrama original.</label>
+          <div class="pilot-actions">
+            <button type="button" class="ghost-button" :disabled="!reviewRolesConfirmed||!reviewRoutesConfirmed" @click="confirmSourceReview">Confirmar revisión del borrador</button>
+            <span v-if="sourceReviewConfirmed" class="maira-review-ok">Revisión registrada para esta versión. Si editas el flujo, habrá que confirmar de nuevo.</span>
+            <span v-else class="maira-review-pending">Publicación bloqueada hasta completar la revisión.</span>
+          </div>
+          </div>
+        </details>
         <div v-if="studioTab==='editor'&&simulationVisible" class="simulation-panel"><div class="panel-title"><strong>Simulación de recorrido</strong><button class="tiny-link" @click="simulationVisible=false">Cerrar</button></div><p class="panel-caption">Datos de ejemplo en JSON; indica etapas completadas separadas por coma. Esta prueba es local y no ejecuta tareas.</p>
           <div class="simulation-fields"><label>Datos del expediente (JSON)<textarea v-model="simulationFacts" rows="3" spellcheck="false"/></label><label>Identificadores completados<input v-model="simulationCompleted" placeholder="inicio, documentos"/></label><button class="primary-button" @click="simulateDraft">Ejecutar simulación</button></div>
           <p v-if="simulationError" class="validation-list">{{simulationError}}</p>

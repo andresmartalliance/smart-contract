@@ -48,11 +48,10 @@ const activities=[
  ['12.1','NOTIFICACIÓN DE CERTIFICADO','SISTEMA','NOTIFICATION',2],
  ['13','ACTA DE INICIO','SUPERVISOR','DOCUMENT_GENERATION',2]
 ] as const
-function point(index:number,total:number){
- const columns=Math.min(5,Math.ceil(Math.sqrt(total)))
- const row=Math.floor(index/columns)
- const col=row%2===0?index%columns:columns-1-index%columns
- return {x:col*315+35,y:row*175+30}
+function point(index:number,_total:number){
+ // Clear top-to-bottom layout for editable Vue Flow canvas.
+ // The guided view presents five activities per page at full readability.
+ return {x:260,y:index*152+48}
 }
 export function buildOriginalContractFlow():OriginalFlow{
  const nodes:DocumentaryNode[]=[
