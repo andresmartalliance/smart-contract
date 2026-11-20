@@ -125,5 +125,7 @@ def test_ordinary_workflow_not_blocked_by_maira_questions():
     from tests.test_maira_import import valid_proposal
     raw = valid_proposal()["workflow"]
     raw["metadata"] = {"source":"smart-contract-workflow-studio"}
+    for node in raw["nodes"]:
+        node.get("config", {}).pop("source_step", None)
     wf = WorkflowDefinition.model_validate(raw)
     assert not _missing_maira_dialogue(wf)
