@@ -404,7 +404,8 @@ def party_portfolio(party_id:str,email:str=Depends(verify_google_email),
 
 
 
-class PartyWorkflowDraftInput(PresentationInput):
+class PartyWorkflowDraftInput(BaseModel):
+    workflow: WorkflowDefinition
     initialize_original: bool = False
 
 
