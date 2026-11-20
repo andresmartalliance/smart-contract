@@ -437,3 +437,32 @@ def test_directory_does_not_confuse_local_drafts_with_party_contracts(portal):
     detail=portal.get("/api/v1/portal/parties/"+party["id"]+"/portfolio")
     assert detail.status_code==200
     assert detail.json()["cases"]==[] and detail.json()["processes"]==[]
+
+
+def test_designer_draft_must_be_explicitly_linked_to_existing_party(portal):
+    create_pilot(portal)
+    party=create_party_record(portal,name="Hospital Smart",email="hospital@example.com")
+    as_user("alice@example.com")
+    before=portal.get("/api/v1/portal/parties/"+party["id"]+"/portfolio").json()
+    assert before["processes"]==[] and before["cases"]==[]
+    saved=portal.post("/api/v1/portal/parties/"+party["id"]+"/workflow-drafts",
+        json={"workflow":sample_flow()})
+    assert saved.status_code==201,saved.text
+    assert not saved.json()["published"] and not saved.json()["case_created"]
+    directory=portal.get("/api/v1/portal/parties").json()[0]
+    assert directory["process_count"]==1
+    assert directory["latest_process"]["kind"]=="DESIGN"
+    portfolio=portal.get("/api/v1/portal/parties/"+party["id"]+"/portfolio").json()
+    assert portfolio["cases"]==[] and len(portfolio["processes"])==1
+    assert portfolio["processes"][0]["id"]==saved.json()["id"]
+    path="/api/v1/portal/parties/"+party["id"]+"/workflow-drafts/"+saved.json()["id"]
+    draft=portal.get(path)
+    assert draft.status_code==200
+    assert draft.json()["workflow"]["name"]==sample_flow()["name"]
+    assert draft.json()["workflow"]["metadata"]["associated_party_id"]==party["id"]
+    assert portal.get("/api/v1/portal/workflows").json()==[]
+    as_user("hospital@example.com")
+    assert portal.get(path).status_code==403
+    assert portal.get("/api/v1/portal/my-workflow-presentations").json()==[]
+    as_user("charlie")
+    assert portal.get(path).status_code==404

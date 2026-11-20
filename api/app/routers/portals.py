@@ -339,7 +339,8 @@ def _party_process_item(record:PartyProcessPreview) -> dict[str,Any]:
     wf=record.workflow if isinstance(record.workflow,dict) else {}
     source=wf.get("metadata") or {}
     return {"id":record.id,"name":str(wf.get("name") or record.filename or "Proceso sin título"),
-            "status":record.status,"kind":"PROPOSAL" if record.status=="DRAFT_REVIEW" else "PRESENTATION",
+            "status":record.status,"kind":{"DRAFT_REVIEW":"PROPOSAL","PREVIEW_SHARED":"PRESENTATION",
+                    "WORKFLOW_DRAFT":"DESIGN"}.get(record.status,"PROPOSAL"),
             "activity_count":sum(1 for n in wf.get("nodes",[]) if n.get("kind") not in ("START","END")),
             "source":source.get("source"),"created_at":record.created_at.isoformat()}
 
@@ -351,7 +352,7 @@ def parties(email: str=Depends(verify_google_email),db: Session=Depends(get_sess
        .order_by(ContractParty.created_at.desc())).all()
     records=db.scalars(select(PartyProcessPreview).where(
        PartyProcessPreview.tenant_id==m.tenant_id,
-       PartyProcessPreview.status.in_(("DRAFT_REVIEW","PREVIEW_SHARED")))
+       PartyProcessPreview.status.in_(("DRAFT_REVIEW","PREVIEW_SHARED","WORKFLOW_DRAFT")))
        .order_by(PartyProcessPreview.created_at.desc())).all()
     by_party:dict[str,list[dict[str,Any]]]={}
     for preview in records:
@@ -378,7 +379,7 @@ def party_portfolio(party_id:str,email:str=Depends(verify_google_email),
     previews=db.scalars(select(PartyProcessPreview).where(
        PartyProcessPreview.tenant_id==m.tenant_id,
        PartyProcessPreview.party_id==party.id,
-       PartyProcessPreview.status.in_(("DRAFT_REVIEW","PREVIEW_SHARED")))
+       PartyProcessPreview.status.in_(("DRAFT_REVIEW","PREVIEW_SHARED","WORKFLOW_DRAFT")))
        .order_by(PartyProcessPreview.created_at.desc())).all()
     return {
         "party":_party_summary(db,party),
@@ -386,6 +387,57 @@ def party_portfolio(party_id:str,email:str=Depends(verify_google_email),
         "processes":[_party_process_item(p) for p in previews]
     }
 
+
+
+
+@router.post("/parties/{party_id}/workflow-drafts",status_code=201)
+def save_party_workflow_design(party_id:str,body:PresentationInput,
+        email:str=Depends(verify_google_email),db:Session=Depends(get_session)):
+    """Explicitly save a designer draft to a particular party, no invitation.
+
+    A local-only Studio flow must not be labeled associated until this action
+    is authorized and performed by its configurator.
+    """
+    m=_configurator(db,email)
+    party=_party_record(db,m.tenant_id,party_id)
+    if len(body.workflow.nodes)>200 or len(body.workflow.edges)>600:
+        raise HTTPException(413,"El flujo supera el límite de almacenamiento del diseñador")
+    workflow=body.workflow.model_dump(mode="json")
+    if len(str(workflow))>350000:
+        raise HTTPException(413,"El flujo es demasiado grande")
+    try: topological_order(body.workflow)
+    except WorkflowInvalid as exc: raise HTTPException(422,{"problems":exc.problems})
+    workflow["metadata"]={**workflow.get("metadata",{}),
+                           "draft":True,"review_confirmed":False,
+                           "associated_party_id":party.id}
+    record=PartyProcessPreview(
+        tenant_id=m.tenant_id,party_id=party.id,
+        filename="Borrador "+body.workflow.key[:120],status="WORKFLOW_DRAFT",
+        workflow=workflow,source_map=[],questions=[],observations=[],created_by=email,
+    )
+    db.add(record);db.flush()
+    _event(db,m.tenant_id,email,"PARTY_WORKFLOW_DRAFT_SAVED",record.id,
+          {"party_id":party.id,"nodes":len(body.workflow.nodes),
+           "published":False,"case_created":False})
+    db.commit()
+    return {"id":record.id,"status":"WORKFLOW_DRAFT","party_id":party.id,
+            "name":body.workflow.name,"published":False,"case_created":False}
+
+
+@router.get("/parties/{party_id}/workflow-drafts/{draft_id}")
+def get_party_workflow_design(party_id:str,draft_id:str,
+        email:str=Depends(verify_google_email),db:Session=Depends(get_session)):
+    m=_operator(db,email)
+    _party_record(db,m.tenant_id,party_id)
+    record=db.scalar(select(PartyProcessPreview).where(
+        PartyProcessPreview.id==draft_id,
+        PartyProcessPreview.tenant_id==m.tenant_id,
+        PartyProcessPreview.party_id==party_id,
+        PartyProcessPreview.status=="WORKFLOW_DRAFT"))
+    if record is None:raise HTTPException(404,"Borrador no encontrado")
+    return {"id":record.id,"name":record.workflow.get("name","Proceso"),
+            "status":record.status,"workflow":record.workflow,
+            "created_at":record.created_at.isoformat()}
 
 @router.get("/parties/{party_id}/workflow-presentations/{presentation_id}")
 def institution_presentation(party_id:str,presentation_id:str,
