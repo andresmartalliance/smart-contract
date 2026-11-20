@@ -1,0 +1,27 @@
+# Cierre del primer workflow — Smart Contract
+
+## Fuente única
+
+`Process Flowchart clico contract V2.pdf` (2 páginas, título fuente «Ciclo de contratación v2»). La fuente fue revisada visualmente y extraída por texto. Contiene 23 pasos numerados, identificados por 1, 2, 2.1, …, 13. Todos están conectados por las flechas del diagrama: 25 nodos en total con Inicio y Fin, 24 conexiones documentales. No hay compuertas condicionales dibujadas.
+
+## Experiencia que debe terminarse
+
+1. Workflow Studio conserva los **23 pasos y su numeración original**, sus flechas y los roles originales: ADMINISTRADOR, ASPIRANTE, SISTEMA, JURIDICO, SUPERVISOR, FINANCIERO y SST.
+2. «Vista operativa» convierte **ese mismo workflow**, sin modelos paralelos, en la interfaz de las dos partes. El ASPIRANTE se visualiza por ahora como contraparte externa y los demás roles como organización, **solo para revisar la interfaz**.
+3. La visualización no debe presentarse como contrato ejecutable, ni crear expedientes, enviar mensajes, cargar documentos o firmar. Los campos que no constan en el PDF se dejan sin configurar.
+4. La pregunta de alcance sobre aspirante/persona natural y la confirmación de responsables y campos debe resolverse antes de cualquier publicación.
+5. Una vez validada la vista interna, el configurador podrá compartir explícitamente la **misma representación** con una cuenta externa registrada; desde /prestador verá solo su proyección de lectura.
+
+## Aislamiento de Famisanar
+
+La iniciativa Famisanar y `web/src/famisanarCase.ts` permanecen como trabajo futuro en el historial del repositorio. **No se cargan al inicio, no aparecen como recomendación ni como opción en la navegación del ejercicio original.** No se alteran sus datos, archivos ni versiones de workflow.
+
+## Criterio de cierre técnico
+
+- El navegador muestra `Ciclo de contratación v2 · Documento original` como proceso inicial.
+- La Vista operativa contiene 23 actividades y el diseñador los 25 nodos/24 enlaces.
+- Los botones Contratante/Contratista muestran la misma secuencia con diferentes roles y permisos visuales.
+- Una segunda cuenta puede abrir la vista compartida de lectura sin activar un expediente.
+- El borrador local antiguo de dos tareas se archiva sin borrarse.
+- Cualquier publicación legal sigue bloqueada hasta confirmación humana de responsabilidades, alcance y reglas.
+
