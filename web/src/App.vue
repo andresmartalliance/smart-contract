@@ -3,7 +3,7 @@ import { computed, nextTick, onMounted, ref, shallowRef, watch } from 'vue'
 import { VueFlow, Position, type Node, type Edge, type Connection } from '@vue-flow/core'
 import ProviderPortal from './ProviderPortal.vue'
 import WorkflowPresentation from './WorkflowPresentation.vue'
-import { buildFamisanarFirstCase } from './famisanarCase'
+import { buildOriginalContractFlow } from './originalContractFlow'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 
@@ -270,20 +270,20 @@ function workflowWithMairaDialogue(p:MairaProposal):Workflow{
 }
 const studioMairaDialogue=computed(()=>workflowMetadata.value.maira_dialogue as MairaDialogue|undefined)
 
-const famisanarScopeChoice=ref<'KEEP_ORIGINAL'|'ADAPT_TO_ENTITY'|''>('')
-const famisanarClarificationAnswers=ref<Record<string,string>>({})
-const isFamisanarCase=computed(()=>workflowMetadata.value.source==='famisanar-documental')
-function saveFamisanarClarifications(){
- if(!isFamisanarCase.value)return
- if(!famisanarScopeChoice.value){
-  flowMessage.value='Define primero si conservarás o adaptarás el procedimiento fuente de Famisanar.';return
+const originalScopeChoice=ref<'KEEP_ORIGINAL'|'ADAPT_TO_ENTITY'|''>('')
+const originalClarificationAnswers=ref<Record<string,string>>({})
+const isOriginalFirstFlow=computed(()=>workflowMetadata.value.source==='smart-contract-original-pdf')
+function saveOriginalFlowClarifications(){
+ if(!isOriginalFirstFlow.value)return
+ if(!originalScopeChoice.value){
+  flowMessage.value='Define primero si conservarás o adaptarás el alcance del diagrama original.';return
  }
  const questions=studioReviewQuestions.value
- const answers=questions.map(question=>({question,answer:(famisanarClarificationAnswers.value[question]||'').trim()}))
+ const answers=questions.map(question=>({question,answer:(originalClarificationAnswers.value[question]||'').trim()}))
  if(answers.some(item=>item.answer.length<4)){
   flowMessage.value='Responde todas las preguntas. Si el dato no está confirmado, indícalo explícitamente como pendiente.';return
  }
- const dialogue:MairaDialogue={scope_decision:famisanarScopeChoice.value,completed:true,
+ const dialogue:MairaDialogue={scope_decision:originalScopeChoice.value,completed:true,
   questions_total:answers.length+1,answers}
  workflowMetadata.value={...workflowMetadata.value,maira_dialogue:dialogue,review_confirmed:false}
  resetSourceReview()
@@ -914,13 +914,13 @@ const edges = shallowRef<Edge[]>([])
 function nodeInfo(id:string, kind:Kind, label:string, x:number,y:number,role:string|null=null,policy:Policy='OPTIONAL'):Node {
   return {id,type:kind==='START'?'input':kind==='END'?'output':'default',position:{x,y},data:{label,kind,role,policy,enabled:true,config:{execution_mode:'MANUAL',fields:[]}},class:kind==='START'?'node-start':kind==='END'?'node-end':'node-'+kind.toLowerCase()}
 }
-function loadFamisanarCaseDraft(){
+function loadOriginalContractFlowDraft(){
  studioTab.value='pantallas'
- famisanarScopeChoice.value='';famisanarClarificationAnswers.value={}
- const draft=buildFamisanarFirstCase()
+ originalScopeChoice.value='';originalClarificationAnswers.value={}
+ const draft=buildOriginalContractFlow()
  loadDefinition(draft)
- selectedId.value='fam_a6';selectedEdgeId.value=null
- flowMessage.value='Famisanar: primer caso documental cargado. Roles, condiciones y rutas pendientes de validación; no publicado.'
+ selectedId.value='original_1';selectedEdgeId.value=null
+ flowMessage.value='Flujo original del PDF cargado: 23 actividades, 25 nodos y 24 conexiones. Puedes revisar ambos portales sin publicar.'
 }
 function newWorkflow(){
  workflowMetadata.value={source:'smart-contract-workflow-studio',draft:true};resetSourceReview()
@@ -929,7 +929,7 @@ function newWorkflow(){
   edges.value=[{id:'e-inicio-fin',source:'inicio',target:'fin'}]
   selectedId.value=null;selectedEdgeId.value=null;nodeCounter.value=1;errors.value=[];simulationVisible.value=false;flowMessage.value='Proceso en blanco. Agrega bloques desde el catálogo.'
 }
-loadFamisanarCaseDraft()
+loadOriginalContractFlowDraft()
 const selectedNode = computed(() => nodes.value.find(n=>n.id===selectedId.value))
 const selectedEdge = computed(() => edges.value.find(e=>e.id===selectedEdgeId.value))
 const selectedEdgeCondition = computed(() => (selectedEdge.value?.data as {when?:Condition}|undefined)?.when)
@@ -1238,12 +1238,12 @@ function openArchivedPilotDraft(){
  try{
   loadDefinition(archivedPilotDraft.value)
   studioTab.value='pantallas'
-  flowMessage.value='Se abrió el ejercicio histórico de dos portales. Es un borrador de referencia, no el caso de Famisanar.'
+  flowMessage.value='Se abrió el ejercicio histórico de dos tareas. Para cerrar el proceso completo, vuelve al flujo original de 23 actividades.'
  }catch(e){flowMessage.value='No se pudo abrir el ejercicio anterior: '+(e instanceof Error?e.message:'borrador inválido')}
 }
 function restoreLocalDraft(){
- // Preserve intentional user work. Migrate ONLY the exact retired four-node
- // demonstration, not all previously saved workflows.
+ // Preserve previous local work without allowing an unrelated Famisanar draft
+ // or the two-task demonstration to replace the original 23-step PDF on entry.
  try{
    const archived=localStorage.getItem(ARCHIVED_PILOT_DRAFT_KEY)
    if(archived){
@@ -1253,21 +1253,29 @@ function restoreLocalDraft(){
    const raw=localStorage.getItem(LOCAL_DRAFT_KEY)
    if(!raw)return
    const parsed=JSON.parse(raw) as Partial<Workflow>
-   if(isLegacyTwoPortalExample(parsed)){
+   const legacy=isLegacyTwoPortalExample(parsed)
+   const unrelated=parsed.key==='FAMISANAR_RED_PRESTADORA_CASO_01'||
+     parsed.metadata?.source==='famisanar-documental'
+   if(legacy||unrelated){
+     const archiveKey=legacy?ARCHIVED_PILOT_DRAFT_KEY:
+       'smart-contract:workflow-studio:archive:famisanar-deferred:v6.6.4'
      try{
-       localStorage.setItem(ARCHIVED_PILOT_DRAFT_KEY,raw)
-       archivedPilotDraft.value=parsed
-       loadFamisanarCaseDraft()
-       flowMessage.value='Se archivó el ejemplo anterior sin borrarlo. Ahora estás visualizando el primer caso de Famisanar.'
+       localStorage.setItem(archiveKey,raw)
+       if(legacy)archivedPilotDraft.value=parsed
+       loadOriginalContractFlowDraft()
+       flowMessage.value=legacy?
+         'El ejemplo anterior de dos actividades quedó respaldado. Se cargó el flujo completo del PDF.':
+         'El borrador de Famisanar quedó respaldado para otra fase. Continuamos con el primer workflow.'
      }catch{
+       // Keep current user work rather than risk irreversible data loss.
        loadDefinition(parsed)
-       flowMessage.value='No se pudo crear una copia de seguridad del piloto. Sigue disponible en este navegador; usa Caso Famisanar para cambiar de flujo.'
+       flowMessage.value='No se pudo respaldar el borrador previo. No se ha eliminado; abre el Flujo original para continuar.'
      }
      return
    }
    loadDefinition(parsed)
-   flowMessage.value='Se recuperó tu último borrador del diseñador.'
- }catch{flowMessage.value='No se pudo recuperar el borrador local. Se cargó el caso documental de Famisanar.'}
+   flowMessage.value='Se recuperó el borrador que estabas editando.'
+ }catch{flowMessage.value='No se pudo recuperar el borrador local. Se cargó el flujo original de 23 actividades.'}
 }
 restoreLocalDraft()
 watch([nodes,edges,workflowKey,workflowName,modalityKey],()=>{
@@ -1381,10 +1389,10 @@ function simulateDraft(){
     <main class="main">
       <header class="top-header">
         <div><small>Workspace / Smart Contract / {{screenTitle}}</small><h1>{{screenTitle}}</h1></div>
-        <div class="top-meta"><span class="top-product">Smart Contract · Famisanar 01</span><span class="context-pill">Development</span><button type="button" class="logout-button" @click="logoutGoogle" title="Cerrar sesión Google">Salir</button></div>
+        <div class="top-meta"><span class="top-product">Smart Contract · Primer flujo</span><span class="context-pill">Development</span><button type="button" class="logout-button" @click="logoutGoogle" title="Cerrar sesión Google">Salir</button></div>
       </header>
       <section v-if="current==='flujos'&&hasInstitution" class="stack">
-        <div class="heading"><div><span class="eyebrow">Diseño inteligente de procesos</span><h2>Workflow Studio</h2><p>Diseña, conecta y valida etapas configurables. Todos los cambios siguen siendo un borrador local.</p></div><div class="header-actions"><button class="primary-button" @click="studioTab='editor';openMairaDocumentImport()">✧ Crear con MAIRA</button><button class="ghost-button" @click="loadFamisanarCaseDraft">Caso Famisanar · Prefactibilidad</button><button class="ghost-button" @click="newWorkflow">＋ Nuevo flujo</button><button class="ghost-button" @click="fileInput?.click()">↥ Importar</button><button class="primary-button" @click="exportDraft">↧ Exportar JSON</button><button class="ghost-button" :disabled="portalBusy" @click="publishPilot">Publicar plantilla</button></div></div>
+        <div class="heading"><div><span class="eyebrow">Diseño inteligente de procesos</span><h2>Workflow Studio</h2><p>Diseña, conecta y valida etapas configurables. Todos los cambios siguen siendo un borrador local.</p></div><div class="header-actions"><button class="primary-button" @click="studioTab='editor';openMairaDocumentImport()">✧ Crear con MAIRA</button><button class="ghost-button" @click="loadOriginalContractFlowDraft">Flujo original · 23 actividades</button><button class="ghost-button" @click="newWorkflow">＋ Nuevo flujo</button><button class="ghost-button" @click="fileInput?.click()">↥ Importar</button><button class="primary-button" @click="exportDraft">↧ Exportar JSON</button><button class="ghost-button" :disabled="portalBusy" @click="publishPilot">Publicar plantilla</button></div></div>
 
         <div class="workflow-mode-select" role="group" aria-label="Modo de visualización del proceso">
           <button type="button" :class="{active:studioTab==='pantallas'}" @click="studioTab='pantallas'">Vista operativa</button>
@@ -1392,10 +1400,10 @@ function simulateDraft(){
         </div>
         <div class="workflow-source-banner">
           <div><span class="eyebrow">PROCESO SELECCIONADO</span><strong>{{workflowName}}</strong>
-            <small v-if="isFamisanarCase">Famisanar · Fuente documental · Responsables y condiciones por validar</small>
+            <small v-if="isOriginalFirstFlow">Documento original de 2 páginas · Roles y campos pendientes de confirmar</small>
             <small v-else>Borrador local · La vista muestra exactamente la definición seleccionada</small></div>
           <div class="workflow-source-actions">
-            <button type="button" class="ghost-button" @click="loadFamisanarCaseDraft">Abrir caso Famisanar</button>
+            <button type="button" class="ghost-button" @click="loadOriginalContractFlowDraft">Abrir flujo original</button>
             <button v-if="archivedPilotDraft" type="button" class="ghost-button" @click="openArchivedPilotDraft">Ver ejercicio anterior</button>
           </div>
         </div>
@@ -1602,11 +1610,11 @@ function simulateDraft(){
         <section v-if="studioTab==='editor'&&sourceReviewRequired" class="maira-review-gate">
           <strong>Revisión documental obligatoria</strong>
           <p>El proceso conserva los datos del documento, pero no verifica automáticamente los responsables ni las flechas. Comprueba cada etapa en el diseñador antes de confirmar.</p>
-          <div v-if="isFamisanarCase" class="famisanar-review-form">
-            <div class="famisanar-review-heading"><strong>Definiciones pendientes · Famisanar</strong><span>Fuente: Hoja1 · A3–A12</span></div>
-            <p>MAIRA necesita estas definiciones para configurar el caso. Las respuestas quedan en el borrador, pero no ejecutan cambios ni sustituyen la aprobación de Famisanar.</p>
+          <div v-if="isOriginalFirstFlow" class="original-review-form">
+            <div class="original-review-heading"><strong>Definiciones pendientes · Primer flujo</strong><span>Fuente: Ciclo de contratación v2 · PDF</span></div>
+            <p>MAIRA necesita estas definiciones para completar la configuración del primer proceso. Las respuestas quedan en el borrador; no activan contrataciones.</p>
             <label>¿Qué alcance tendrá el procedimiento?
-              <select v-model="famisanarScopeChoice">
+              <select v-model="originalScopeChoice">
                 <option value="">Seleccionar</option>
                 <option value="KEEP_ORIGINAL">Conservar el procedimiento fuente</option>
                 <option value="ADAPT_TO_ENTITY">Adaptarlo para una configuración específica</option>
@@ -1614,14 +1622,14 @@ function simulateDraft(){
             </label>
             <label v-for="(question,index) in studioReviewQuestions" :key="index">
               <span>{{index+1}}. {{question}}</span>
-              <textarea :value="famisanarClarificationAnswers[question]||''" rows="2" maxlength="650"
+              <textarea :value="originalClarificationAnswers[question]||''" rows="2" maxlength="650"
                  placeholder="Respuesta o información por confirmar"
-                 @input="famisanarClarificationAnswers={...famisanarClarificationAnswers,[question]:($event.target as HTMLTextAreaElement).value}"></textarea>
+                 @input="originalClarificationAnswers={...originalClarificationAnswers,[question]:($event.target as HTMLTextAreaElement).value}"></textarea>
             </label>
-            <button class="ghost-button" type="button" @click="saveFamisanarClarifications">
+            <button class="ghost-button" type="button" @click="saveOriginalFlowClarifications">
               Registrar aclaraciones del caso
             </button>
-            <span v-if="studioMairaDialogue?.completed" class="famisanar-review-complete">Aclaraciones registradas para este borrador. Debes verificar las tareas y los roles antes de cualquier publicación.</span>
+            <span v-if="studioMairaDialogue?.completed" class="original-review-complete">Aclaraciones registradas para este borrador. Debes verificar las tareas y los roles antes de cualquier publicación.</span>
           </div>
           <p v-if="studioMairaDialogue?.completed" class="maira-dialogue-record">MAIRA registró {{studioMairaDialogue.questions_total}} decisiones. Alcance: {{studioMairaDialogue.scope_decision==='ADAPT_TO_ENTITY'?'Adaptar a la entidad':'Conservar el proceso original'}}. Las respuestas no modifican automáticamente el workflow.</p>
           <label><input type="checkbox" v-model="reviewRolesConfirmed" /> Revisé responsables, contratante/contratista y pertinencia para esta persona o empresa.</label>
@@ -1634,7 +1642,7 @@ function simulateDraft(){
         </section>
         <div v-show="studioTab==='editor'" class="studio-layout">
           <div class="studio-catalog">
-            <div class="panel-title"><strong>Componentes</strong><button class="tiny-link" @click="loadFamisanarCaseDraft">Restaurar caso Famisanar</button></div>
+            <div class="panel-title"><strong>Componentes</strong><button class="tiny-link" @click="loadOriginalContractFlowDraft">Restaurar flujo original</button></div>
             <p class="panel-caption">Selecciona una etapa y agrega bloques a su recorrido.</p>
             <div v-if="showCatalog" class="catalog-scroll">
               <div v-for="category in categories" :key="category" class="catalog-group"><span class="group-label">{{category}}</span>
