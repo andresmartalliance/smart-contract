@@ -79,6 +79,26 @@ const simulationError = ref('')
 const nodeCounter = ref(1)
 const workflowName = ref('Contratación de red prestadora')
 const workflowKey = ref('RED_PRESTADORA_BASE')
+const workflowMetadata=ref<Record<string,unknown>>({source:'smart-contract-workflow-studio',draft:true})
+const reviewRolesConfirmed=ref(false)
+const reviewRoutesConfirmed=ref(false)
+const reviewedSignature=ref('')
+function sourceReviewSignature(){
+ return JSON.stringify({key:workflowKey.value,name:workflowName.value,modality:modalityKey.value,
+   nodes:nodes.value.map(n=>({id:n.id,data:n.data,position:n.position})),
+   edges:edges.value.map(e=>({source:e.source,target:e.target,data:e.data}))})
+}
+const sourceReviewRequired=computed(()=>workflowMetadata.value.source==='maira-document-import' ||
+ nodes.value.some(n=>Boolean((n.data as WorkNode).config?.source_step)))
+const sourceReviewConfirmed=computed(()=>sourceReviewRequired.value&&reviewRolesConfirmed.value&&reviewRoutesConfirmed.value&&
+ reviewedSignature.value.length>0&&reviewedSignature.value===sourceReviewSignature())
+function resetSourceReview(){reviewRolesConfirmed.value=false;reviewRoutesConfirmed.value=false;reviewedSignature.value=''}
+function confirmSourceReview(){
+ if(!reviewRolesConfirmed.value||!reviewRoutesConfirmed.value){flowMessage.value='Debes confirmar la revisión de responsables y conexiones.';return}
+ if(!validateDraft()){flowMessage.value='Corrige las observaciones del flujo antes de confirmar.';return}
+ reviewedSignature.value=sourceReviewSignature()
+ flowMessage.value='Revisión documental confirmada para esta versión del borrador. Cualquier cambio requiere una nueva verificación.'
+}
 const modalityKey = ref('')
 const flowMessage = ref('')
 const errors = ref<string[]>([])
@@ -87,7 +107,7 @@ const showCatalog = ref(true)
 
 type MairaStatus={ready:boolean;google_enabled:boolean;gemini_enabled:boolean;google_client_id:string|null;max_mb:number;extensions:string[]}
 type MairaMapping={source_step:string;source_excerpt:string;node_id:string;page:number|null;confidence:string}
-type MairaProposal={workflow:Workflow;source_map:MairaMapping[];questions:string[];observations:string[];node_count:number;mapped_steps:number;notice:string}
+type MairaProposal={workflow:Workflow;source_map:MairaMapping[];questions:string[];observations:string[];node_count:number;mapped_steps:number;notice:string;analysis_method?:string}
 type PartyProcessPreview = {id:string;party_id:string;filename:string;status:string;workflow:Workflow;source_map:MairaMapping[];questions:string[];observations:string[];created_at:string}
 type PreviewStage={id:string;step:string;label:string;role:string;kind:string;side:'CONTRATISTA'|'CONTRATANTE'|'REVISAR';source:string;page:number|null;confidence:string;dependencies:string[]}
 function previewStages(proposal:{workflow:Workflow;source_map:MairaMapping[]}):PreviewStage[]{
@@ -162,11 +182,13 @@ const mairaProposal=ref<MairaProposal|null>(null)
 const mairaTargetPartyId=ref('')
 const mairaTargetParty=computed(()=>partyRecords.value.find(x=>x.id===mairaTargetPartyId.value)||null)
 const mairaPreviewStages=computed(()=>mairaProposal.value?previewStages(mairaProposal.value).sort(numericStepOrder):[])
+const sourceOnlyPreview=computed(()=>mairaProposal.value?.workflow.metadata?.source_method==='PDF_TEXT_ONLY')
 const mairaPreviewSaving=ref(false)
 const partyPreview=ref<PartyProcessPreview|null>(null)
 const partyPreviewTarget=ref<PartyRecord|null>(null)
 const partyPreviewBusy=ref(false)
 const savedPreviewStages=computed(()=>partyPreview.value?previewStages(partyPreview.value).sort(numericStepOrder):[])
+const savedSourceOnly=computed(()=>partyPreview.value?.workflow.metadata?.source_method==='PDF_TEXT_ONLY')
 
 const mairaApplyConfirm=ref(false)
 const loginGoogleMount=ref<HTMLElement|null>(null)
@@ -240,6 +262,10 @@ async function setupPilot(){
  finally{portalBusy.value=false}
 }
 async function publishPilot(){
+ if(sourceReviewRequired.value&&!sourceReviewConfirmed.value){
+  portalError.value='Antes de publicar debes verificar roles, pertinencia y dependencias del documento en Workflow Studio.'
+  return
+ }
  portalBusy.value=true;portalError.value='';portalMessage.value=''
  try{
   const result=await portalRequest<{id:string;version:number}>('/workflows/publish','POST',{workflow:definition()})
@@ -611,6 +637,7 @@ function nodeInfo(id:string, kind:Kind, label:string, x:number,y:number,role:str
   return {id,type:kind==='START'?'input':kind==='END'?'output':'default',position:{x,y},data:{label,kind,role,policy,enabled:true,config:{execution_mode:'MANUAL',fields:[]}},class:kind==='START'?'node-start':kind==='END'?'node-end':'node-'+kind.toLowerCase()}
 }
 function loadExample(){
+ workflowMetadata.value={source:'smart-contract-workflow-studio',draft:true};resetSourceReview()
   workflowName.value='Contratación de red prestadora';workflowKey.value='RED_PRESTADORA_BASE';modalityKey.value=''
   nodes.value=[
     nodeInfo('inicio','START','Solicitud de contratación',260,24,null,'ORG_REQUIRED'),
@@ -624,6 +651,7 @@ function loadExample(){
   selectedId.value='documentos';selectedEdgeId.value=null;nodeCounter.value=1;errors.value=[];simulationVisible.value=false;flowMessage.value='Plantilla base cargada para edición.'
 }
 function loadPortalPilotExample(){
+ workflowMetadata.value={source:'smart-contract-workflow-studio',draft:true};resetSourceReview()
  workflowName.value='Ciclo de contratación · prueba entre dos portales'
  workflowKey.value='PILOTO_DOBLE_PORTAL'
  modalityKey.value='PRUEBA'
@@ -645,6 +673,7 @@ function loadPortalPilotExample(){
  flowMessage.value='Ejemplo ficticio de doble portal. Revisa las etapas y publica solo para el piloto.'
 }
 function newWorkflow(){
+ workflowMetadata.value={source:'smart-contract-workflow-studio',draft:true};resetSourceReview()
   workflowName.value='Nuevo proceso de contratación';workflowKey.value='NUEVO_PROCESO';modalityKey.value=''
   nodes.value=[nodeInfo('inicio','START','Inicio',230,60,null,'ORG_REQUIRED'),nodeInfo('fin','END','Finalización',230,270,null,'ORG_REQUIRED')]
   edges.value=[{id:'e-inicio-fin',source:'inicio',target:'fin'}]
@@ -877,7 +906,8 @@ function validateDraft():boolean{
 function definition():Workflow{
   return {key:workflowKey.value.trim(),name:workflowName.value.trim(),modality_key:modalityKey.value.trim()||null,
     nodes:nodes.value.map(n=>{const d=n.data as WorkNode;return {id:n.id,label:String(d.label),kind:d.kind,role:d.role||null,policy:d.policy,enabled:d.enabled,when:d.when||null,config:{...d.config,position:{x:n.position.x,y:n.position.y}}}}),
-    edges:edges.value.map(e=>({source:e.source,target:e.target,when:(e.data as {when?:Condition}|undefined)?.when||null})),metadata:{source:'smart-contract-workflow-studio',draft:true}}
+    edges:edges.value.map(e=>({source:e.source,target:e.target,when:(e.data as {when?:Condition}|undefined)?.when||null})),
+    metadata:{...workflowMetadata.value,draft:true,review_confirmed:sourceReviewRequired.value?sourceReviewConfirmed.value:false}}
 }
 function exportDraft(){
   const result=definition()
@@ -928,6 +958,8 @@ function loadDefinition(parsed:Partial<Workflow>){
  const ids=new Set(imported.map(n=>n.id))
  if(parsedEdges.some(e=>!ids.has(e.source)||!ids.has(e.target)))throw new Error('Hay conexiones con etapas inexistentes.')
  workflowKey.value=parsed.key;workflowName.value=parsed.name;modalityKey.value=parsed.modality_key||''
+ workflowMetadata.value={...(parsed.metadata||{}),draft:true}
+ resetSourceReview()
  nodes.value=imported;edges.value=parsedEdges;selectedId.value=null;selectedEdgeId.value=null;simulationVisible.value=false
  nodeCounter.value=imported.length+1;errors.value=[]
 }
@@ -1078,7 +1110,7 @@ function simulateDraft(){
                 <input type="file" :disabled="mairaImportBusy" accept=".pdf,.png,.jpg,.jpeg,.txt,application/pdf,image/png,image/jpeg,text/plain" @change="chooseMairaSource"/>
               </label>
               <div v-if="mairaSourceFile" class="maira-import-selected">{{mairaSourceFile.name}} · {{(mairaSourceFile.size/1024).toFixed(0)}} KB</div>
-              <p class="maira-import-fine">PDF, imagen o TXT · Máximo 6 MB. Únicamente documentos sintéticos o autorizados. El archivo se envía a Gemini para su análisis y no se guarda en Smart Contract.</p>
+              <p class="maira-import-fine">PDF, imagen o TXT · Máximo 6 MB. Únicamente documentos sintéticos o autorizados. «Analizar con Maira» envía el archivo a Gemini; «Extraer pasos sin Gemini» lo procesa en Smart Contract. El archivo no se conserva.</p>
               <div class="pilot-actions">
                 <button type="button" class="primary-button" :disabled="!mairaImportStatus?.ready||!mairaGoogleToken||!mairaSourceFile||mairaImportBusy" @click="analyzeMairaDocument">
                   {{mairaImportBusy?'Maira está analizando…':'Analizar documento con Maira'}}
@@ -1126,17 +1158,22 @@ function simulateDraft(){
               <template v-if="mairaProposal">
                 <div class="maira-import-metrics"><span><b>{{mairaProposal.node_count}}</b> nodos</span><span><b>{{mairaProposal.mapped_steps}}</b> pasos identificados</span><span><b>{{mairaProposal.questions.length}}</b> preguntas</span></div>
                 <div class="maira-preview-card">
-                  <strong>Así se distribuirían las actividades {{mairaTargetParty?'para '+mairaTargetParty.name:''}}</strong>
+                  <strong>{{sourceOnlyPreview?'Actividades recuperadas del documento original':'Así se distribuirían las actividades '+(mairaTargetParty?'para '+mairaTargetParty.name:'')}}</strong>
+                  <p v-if="sourceOnlyPreview" class="maira-preview-alert">Extracción textual sin Gemini. Los responsables provienen del PDF, no son asignaciones aprobadas para {{mairaTargetParty?.name||'la institución'}}. Las conexiones son provisionales.</p>
                   <p class="maira-import-fine">Las responsabilidades son una propuesta. No se inventan campos o documentos que no figuren en el diagrama.</p>
-                  <div class="maira-preview-summary">
+                  <div v-if="!sourceOnlyPreview" class="maira-preview-summary">
                     <span><b>{{mairaPreviewStages.filter(s=>s.side==='CONTRATISTA').length}}</b> Del contratista</span>
                     <span><b>{{mairaPreviewStages.filter(s=>s.side==='CONTRATANTE').length}}</b> Del contratante</span>
                     <span><b>{{mairaPreviewStages.filter(s=>s.side==='REVISAR').length}}</b> Por definir</span>
                   </div>
+                  <div v-else class="maira-preview-summary"><span><b>{{mairaPreviewStages.length}}</b> actividades del documento</span><span>Roles por revisar</span><span>Dependencias provisionales</span></div>
                   <div class="maira-preview-tasks">
                     <div v-for="stage in mairaPreviewStages" :key="stage.id" class="maira-preview-task">
                       <span class="maira-preview-number">{{stage.step}}</span>
-                      <div><strong>{{stage.label}}</strong><small>{{stage.role}} · {{stage.side==='CONTRATISTA'?'Hospital / contratista':stage.side==='CONTRATANTE'?'Entidad contratante':'Por asignar'}}</small><small>Origen: {{stage.source}}{{stage.page?' · Página '+stage.page:''}}</small><small>Depende de: {{stage.dependencies.join(', ')||'Inicio'}}</small></div>
+                      <div><strong>{{stage.label}}</strong><small v-if="sourceOnlyPreview">Responsable original: {{stage.role}} · Asignación institucional no verificada</small><small v-else>{{stage.role}} · {{stage.side==='CONTRATISTA'?'Hospital / contratista':stage.side==='CONTRATANTE'?'Entidad contratante':'Por asignar'}}</small>
+                        <small>Origen: {{stage.source}}{{stage.page?' · Página '+stage.page:''}}</small>
+                        <small v-if="sourceOnlyPreview">Conexión provisional por numeración: {{stage.dependencies.join(', ')||'Inicio'}} · Validar flechas</small>
+                        <small v-else>Depende de: {{stage.dependencies.join(', ')||'Inicio'}}</small></div>
                     </div>
                   </div>
                   <p v-if="mairaTargetParty?.kind==='JURIDICA'&&mairaPreviewStages.some(s=>s.role==='ASPIRANTE')" class="maira-preview-alert">El documento identifica actividades de un aspirante. Antes de asignarlas a una empresa, valida si aplican al hospital o a un representante autorizado.</p>
@@ -1144,7 +1181,7 @@ function simulateDraft(){
                 <div v-if="mairaProposal.questions.length"><strong>Dudas que requieren revisión</strong><p v-for="(question,i) in mairaProposal.questions" :key="i">• {{question}}</p></div>
                 <div v-if="mairaProposal.observations.length"><strong>Observaciones</strong><p v-for="(item,i) in mairaProposal.observations" :key="i">• {{item}}</p></div>
                 <div class="pilot-actions">
-                  <button v-if="mairaTargetParty" type="button" class="primary-button" :disabled="mairaPreviewSaving" @click="saveMairaPreview">{{mairaPreviewSaving?'Guardando…':'Guardar vista previa en '+mairaTargetParty.name}}</button>
+                  <button v-if="mairaTargetParty" type="button" class="primary-button" :disabled="mairaPreviewSaving" @click="saveMairaPreview">{{mairaPreviewSaving?'Guardando…':sourceOnlyPreview?'Guardar borrador sin aprobar en '+mairaTargetParty.name:'Guardar vista previa en '+mairaTargetParty.name}}</button>
                   <button type="button" class="ghost-button" @click="applyMairaProposal">{{mairaApplyConfirm?'Confirmar reemplazo del borrador':'Revisar en diseñador'}}</button>
                 </div>
                 <p class="maira-import-fine">Las etapas originales conservarán su número y cita en Propiedades. Antes de aplicar puedes usar «Exportar JSON» para respaldar el borrador actual.</p>
@@ -1159,6 +1196,17 @@ function simulateDraft(){
           <label>Identificador<input v-model="workflowKey" maxlength="120" aria-label="Identificador del proceso" /></label>
           <label>Modalidad <span class="field-hint">opcional</span><input v-model="modalityKey" placeholder="Definida por la entidad" maxlength="120" aria-label="Modalidad configurable" /></label>
         </div>
+        <section v-if="sourceReviewRequired" class="maira-review-gate">
+          <strong>Revisión documental obligatoria</strong>
+          <p>El proceso conserva los datos del documento, pero no verifica automáticamente los responsables ni las flechas. Comprueba cada etapa en el diseñador antes de confirmar.</p>
+          <label><input type="checkbox" v-model="reviewRolesConfirmed" /> Revisé responsables, contratante/contratista y pertinencia para esta persona o empresa.</label>
+          <label><input type="checkbox" v-model="reviewRoutesConfirmed" /> Revisé las dependencias, secuencia y condiciones contra el diagrama original.</label>
+          <div class="pilot-actions">
+            <button type="button" class="ghost-button" :disabled="!reviewRolesConfirmed||!reviewRoutesConfirmed" @click="confirmSourceReview">Confirmar revisión del borrador</button>
+            <span v-if="sourceReviewConfirmed" class="maira-review-ok">Revisión registrada para esta versión. Si editas el flujo, habrá que confirmar de nuevo.</span>
+            <span v-else class="maira-review-pending">Publicación bloqueada hasta completar la revisión.</span>
+          </div>
+        </section>
         <div class="studio-layout">
           <div class="studio-catalog">
             <div class="panel-title"><strong>Componentes</strong><button class="tiny-link" @click="loadExample">Restaurar ejemplo</button></div>
@@ -1340,13 +1388,20 @@ function simulateDraft(){
               <p>Proceso interpretado: {{partyPreview.workflow.name}} · {{partyPreview.source_map.length}} actividades</p></div>
             <button type="button" class="ghost-button" @click="partyPreview=null;partyPreviewTarget=null">Cerrar</button>
           </div>
-          <p class="pilot-notice">Esta es una simulación de responsabilidades. El prestador no recibe estas tareas hasta que un administrador apruebe y active una plantilla en un expediente.</p>
-          <div class="maira-preview-summary">
+          <p class="pilot-notice">{{savedSourceOnly?'Texto extraído sin Gemini. Los roles pertenecen al documento original. Ninguna tarea está asignada a la empresa y las conexiones son provisionales.':'Esta es una simulación de responsabilidades. El prestador no recibe estas tareas hasta que un administrador apruebe y active una plantilla en un expediente.'}}</p>
+          <div v-if="savedSourceOnly" class="maira-preview-card">
+            <strong>Actividades originales pendientes de revisión</strong>
+            <div v-for="stage in savedPreviewStages" :key="stage.id" class="maira-preview-task">
+              <span class="maira-preview-number">{{stage.step}}</span>
+              <div><strong>{{stage.label}}</strong><small>Responsable original: {{stage.role}} · {{stage.page?'Página '+stage.page:'Sin página'}}</small><small>Conexión provisional: {{stage.dependencies.join(', ')||'Inicio'}} · Revisar en el diagrama</small></div>
+            </div>
+          </div>
+          <div v-else class="maira-preview-summary">
             <span><b>{{savedPreviewStages.filter(s=>s.side==='CONTRATISTA').length}}</b> Actividades del prestador</span>
             <span><b>{{savedPreviewStages.filter(s=>s.side==='CONTRATANTE').length}}</b> Actividades internas</span>
             <span><b>{{savedPreviewStages.filter(s=>s.side==='REVISAR').length}}</b> Por clasificar</span>
           </div>
-          <div class="maira-preview-task-grid">
+          <div v-if="!savedSourceOnly" class="maira-preview-task-grid">
             <div class="maira-preview-card">
               <strong>Así lo vería {{partyPreviewTarget.name}}</strong>
               <p v-if="!savedPreviewStages.some(s=>s.side==='CONTRATISTA')" class="pilot-muted">Todavía no hay actividades asignadas al prestador. El responsable debe confirmarse.</p>

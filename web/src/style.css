@@ -447,3 +447,12 @@ nav button.active .nav-icon{stroke:#236ed3;transform:scale(1.03)}
 @keyframes maira-circle-spin{to{transform:rotate(360deg)}}
 @media(max-width:650px){.maira-live-main{gap:13px}.maira-progress-circle,.maira-progress-circle svg{width:96px;height:96px}.maira-progress-circle{flex-basis:96px}.maira-circle-number strong{font-size:24px}}
 @media(prefers-reduced-motion:reduce){.maira-circle-activity{animation:none}.maira-circle-fill{transition:none}}
+
+/* MAIRA: review provenance before a documentary process is publishable */
+.maira-review-gate{display:grid;gap:12px;padding:18px;border:1px solid #eadbbf;border-radius:15px;background:#fffaf3}
+.maira-review-gate>strong{font-size:14px;color:#6d4b31}
+.maira-review-gate p{font-size:12px;color:#776953;line-height:1.6;margin:0}
+.maira-review-gate label{display:flex;align-items:flex-start;gap:9px;font-size:12px;line-height:1.55;color:#534d44}
+.maira-review-gate input[type=checkbox]{margin-top:3px;accent-color:#357d7a}
+.maira-review-ok{color:#28745f;font-size:11px}
+.maira-review-pending{color:#9c7144;font-size:11px}
