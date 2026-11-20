@@ -483,25 +483,24 @@ async def _probe_gemini_model(api_key: str, model: str) -> dict[str, Any]:
 
 @router.post("/workflow-import/diagnose-models")
 async def diagnose_gemini_models(email: str = Depends(_verify_identity)):
-    """Check the configured model and one documented stable Flash alternative.
+    """Check configured Gemini and a verified Flash-Lite alternative.
 
-    Access is restricted to the same verified Google allowlist. Two tiny model
-    calls, in parallel, with no retries and no source documents or secrets.
-    A successful tiny text probe does not guarantee PDF processing.
+    Same Google allowlist. Up to two small text calls with no retries.
+    A successful probe does not certify contractual document interpretation.
     """
     _, _, key = _configuration()
     if not key:
         raise HTTPException(503, "Gemini no está configurado.")
     configured = _gemini_model()
-    models = list(dict.fromkeys([configured, "gemini-3.8-flash"]))
+    models = list(dict.fromkeys([configured, "gemini-3.5-flash-lite"]))
     results = await asyncio.gather(*[_probe_gemini_model(key, name) for name in models])
     working = [entry["model"] for entry in results if entry["state"] == "OK"]
     recommended = configured if configured in working else (
-        "gemini-3.8-flash" if "gemini-3.8-flash" in working else None
+        "gemini-3.5-flash-lite" if "gemini-3.5-flash-lite" in working else None
     )
     return {"configured_model": configured, "results": results,
             "recommended_model": recommended, "verified": bool(recommended),
-            "notice": "Se probaron dos solicitudes mínimas de texto, sin documentos. "
+            "notice": "Se probaron hasta dos solicitudes mínimas de texto, sin documentos. "
                       "Una respuesta satisfactoria no garantiza el análisis del PDF."}
 
 
@@ -571,7 +570,7 @@ async def _call_gemini(data: bytes, suffix: str, filename: str, api_key: str,
     else:
         parts = [{"text": PROMPT + context + "\n\nDocumento: " + filename},
                  {"inline_data": {"mime_type": MIMES[suffix], "data": base64.b64encode(data).decode("ascii")}}]
-    if model_override is not None and model_override != "gemini-3.8-flash":
+    if model_override is not None and model_override != "gemini-3.5-flash-lite":
         raise HTTPException(400, "Modelo de análisis no permitido.")
     model = model_override or _gemini_model()
     req = {"contents": [{"role": "user", "parts": parts}],
@@ -826,7 +825,7 @@ async def local_pdf_source_preview(
 async def interpret_workflow_document_stream(
     file: UploadFile = File(...),
     party_kind: Literal["NATURAL", "JURIDICA"] | None = Form(default=None),
-    model_choice: Literal["gemini-3.8-flash"] | None = Form(default=None),
+    model_choice: Literal["gemini-3.5-flash-lite"] | None = Form(default=None),
     email: str = Depends(_verify_identity),
 ):
     """Incremental NDJSON: explicit server milestones; heartbeat is not progress."""

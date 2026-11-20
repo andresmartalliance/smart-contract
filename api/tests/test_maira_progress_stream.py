@@ -81,15 +81,15 @@ def test_diagnose_models_finds_real_text_alternative_without_documents(testing, 
     async def fake_probe(key, model):
         captured.append(model)
         assert key == "secret_test_key"
-        return {"model": model, "state": "OK" if model == "gemini-3.8-flash" else "UNAVAILABLE",
-                "http": 200 if model == "gemini-3.8-flash" else 503}
+        return {"model": model, "state": "OK" if model == "gemini-3.5-flash-lite" else "UNAVAILABLE",
+                "http": 200 if model == "gemini-3.5-flash-lite" else 503}
 
     monkeypatch.setattr(maira, "_probe_gemini_model", fake_probe)
     try:
         response = client.post("/api/v1/maira/workflow-import/diagnose-models")
         assert response.status_code == 200
-        assert sorted(captured) == ["gemini-3.6-flash", "gemini-3.8-flash"]
-        assert response.json()["recommended_model"] == "gemini-3.8-flash"
+        assert sorted(captured) == ["gemini-3.6-flash", "gemini-3.5-flash-lite"]
+        assert response.json()["recommended_model"] == "gemini-3.5-flash-lite"
         assert "secret_test_key" not in response.text
         assert "PDF" in response.json()["notice"]
     finally:
@@ -111,9 +111,9 @@ def test_stream_override_is_limited_to_approved_flash_name(testing, monkeypatch)
     try:
         files = {"file": ("diagram.pdf", b"%PDF-1.4 synthetic", "application/pdf")}
         valid = client.post("/api/v1/maira/workflow-import/stream", files=files,
-                            data={"model_choice": "gemini-3.8-flash"})
+                            data={"model_choice": "gemini-3.5-flash-lite"})
         assert valid.status_code == 200
-        assert captured["model"] == "gemini-3.8-flash"
+        assert captured["model"] == "gemini-3.5-flash-lite"
         invalid = client.post("/api/v1/maira/workflow-import/stream", files=files,
                               data={"model_choice": "unverified-expensive-pro"})
         assert invalid.status_code == 422
@@ -135,5 +135,23 @@ def test_diagnose_reports_both_models_unavailable_without_recommending(testing, 
         assert response.status_code == 200
         assert response.json()["verified"] is False
         assert response.json()["recommended_model"] is None
+    finally:
+        app.dependency_overrides.pop(maira._verify_identity, None)
+
+def test_diagnose_configured_flash_lite_is_verified_without_other_model(testing, monkeypatch):
+    client, _ = testing
+    monkeypatch.setenv("SMART_GEMINI_API_KEY", "fake")
+    monkeypatch.setenv("SMART_GEMINI_MODEL", "gemini-3.5-flash-lite")
+    app.dependency_overrides[maira._verify_identity] = lambda: "authorized@example.com"
+    called = []
+    async def fake_probe(key, model):
+        called.append(model)
+        return {"model": model, "state": "OK", "http": 200}
+    monkeypatch.setattr(maira, "_probe_gemini_model", fake_probe)
+    try:
+        response = client.post("/api/v1/maira/workflow-import/diagnose-models")
+        assert response.status_code == 200
+        assert called == ["gemini-3.5-flash-lite"]
+        assert response.json()["recommended_model"] == "gemini-3.5-flash-lite"
     finally:
         app.dependency_overrides.pop(maira._verify_identity, None)
