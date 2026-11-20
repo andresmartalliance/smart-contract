@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, shallowRef, watch } from 'vue'
 import { VueFlow, Position, type Node, type Edge, type Connection } from '@vue-flow/core'
+import ProviderPortal from './ProviderPortal.vue'
+import { buildFamisanarFirstCase } from './famisanarCase'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 
@@ -16,19 +18,30 @@ type WorkEdge = {source:string;target:string;when?:Condition|null}
 type Workflow = {key: string; name: string; modality_key: string | null; nodes: WorkNode[]; edges: WorkEdge[]; metadata: Record<string, unknown>}
 
 const current = ref<Screen>('resumen')
+const providerPortalMode=ref(window.location.pathname.replace(/\/$/,'')==='/prestador' ||
+ new URLSearchParams(window.location.search).get('view')==='mi-contratacion')
+function openProviderPortal(){
+ providerPortalMode.value=true;current.value='prestadores';activeCase.value=null
+ window.history.pushState({},'','/prestador')
+}
+function closeProviderPortal(){
+ if(!hasInstitution.value)return
+ providerPortalMode.value=false;current.value='contrataciones';activeCase.value=null
+ window.history.pushState({},'','/')
+}
 const mairaOpen = ref(false)
 const mairaLastAction = ref('')
 const menu: { key: Screen; title: string; glyph: string }[] = [
   { key:'resumen',title:'Resumen',glyph:'▦' },
   { key:'personas',title:'Personas y empresas',glyph:'♙' },
   { key:'contrataciones',title:'Gestión Contractual',glyph:'▤' },
-  { key:'prestadores',title:'Mi Contratación',glyph:'⌂' },
+  { key:'prestadores',title:'Portal de prestadores',glyph:'⌂' },
   { key:'flujos',title:'Flujos',glyph:'◇' },
   { key:'maira',title:'MAIRA',glyph:'✳' },
   { key:'configuracion',title:'Configuración',glyph:'⚙' }
 ]
 const screenTitle = computed(() => menu.find(m => m.key === current.value)?.title ?? '')
-const visibleMenu = computed(() => hasInstitution.value || portalSession.value?.can_setup ? menu : menu.filter(m=>m.key==='prestadores'||m.key==='maira'))
+const visibleMenu = computed(() => hasInstitution.value || portalSession.value?.can_setup ? menu : menu.filter(m=>m.key==='prestadores'))
 const iconPaths: Record<Screen,string[]> = {
   resumen: ['M3 3h8v8H3z','M13 3h8v8h-8z','M3 13h8v8H3z','M13 13h8v8h-8z'],
   personas: ['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2','M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8','M18 8a3 3 0 0 1 0 6','M22 21v-2a4 4 0 0 0-3-3.87'],
@@ -518,6 +531,23 @@ async function openCase(id:string){
  try{activeCase.value=await portalRequest<CaseView>('/cases/'+id);draftWorkflowId.value='' }
  catch(e){portalError.value=e instanceof Error?e.message:'No se pudo abrir el expediente'}
 }
+async function completeProviderPortalTask(payload:{taskId:string;data:Record<string,unknown>;note:string}){
+ const opened=activeCase.value
+ if(!opened||opened.side!=='CONTRATISTA'){portalError.value='La cuenta no está autorizada como contratista en este expediente.';return}
+ const task=opened.tasks.find(t=>t.id===payload.taskId)
+ if(!task||task.side!=='CONTRATISTA'||!['PENDING','RETURNED'].includes(task.state)){
+  portalError.value='La actividad no está disponible para esta cuenta.';return
+ }
+ portalBusy.value=true;portalError.value='';portalMessage.value=''
+ try{
+  await portalRequest('/cases/'+opened.case.id+'/tasks/'+task.id+'/complete','POST',{
+   data:payload.data,note:payload.note
+  })
+  portalMessage.value='Actividad registrada con trazabilidad.'
+  await refreshPortal();await openCase(opened.case.id)
+ }catch(e){portalError.value=e instanceof Error?e.message:'No se pudo registrar la actividad'}
+ finally{portalBusy.value=false}
+}
 async function completePortalTask(task:ContractTaskView){
  if(!activeCase.value)return
  portalBusy.value=true;portalError.value=''
@@ -542,7 +572,7 @@ async function returnPortalTask(task:ContractTaskView){
  finally{portalBusy.value=false}
 }
 function inviteLink(){
- const url=window.location.origin+'/?view=mi-contratacion'
+ const url=window.location.origin+'/prestador'
  if(!navigator.clipboard){portalMessage.value='Comparte esta dirección con el usuario invitado: '+url;return}
  void navigator.clipboard.writeText(url).then(()=>{portalMessage.value='Enlace copiado. El invitado debe usar el correo registrado en Google Testing.'}).catch(()=>{portalMessage.value='Comparte esta dirección con el invitado: '+url})
 }
@@ -570,7 +600,9 @@ async function acceptGoogleCredential(credential:string){
   loginEmail.value=payload.email
   portalSession.value=payload
   await refreshPortal()
-  if(!hasInstitution.value)current.value=payload.can_setup?'contrataciones':'prestadores'
+  if(providerPortalMode.value||(!hasInstitution.value&&!payload.can_setup)){
+   providerPortalMode.value=true;current.value='prestadores'
+  }else if(!hasInstitution.value)current.value='contrataciones'
  }catch(e){
   loginToken.value='';mairaGoogleToken.value='';loginEmail.value=''
   loginError.value=e instanceof Error?e.message:'No se pudo validar la sesión'
@@ -821,41 +853,11 @@ const edges = shallowRef<Edge[]>([])
 function nodeInfo(id:string, kind:Kind, label:string, x:number,y:number,role:string|null=null,policy:Policy='OPTIONAL'):Node {
   return {id,type:kind==='START'?'input':kind==='END'?'output':'default',position:{x,y},data:{label,kind,role,policy,enabled:true,config:{execution_mode:'MANUAL',fields:[]}},class:kind==='START'?'node-start':kind==='END'?'node-end':'node-'+kind.toLowerCase()}
 }
-function loadExample(){
- workflowMetadata.value={source:'smart-contract-workflow-studio',draft:true};resetSourceReview()
-  workflowName.value='Contratación de red prestadora';workflowKey.value='RED_PRESTADORA_BASE';modalityKey.value=''
-  nodes.value=[
-    nodeInfo('inicio','START','Solicitud de contratación',260,24,null,'ORG_REQUIRED'),
-    nodeInfo('documentos','DOCUMENT_REVIEW','Revisión documental',260,155,'RED'),
-    nodeInfo('juridica','APPROVAL','Concepto jurídico',70,300,'JURIDICO'),
-    nodeInfo('financiera','APPROVAL','Revisión financiera',455,300,'FINANCIERO'),
-    nodeInfo('acuerdo','DOCUMENT_GENERATION','Acuerdo de voluntades',260,440,'RED'),
-    nodeInfo('fin','END','Formalización',260,570,null,'ORG_REQUIRED')
-  ]
-  edges.value=[{id:'e1',source:'inicio',target:'documentos'},{id:'e2',source:'documentos',target:'juridica'},{id:'e3',source:'documentos',target:'financiera'},{id:'e4',source:'juridica',target:'acuerdo'},{id:'e5',source:'financiera',target:'acuerdo'},{id:'e6',source:'acuerdo',target:'fin'}]
-  selectedId.value='documentos';selectedEdgeId.value=null;nodeCounter.value=1;errors.value=[];simulationVisible.value=false;flowMessage.value='Plantilla base cargada para edición.'
-}
-function loadPortalPilotExample(){
- workflowMetadata.value={source:'smart-contract-workflow-studio',draft:true};resetSourceReview()
- workflowName.value='Ciclo de contratación · prueba entre dos portales'
- workflowKey.value='PILOTO_DOBLE_PORTAL'
- modalityKey.value='PRUEBA'
- const inicio=nodeInfo('inicio','START','Inicio',260,20,null,'ORG_REQUIRED')
- const datos=nodeInfo('datos','FORM','Datos del contratista',260,160,'CONTRATISTA')
- const revision=nodeInfo('revision','APPROVAL','Revisión interna',260,300,'JURIDICO')
- const fin=nodeInfo('fin','END','Cierre del piloto',260,440,null,'ORG_REQUIRED')
- const work=datos.data as WorkNode
- datos.data={...work,config:{...work.config,actor_side:'CONTRATISTA',
-  fields:[{key:'contacto',label:'Persona de contacto (ficticia)',type:'text',required:true}]}}
- const review=revision.data as WorkNode
- revision.data={...review,config:{...review.config,actor_side:'CONTRATANTE'}}
- nodes.value=[inicio,datos,revision,fin]
- edges.value=[{id:'p1',source:'inicio',target:'datos'},
-  {id:'p2',source:'datos',target:'revision'},
-  {id:'p3',source:'revision',target:'fin'}]
- selectedId.value='datos';selectedEdgeId.value=null
- errors.value=[];simulationVisible.value=false
- flowMessage.value='Ejemplo ficticio de doble portal. Revisa las etapas y publica solo para el piloto.'
+function loadFamisanarCaseDraft(){
+ const draft=buildFamisanarFirstCase()
+ loadDefinition(draft)
+ selectedId.value='fam_a6';selectedEdgeId.value=null
+ flowMessage.value='Famisanar: primer caso documental cargado. Roles, condiciones y rutas pendientes de validación; no publicado.'
 }
 function newWorkflow(){
  workflowMetadata.value={source:'smart-contract-workflow-studio',draft:true};resetSourceReview()
@@ -864,7 +866,7 @@ function newWorkflow(){
   edges.value=[{id:'e-inicio-fin',source:'inicio',target:'fin'}]
   selectedId.value=null;selectedEdgeId.value=null;nodeCounter.value=1;errors.value=[];simulationVisible.value=false;flowMessage.value='Proceso en blanco. Agrega bloques desde el catálogo.'
 }
-loadExample()
+loadFamisanarCaseDraft()
 const selectedNode = computed(() => nodes.value.find(n=>n.id===selectedId.value))
 const selectedEdge = computed(() => edges.value.find(e=>e.id===selectedEdgeId.value))
 const selectedEdgeCondition = computed(() => (selectedEdge.value?.data as {when?:Condition}|undefined)?.when)
@@ -916,8 +918,8 @@ const mairaShortcuts = computed(() => !hasInstitution.value ? [{key:'mine',label
 )
 function mairaShortcut(key:string){
   mairaLastAction.value=''
-  if(key==='workflow'){current.value=hasInstitution.value?'flujos':'prestadores';mairaLastAction.value='Espacio disponible abierto.'}
-  else if(key==='mine'){current.value='prestadores';mairaLastAction.value='Mi Contratación abierta.'}
+  if(key==='workflow'){if(hasInstitution.value)current.value='flujos';else openProviderPortal();mairaLastAction.value='Espacio disponible abierto.'}
+  else if(key==='mine'){openProviderPortal();mairaLastAction.value='Portal de prestadores abierto.'}
   else if(key==='maira'){current.value='maira';mairaLastAction.value='Vista de MAIRA abierta.'}
   else if(key==='verify'){
     const valid=validateDraft()
@@ -1244,14 +1246,20 @@ function simulateDraft(){
   <div v-if="!loginToken" class="login-screen">
     <div class="login-panel">
       <img src="/smart-wordmark.png" class="login-logo" alt="Smart" />
-      <h1>Smart Contract</h1>
-      <p>Inicia sesión con tu cuenta Google para acceder a la plataforma contractual.</p>
+      <h1>{{providerPortalMode?'Portal de prestadores':'Smart Contract'}}</h1>
+      <p>{{providerPortalMode?'Ingresa con el correo que recibió la invitación contractual.':'Inicia sesión con tu cuenta Google para acceder a la plataforma contractual.'}}</p>
       <div v-if="loginChecking" class="login-loading" role="status">Verificando acceso…</div>
       <div v-else-if="!mairaImportStatus?.google_enabled" class="login-warning" role="status">El inicio de sesión aún no está configurado. Comprueba el servicio API de Smart Contract.</div>
       <div v-else ref="loginGoogleMount" class="login-google-button" aria-label="Iniciar sesión con Google"></div>
       <div v-if="loginPending" class="login-loading" role="status">Validando cuenta Google…</div>
       <div v-if="loginError" class="login-warning" role="alert">{{loginError}}</div>
     </div>
+  </div>
+  <div v-else-if="providerPortalMode" class="provider-standalone">
+    <ProviderPortal :email="loginEmail" :cases="myCases" :detail="activeCase" :busy="portalBusy"
+      :error="portalError" :message="portalMessage" :can-return-to-admin="hasInstitution"
+      @refresh="refreshPortal" @open-case="openCase" @close-case="activeCase=null"
+      @complete="completeProviderPortalTask" @logout="logoutGoogle" @back-office="closeProviderPortal"/>
   </div>
   <div v-else class="shell">
     <aside class="sidebar">
@@ -1261,7 +1269,7 @@ function simulateDraft(){
       </div>
       <div class="nav-section">Workspace</div>
       <nav aria-label="Navegación principal">
-        <button v-for="entry in visibleMenu" :key="entry.key" :class="{active:current===entry.key,'nav-ai':entry.key==='maira'}" @click="current=entry.key" :aria-current="current===entry.key?'page':undefined">
+        <button v-for="entry in visibleMenu" :key="entry.key" :class="{active:current===entry.key,'nav-ai':entry.key==='maira'}" @click="entry.key==='prestadores'?openProviderPortal():current=entry.key" :aria-current="current===entry.key?'page':undefined">
           <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
             <path v-for="(path,i) in iconPaths[entry.key]" :key="i" :d="path" />
           </svg>
@@ -1274,10 +1282,10 @@ function simulateDraft(){
     <main class="main">
       <header class="top-header">
         <div><small>Workspace / Smart Contract / {{screenTitle}}</small><h1>{{screenTitle}}</h1></div>
-        <div class="top-meta"><span class="top-product">Smart Contract · V6.5.13</span><span class="context-pill">Development</span><button type="button" class="logout-button" @click="logoutGoogle" title="Cerrar sesión Google">Salir</button></div>
+        <div class="top-meta"><span class="top-product">Smart Contract · Famisanar 01</span><span class="context-pill">Development</span><button type="button" class="logout-button" @click="logoutGoogle" title="Cerrar sesión Google">Salir</button></div>
       </header>
       <section v-if="current==='flujos'&&hasInstitution" class="stack">
-        <div class="heading"><div><span class="eyebrow">Diseño inteligente de procesos</span><h2>Workflow Studio</h2><p>Diseña, conecta y valida etapas configurables. Todos los cambios siguen siendo un borrador local.</p></div><div class="header-actions"><button class="primary-button" @click="openMairaDocumentImport()">✧ Crear con MAIRA</button><button class="ghost-button" @click="loadPortalPilotExample">Ejemplo de doble portal</button><button class="ghost-button" @click="newWorkflow">＋ Nuevo flujo</button><button class="ghost-button" @click="fileInput?.click()">↥ Importar</button><button class="primary-button" @click="exportDraft">↧ Exportar JSON</button><button class="ghost-button" :disabled="portalBusy" @click="publishPilot">Publicar plantilla de prueba</button></div></div>
+        <div class="heading"><div><span class="eyebrow">Diseño inteligente de procesos</span><h2>Workflow Studio</h2><p>Diseña, conecta y valida etapas configurables. Todos los cambios siguen siendo un borrador local.</p></div><div class="header-actions"><button class="primary-button" @click="openMairaDocumentImport()">✧ Crear con MAIRA</button><button class="ghost-button" @click="loadFamisanarCaseDraft">Caso Famisanar · Prefactibilidad</button><button class="ghost-button" @click="newWorkflow">＋ Nuevo flujo</button><button class="ghost-button" @click="fileInput?.click()">↥ Importar</button><button class="primary-button" @click="exportDraft">↧ Exportar JSON</button><button class="ghost-button" :disabled="portalBusy" @click="publishPilot">Publicar plantilla</button></div></div>
 
         <div v-if="mairaImportOpen" class="maira-import-surface" role="region" aria-label="Crear flujo a partir de documento con MAIRA">
           <div class="maira-import-head">
@@ -1462,7 +1470,7 @@ function simulateDraft(){
         </section>
         <div class="studio-layout">
           <div class="studio-catalog">
-            <div class="panel-title"><strong>Componentes</strong><button class="tiny-link" @click="loadExample">Restaurar ejemplo</button></div>
+            <div class="panel-title"><strong>Componentes</strong><button class="tiny-link" @click="loadFamisanarCaseDraft">Restaurar caso Famisanar</button></div>
             <p class="panel-caption">Selecciona una etapa y agrega bloques a su recorrido.</p>
             <div v-if="showCatalog" class="catalog-scroll">
               <div v-for="category in categories" :key="category" class="catalog-group"><span class="group-label">{{category}}</span>
@@ -1678,7 +1686,7 @@ function simulateDraft(){
         </div>
       </section>
       <section v-else-if="current==='contrataciones'&&(hasInstitution||portalSession?.can_setup)" class="contract-space">
-        <div class="contract-hero"><div><span class="eyebrow">SMART CONTRACT · PILOTO</span><h2>Gestión Contractual</h2><p>Publica una plantilla de prueba, invita a una persona o empresa y gestiona las actividades desde aquí.</p></div><button class="ghost-button" @click="refreshPortal">Actualizar</button></div>
+        <div class="contract-hero"><div><span class="eyebrow">SMART CONTRACT · CONTRATANTE</span><h2>Gestión Contractual</h2><p>Gestiona expedientes, define responsables y revisa el avance de tus contratistas.</p></div><div class="pilot-actions"><button class="ghost-button" @click="openProviderPortal">Ver portal de IPS</button><button class="ghost-button" @click="refreshPortal">Actualizar</button></div></div>
         <div class="pilot-notice">Ambiente de evaluación con datos sintéticos. No admite documentos confidenciales, firma válida ni contratación productiva.</div>
         <div v-if="portalError" class="pilot-error" role="alert">{{portalError}}</div>
         <div v-if="portalMessage" class="pilot-success" role="status">{{portalMessage}}</div>
@@ -1713,21 +1721,6 @@ function simulateDraft(){
           </div>
         </template>
       </section>
-      <section v-else-if="current==='prestadores'" class="contract-space">
-        <div class="contract-hero"><div><span class="eyebrow">SMART CONTRACT · ESPACIO PERSONAL</span><h2>Mi Contratación</h2><p>Consulta las actividades que la entidad te ha asignado. Solo aparecen las invitaciones asociadas a tu cuenta Google.</p></div><button class="ghost-button" @click="refreshPortal">Actualizar</button></div>
-        <div class="pilot-notice">Piloto con datos sintéticos. Las firmas y documentos no se reciben todavía desde este espacio.</div>
-        <div v-if="portalError" class="pilot-error" role="alert">{{portalError}}</div>
-        <div v-if="portalMessage" class="pilot-success" role="status">{{portalMessage}}</div>
-        <div class="pilot-panel">
-          <h3>Mis procesos <span class="pilot-count">{{myCases.length}}</span></h3>
-          <p v-if="!myCases.length" class="pilot-muted">No tienes invitaciones asignadas. Deben invitarte desde Gestión Contractual usando exactamente este correo: {{loginEmail}}.</p>
-          <button v-for="caseItem in myCases" :key="caseItem.id" class="pilot-case-row" @click="openCase(caseItem.id)">
-            <span><strong>{{caseItem.title}}</strong><small>Contratación: {{caseItem.party_name}}</small></span>
-            <span>{{caseItem.workflow_version_id?caseItem.completed+'/'+caseItem.total:'Sin plantilla'}} · {{caseItem.state==='DRAFT'?'Borrador':caseItem.state==='COMPLETED'?'Finalizado':'En trámite'}}</span>
-          </button>
-        </div>
-      </section>
-
       <section v-else class="overview">
         <div class="placeholder-panel">
           <div class="placeholder-icon">{{menu.find(m=>m.key===current)?.glyph}}</div>
@@ -1738,7 +1731,7 @@ function simulateDraft(){
           <button class="primary-button" @click="current='flujos'">Abrir Workflow Studio ↗</button>
         </div>
       </section>
-      <section v-if="activeCase&&(current==='contrataciones'||current==='prestadores')" class="contract-case-detail">
+      <section v-if="activeCase&&current==='contrataciones'" class="contract-case-detail">
         <div class="pilot-detail-top"><div><span class="eyebrow">EXPEDIENTE DE PRUEBA · {{activeCase.side}}</span><h3>{{activeCase.case.title}}</h3><p>{{activeCase.case.party_name}} · {{activeCase.case.completed}} de {{activeCase.case.total}} actividades completadas</p></div><button class="ghost-button" @click="activeCase=null">Cerrar detalle</button></div>
         <div class="pilot-progress"><div :style="{width:activeCase.case.total?Math.round(100*activeCase.case.completed/activeCase.case.total)+'%':'0%'}"></div></div>
         <div v-if="activeCase.side==='CONTRATANTE'&&!activeCase.case.workflow_version_id" class="pilot-draft-attach">
