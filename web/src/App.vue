@@ -94,6 +94,7 @@ const sourceReviewConfirmed=computed(()=>sourceReviewRequired.value&&reviewRoles
  reviewedSignature.value.length>0&&reviewedSignature.value===sourceReviewSignature())
 function resetSourceReview(){reviewRolesConfirmed.value=false;reviewRoutesConfirmed.value=false;reviewedSignature.value=''}
 function confirmSourceReview(){
+ if(sourceReviewRequired.value&&studioMairaDialogue.value?.completed!==true){flowMessage.value='Debes responder las preguntas de MAIRA antes de confirmar la revisión.';return}
  if(!reviewRolesConfirmed.value||!reviewRoutesConfirmed.value){flowMessage.value='Debes confirmar la revisión de responsables y conexiones.';return}
  if(!validateDraft()){flowMessage.value='Corrige las observaciones del flujo antes de confirmar.';return}
  reviewedSignature.value=sourceReviewSignature()
@@ -184,6 +185,57 @@ const mairaTargetPartyId=ref('')
 const mairaTargetParty=computed(()=>partyRecords.value.find(x=>x.id===mairaTargetPartyId.value)||null)
 const mairaPreviewStages=computed(()=>mairaProposal.value?previewStages(mairaProposal.value,mairaTargetParty.value?.kind).sort(numericStepOrder):[])
 const sourceOnlyPreview=computed(()=>mairaProposal.value?.workflow.metadata?.source_method==='PDF_TEXT_ONLY')
+
+// MAIRA: ask about intended process before treating a generated graph as final.
+type MairaIntent='KEEP_ORIGINAL'|'ADAPT_TO_ENTITY'|''
+type MairaDialogue={scope_decision:MairaIntent;completed:boolean;questions_total:number;answers:{question:string;answer:string}[]}
+const mairaIntent=ref<MairaIntent>('')
+const mairaQuestionCursor=ref(0)
+const mairaAnswerText=ref('')
+const mairaAnswers=ref<Record<string,string>>({})
+const mairaQuestionError=ref('')
+const mairaScopeMismatch=computed(()=>mairaTargetParty.value?.kind==='JURIDICA'&&Boolean(
+ mairaProposal.value?.source_map.some(x=>/aspirante|personal a contratar|arl/i.test(x.source_excerpt))))
+const mairaScopePrompt=computed(()=>mairaScopeMismatch.value?
+ 'Este diagrama describe la contratación de aspirantes, pero el destinatario es '+(mairaTargetParty.value?.name||'una persona jurídica')+
+ '. ¿Quieres conservar el proceso original o adaptarlo a la contratación de una IPS?':
+ '¿Deseas conservar el proceso original del documento o adaptarlo a la entidad seleccionada?')
+const mairaQuestions=computed(()=>{
+ if(!mairaProposal.value)return [] as string[]
+ return [mairaScopePrompt.value,
+ ...(mairaIntent.value==='ADAPT_TO_ENTITY'?['¿Qué reglas, documentos y responsables necesitarían cambiar para esta entidad? Indica qué información falta por definir.']:[]),
+ ...mairaProposal.value.questions]
+})
+const mairaTotalQuestions=computed(()=>mairaQuestions.value.length)
+const mairaAnsweredQuestions=computed(()=>mairaQuestions.value.filter((q,i)=>i===0?Boolean(mairaIntent.value):Boolean(mairaAnswers.value[q]?.trim())).length)
+const mairaQuestionsDone=computed(()=>Boolean(mairaProposal.value&&mairaIntent.value&&mairaAnsweredQuestions.value===mairaTotalQuestions.value))
+const mairaCurrentQuestion=computed(()=>mairaQuestions.value[mairaQuestionCursor.value]||'')
+function resetMairaQuestions(){mairaIntent.value='';mairaQuestionCursor.value=0;mairaAnswerText.value='';mairaAnswers.value={};mairaQuestionError.value=''}
+function mairaBack(){if(mairaQuestionCursor.value<=0)return;mairaQuestionCursor.value--;mairaQuestionError.value='';
+ mairaAnswerText.value=mairaAnswers.value[mairaCurrentQuestion.value]||''}
+function mairaAnswer(){
+ mairaQuestionError.value=''
+ if(mairaQuestionCursor.value===0){
+  if(!mairaIntent.value){mairaQuestionError.value='Elige cómo utilizar este documento.';return}
+ }else{
+  const answer=mairaAnswerText.value.trim()
+  if(answer.length<4){mairaQuestionError.value='Escribe una respuesta o indica qué dato falta por definir.';return}
+  mairaAnswers.value={...mairaAnswers.value,[mairaCurrentQuestion.value]:answer.slice(0,650)}
+ }
+ mairaQuestionCursor.value++
+ mairaAnswerText.value=mairaAnswers.value[mairaCurrentQuestion.value]||''
+}
+function mairaDialogue():MairaDialogue{return {
+ scope_decision:mairaIntent.value,completed:mairaQuestionsDone.value,questions_total:mairaTotalQuestions.value,
+ answers:mairaQuestions.value.slice(1).map(question=>({question:question.slice(0,700),
+  answer:(mairaAnswers.value[question]||'').trim().slice(0,650)}))
+}}
+function workflowWithMairaDialogue(p:MairaProposal):Workflow{
+ const wf=workflowWithEvidence(p,mairaTargetParty.value?.kind)
+ return {...wf,metadata:{...wf.metadata,maira_dialogue:mairaDialogue()}}
+}
+const studioMairaDialogue=computed(()=>workflowMetadata.value.maira_dialogue as MairaDialogue|undefined)
+
 
 /** The visual preview uses the actual MAIRA nodes, edges and source references. */
 function workflowWithEvidence(proposal:{workflow:Workflow;source_map:MairaMapping[]},partyKind?:'NATURAL'|'JURIDICA'):Workflow{
@@ -323,6 +375,7 @@ async function setupPilot(){
  finally{portalBusy.value=false}
 }
 async function publishPilot(){
+ if(sourceReviewRequired.value&&studioMairaDialogue.value?.completed!==true){portalError.value='Faltan las respuestas de MAIRA para completar el proceso.';return}
  if(sourceReviewRequired.value&&!sourceReviewConfirmed.value){
   portalError.value='Antes de publicar debes verificar roles, pertinencia y dependencias del documento en Workflow Studio.'
   return
@@ -508,12 +561,14 @@ async function openMairaDocumentImport(partyId?:string){
  mairaTargetPartyId.value=partyId||''
  current.value='flujos';mairaOpen.value=false;mairaImportOpen.value=true
  mairaImportError.value='';mairaImportInfo.value='';mairaProposal.value=null;mairaApplyConfirm.value=false
+ resetMairaQuestions()
  mairaLivePhase.value='';mairaLiveLabel.value='';mairaLiveHistory.value=[];mairaSeconds.value=0;mairaSourceOnly.value=false
  await loadMairaImportStatus()
 }
 function chooseMairaSource(event:Event){
  const target=event.target as HTMLInputElement, file=target.files?.[0]||null
  mairaImportError.value='';mairaProposal.value=null;mairaApplyConfirm.value=false
+ resetMairaQuestions()
  mairaLivePhase.value='';mairaLiveLabel.value='';mairaLiveHistory.value=[];mairaSourceOnly.value=false
  if(file&&(file.size>6*1024*1024||!/\.(pdf|png|jpe?g|txt)$/i.test(file.name))){
   mairaImportError.value='Formatos PDF, imagen o TXT, hasta 6 MB.';mairaSourceFile.value=null
@@ -554,6 +609,7 @@ async function analyzeMairaDocument(){
  if(!mairaGoogleToken.value){mairaImportError.value='Inicia sesión con Google para continuar.';return}
  if(!mairaSourceFile.value){mairaImportError.value='Selecciona un documento para analizar.';return}
  mairaImportBusy.value=true;mairaImportError.value='';mairaImportInfo.value='';mairaProposal.value=null;mairaApplyConfirm.value=false
+ resetMairaQuestions()
  mairaSourceOnly.value=false
  mairaLiveHistory.value=[];mairaProgress('ENVIANDO','Enviando documento a MAIRA.')
  startMairaClock()
@@ -608,6 +664,7 @@ async function extractMairaPdfWithoutGemini(){
  }
  mairaImportBusy.value=true
  mairaImportError.value='';mairaImportInfo.value='';mairaProposal.value=null;mairaApplyConfirm.value=false
+ resetMairaQuestions()
  mairaSourceOnly.value=true
  mairaLiveHistory.value=[];mairaProgress('ENVIANDO','Extrayendo pasos del PDF sin Gemini.')
  startMairaClock()
@@ -638,7 +695,7 @@ async function saveMairaPreview(){
   const id=mairaTargetParty.value.id
   const preview=await portalRequest<PartyProcessPreview>('/parties/'+id+'/process-previews','POST',{
     filename:mairaSourceFile.value?.name||'Documento analizado',
-    workflow:workflowWithEvidence(mairaProposal.value,mairaTargetParty.value.kind),
+    workflow:workflowWithMairaDialogue(mairaProposal.value),
     source_map:mairaProposal.value.source_map,
     questions:mairaProposal.value.questions,
     observations:mairaProposal.value.observations
@@ -670,10 +727,11 @@ function openReviewInDesigner(){
 }
 function applyMairaProposal(){
  if(!mairaProposal.value)return
+ if(!mairaQuestionsDone.value){mairaQuestionError.value='Responde las preguntas de MAIRA antes de continuar al diseñador.';return}
  const previous=definition()
  try{
   const proposal=mairaProposal.value
-  const imported=workflowWithEvidence(proposal,mairaTargetParty.value?.kind)
+  const imported=workflowWithMairaDialogue(proposal)
   if(imported.nodes.length!==proposal.node_count||
      imported.nodes.filter(n=>Boolean(n.config?.source_step)).length!==proposal.mapped_steps){
     throw new Error('No coinciden los pasos del documento y los nodos del workflow.')
@@ -1243,7 +1301,30 @@ function simulateDraft(){
                   </div>
                   <p v-if="mairaTargetParty?.kind==='JURIDICA'&&mairaPreviewStages.some(s=>s.role==='ASPIRANTE')" class="maira-preview-alert">El documento identifica actividades de un aspirante. Antes de asignarlas a una empresa, valida si aplican al hospital o a un representante autorizado.</p>
                 </div>
-                <div v-if="mairaProposal.questions.length"><strong>Dudas que requieren revisión</strong><p v-for="(question,i) in mairaProposal.questions" :key="i">• {{question}}</p></div>
+                <section class="maira-dialogue" aria-label="Preguntas de MAIRA">
+                  <div class="maira-dialogue-top"><div><span class="eyebrow">MAIRA · Definición guiada</span><strong>{{mairaQuestionsDone?'Respuestas registradas':'Necesito una respuesta antes de continuar'}}</strong></div>
+                    <small>{{mairaAnsweredQuestions}} de {{mairaTotalQuestions}} respondidas</small>
+                  </div>
+                  <template v-if="mairaQuestionCursor<mairaTotalQuestions">
+                    <p class="maira-dialogue-prompt">{{mairaCurrentQuestion}}</p>
+                    <div v-if="mairaQuestionCursor===0" class="maira-dialogue-choices">
+                      <button type="button" :class="{chosen:mairaIntent==='KEEP_ORIGINAL'}" @click="mairaIntent='KEEP_ORIGINAL';mairaQuestionError=''">Conservar el proceso original</button>
+                      <button type="button" :class="{chosen:mairaIntent==='ADAPT_TO_ENTITY'}" @click="mairaIntent='ADAPT_TO_ENTITY';mairaQuestionError=''">Adaptarlo a la entidad</button>
+                    </div>
+                    <textarea v-else v-model="mairaAnswerText" rows="3" maxlength="650" class="maira-dialogue-input"
+                      placeholder="Responde o indica qué información falta por definir." :aria-label="'Respuesta a pregunta '+(mairaQuestionCursor+1)"/>
+                    <p v-if="mairaQuestionError" class="maira-dialogue-error" role="alert">{{mairaQuestionError}}</p>
+                    <div class="maira-dialogue-actions">
+                      <button v-if="mairaQuestionCursor>0" type="button" class="ghost-button" @click="mairaBack">Anterior</button>
+                      <button type="button" class="primary-button" @click="mairaAnswer">{{mairaQuestionCursor===mairaTotalQuestions-1?'Registrar respuesta':'Responder y continuar'}}</button>
+                    </div>
+                  </template>
+                  <div v-else class="maira-dialogue-done">
+                    <strong>Decisiones vinculadas al borrador</strong>
+                    <p>{{mairaIntent==='ADAPT_TO_ENTITY'?'Se utilizará el documento como referencia para adaptar el proceso.':'Se conservará el alcance original del documento.'}} No se han cambiado automáticamente las actividades ni las asignaciones.</p>
+                    <button type="button" class="ghost-button" @click="mairaQuestionCursor=0;mairaAnswerText='';mairaQuestionError=''">Revisar respuestas</button>
+                  </div>
+                </section>
                 <div v-if="mairaProposal.observations.length"><strong>Observaciones</strong><p v-for="(item,i) in mairaProposal.observations" :key="i">• {{item}}</p></div>
                 <div class="pilot-actions">
                   <button v-if="mairaTargetParty" type="button" class="primary-button" :disabled="mairaPreviewSaving" @click="saveMairaPreview">{{mairaPreviewSaving?'Guardando…':sourceOnlyPreview?'Guardar borrador sin aprobar en '+mairaTargetParty.name:'Guardar vista previa en '+mairaTargetParty.name}}</button>
@@ -1282,6 +1363,7 @@ function simulateDraft(){
         <section v-if="sourceReviewRequired" class="maira-review-gate">
           <strong>Revisión documental obligatoria</strong>
           <p>El proceso conserva los datos del documento, pero no verifica automáticamente los responsables ni las flechas. Comprueba cada etapa en el diseñador antes de confirmar.</p>
+          <p v-if="studioMairaDialogue?.completed" class="maira-dialogue-record">MAIRA registró {{studioMairaDialogue.questions_total}} decisiones. Alcance: {{studioMairaDialogue.scope_decision==='ADAPT_TO_ENTITY'?'Adaptar a la entidad':'Conservar el proceso original'}}. Las respuestas no modifican automáticamente el workflow.</p>
           <label><input type="checkbox" v-model="reviewRolesConfirmed" /> Revisé responsables, contratante/contratista y pertinencia para esta persona o empresa.</label>
           <label><input type="checkbox" v-model="reviewRoutesConfirmed" /> Revisé las dependencias, secuencia y condiciones contra el diagrama original.</label>
           <div class="pilot-actions">
