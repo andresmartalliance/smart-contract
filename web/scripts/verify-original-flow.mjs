@@ -60,7 +60,7 @@ const compactSource=fs.readFileSync(new URL('../src/compactFlowLayout.ts',import
 const compactJS=ts.transpileModule(compactSource,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText
 const compactExports={exports:{}}
 vm.runInNewContext(compactJS,{exports:compactExports.exports,module:compactExports},{timeout:5000})
-const {buildCompactLayout,COMPACT_CARD_WIDTH,COMPACT_CARD_HEIGHT,COMPACT_GAP_X,COMPACT_GAP_Y}=compactExports.exports
+const {buildCompactLayout,buildEditableLayout,COMPACT_CARD_WIDTH,COMPACT_CARD_HEIGHT,COMPACT_GAP_X,COMPACT_GAP_Y}=compactExports.exports
 const ids=flow.nodes.map(n=>n.id)
 const edges=flow.edges.map((e,i)=>({id:'edge_'+i,source:e.source,target:e.target}))
 const diagram=buildCompactLayout(ids,edges)
