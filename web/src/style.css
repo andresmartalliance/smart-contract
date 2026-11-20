@@ -657,7 +657,7 @@ nav button.active .nav-icon{stroke:#236ed3;transform:scale(1.03)}
  width:3px;background:#6596cb;pointer-events:none}
 .connected-diagram-link:after{content:'';position:absolute;bottom:-1px;left:50%;transform:translateX(-50%) rotate(45deg);
  width:8px;height:8px;border-right:3px solid #6596cb;border-bottom:3px solid #6596cb;pointer-events:none}
-.connected-diagram-edge{z-index:1;position:relative;align-self:center;min-width:116px;height:28px;cursor:pointer;
+.connected-diagram-edge{z-index:1;position:absolute;left:calc(50% + 24px);top:50%;transform:translateY(-50%);min-width:116px;height:27px;cursor:pointer;
  border:1px solid #d2e3f4;border-radius:14px;background:#fff;color:#487fae;font-size:10px;font-weight:700;
  opacity:.98;transition:background .15s}
 .connected-diagram-edge:hover,.connected-diagram-edge.active{border-color:#4e8dd0;background:#e7f3ff}
