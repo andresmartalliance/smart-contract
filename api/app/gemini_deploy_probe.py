@@ -41,13 +41,25 @@ async def _request(client: httpx.AsyncClient, phase: str, method: str,
         result["state"] = "OK" if response.status_code == 200 else (
             _safe_error_status(response) or "HTTP_ERROR"
         )
-        if phase == "generation" and response.status_code == 200:
+        if phase == "interactions" and response.status_code == 200:
             try:
-                candidates = response.json().get("candidates") or []
-                has_text = any(str(part.get("text", "")).strip()
-                               for candidate in candidates
-                               for part in candidate.get("content", {}).get("parts", []))
-                result["state"] = "OK_TEXT" if has_text else "EMPTY_RESPONSE"
+                body_json = response.json()
+                interaction = body_json.get("interaction", body_json)
+                content_steps = interaction.get("steps") or interaction.get("output") or []
+                texts = [interaction.get("output_text") or ""]
+                for step in content_steps:
+                    if isinstance(step, dict):
+                        if isinstance(step.get("text"), str):
+                            texts.append(step["text"])
+                        contents = step.get("content") or []
+                        if isinstance(contents, dict):
+                            contents = [contents]
+                        if isinstance(contents, list):
+                            texts.extend(part.get("text", "") for part in contents if isinstance(part, dict))
+                result["state"] = "OK_TEXT" if any(str(t).strip() for t in texts) else (
+                    "COMPLETED_NO_TEXT" if interaction.get("status") == "completed"
+                    else "OK_HTTP"
+                )
             except (ValueError, AttributeError, TypeError):
                 result["state"] = "INVALID_RESPONSE"
     except httpx.ConnectTimeout:
@@ -70,7 +82,7 @@ async def _request(client: httpx.AsyncClient, phase: str, method: str,
 
 
 async def run_gemini_deploy_probe(api_key: str) -> list[dict[str, Any]]:
-    """Read-only GetModel followed, iff authorized, by one minimal generation."""
+    """Read-only GetModel followed by one Interactions API inference."""
     logger.warning("GEMINI_DIAG startup begin model=%s", MODEL)
     timeout = httpx.Timeout(connect=8.0, read=25.0, write=8.0, pool=8.0)
     async with httpx.AsyncClient(timeout=timeout, trust_env=False) as client:
@@ -80,12 +92,13 @@ async def run_gemini_deploy_probe(api_key: str) -> list[dict[str, Any]]:
         results = [get_result]
         if get_result["http"] == 200:
             text_body = {
-                "contents": [{"role": "user", "parts": [{"text": "Responde solo OK."}]}],
-                "generationConfig": {"maxOutputTokens": 64, "temperature": 0}
+                "model": MODEL,
+                "store": False,
+                "input": "Responde solo OK."
             }
             results.append(await _request(
-                client, "generation", "POST",
-                f"{BASE_URL}/models/{MODEL}:generateContent", api_key,
+                client, "interactions", "POST",
+                f"{BASE_URL}/interactions", api_key,
                 body=text_body
             ))
         else:

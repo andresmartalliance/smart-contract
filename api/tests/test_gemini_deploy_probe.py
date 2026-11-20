@@ -7,7 +7,7 @@ import httpx
 from app.gemini_deploy_probe import run_gemini_deploy_probe, MODEL
 
 
-def test_model_lookup_200_generation_503_is_provider_generation_failure(monkeypatch, caplog):
+def test_model_lookup_200_interactions_503_is_provider_generation_failure(monkeypatch, caplog):
     async def handler(request):
         assert request.headers["x-goog-api-key"] == "fake-confidential-key"
         if request.method == "GET":
@@ -19,7 +19,7 @@ def test_model_lookup_200_generation_503_is_provider_generation_failure(monkeypa
     monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: client)
     with caplog.at_level(logging.WARNING):
         answer = asyncio.run(run_gemini_deploy_probe("fake-confidential-key"))
-    assert [x["phase"] for x in answer] == ["model_get", "generation"]
+    assert [x["phase"] for x in answer] == ["model_get", "interactions"]
     assert [x["http"] for x in answer] == [200, 503]
     assert [x["state"] for x in answer] == ["OK", "UNAVAILABLE"]
     assert "fake-confidential-key" not in caplog.text
@@ -37,3 +37,19 @@ def test_invalid_key_does_not_call_generation(monkeypatch):
     assert calls == ["GET"]
     assert len(answer) == 1
     assert answer[0]["state"] == "PERMISSION_DENIED"
+
+def test_interactions_returns_actual_text_without_storing(monkeypatch):
+    seen = {}
+    async def handler(request):
+        if request.method == "GET":
+            return httpx.Response(200, json={"name":"models/"+MODEL})
+        seen["url"] = str(request.url)
+        seen["request"] = __import__("json").loads(request.content)
+        return httpx.Response(200, json={"status":"completed","output_text":"OK"})
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: client)
+    answer = asyncio.run(run_gemini_deploy_probe("key"))
+    assert answer[1]["state"] == "OK_TEXT"
+    assert seen["url"].endswith("/v1beta/interactions")
+    assert seen["request"]["store"] is False
+    assert seen["request"]["model"] == MODEL
