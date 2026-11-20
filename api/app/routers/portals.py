@@ -295,7 +295,8 @@ def list_process_previews(party_id:str,email:str=Depends(verify_google_email),
     _party_record(db,m.tenant_id,party_id)
     rows=db.scalars(select(PartyProcessPreview).where(
       PartyProcessPreview.tenant_id==m.tenant_id,
-      PartyProcessPreview.party_id==party_id)
+      PartyProcessPreview.party_id==party_id,
+      PartyProcessPreview.status=="DRAFT_REVIEW")
       .order_by(PartyProcessPreview.created_at.desc(),PartyProcessPreview.id.desc())
       .limit(30)).all()
     return [_preview_payload(p) for p in rows]
@@ -308,7 +309,8 @@ def get_process_preview(party_id:str,preview_id:str,email:str=Depends(verify_goo
     record=db.scalar(select(PartyProcessPreview).where(
        PartyProcessPreview.id==preview_id,
        PartyProcessPreview.party_id==party_id,
-       PartyProcessPreview.tenant_id==m.tenant_id))
+       PartyProcessPreview.tenant_id==m.tenant_id,
+       PartyProcessPreview.status=="DRAFT_REVIEW"))
     if record is None:raise HTTPException(404,"Process preview not found")
     return _preview_payload(record,include_workflow=True)
 
