@@ -23,7 +23,11 @@ from fastapi.responses import StreamingResponse
 from google.auth.transport.requests import Request as GoogleRequest
 from google.oauth2 import id_token
 from pydantic import BaseModel, Field, ValidationError
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
+from ..database import get_session
+from ..models import Membership, Tenant
 from ..workflow.schema import WorkflowDefinition
 from ..workflow.validator import WorkflowInvalid, topological_order
 
@@ -79,7 +83,10 @@ def import_status():
     }
 
 
-def _verify_identity(authorization: str | None = Header(default=None)) -> str:
+def _verify_identity(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_session),
+) -> str:
     client_id, allowed, _ = _configuration()
     if not client_id or not allowed:
         raise HTTPException(503, "Google Sign-In for MAIRA is not configured")
@@ -93,8 +100,20 @@ def _verify_identity(authorization: str | None = Header(default=None)) -> str:
     except Exception:
         raise HTTPException(401, "Google sign-in expired or invalid") from None
     email = str(claims.get("email") or "").lower().strip()
-    if str(claims.get("email_verified")).lower() != "true" or email not in allowed:
-        raise HTTPException(403, "This account is not enabled for the MAIRA pilot")
+    if str(claims.get("email_verified")).lower() != "true":
+        raise HTTPException(403, "A verified Google account is required")
+    if email not in allowed:
+        # The designated administrator uses their persisted tenant membership;
+        # an invitation variable by itself never grants MAIRA access.
+        members = db.scalars(select(Membership).join(
+            Tenant, Tenant.id == Membership.tenant_id
+        ).where(
+            Membership.user_id == email,
+            Membership.active.is_(True),
+            Tenant.active.is_(True),
+        )).all()
+        if not any("ADMIN" in m.roles for m in members):
+            raise HTTPException(403, "This account is not enabled for the MAIRA pilot")
     return email
 
 

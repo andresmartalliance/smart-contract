@@ -39,3 +39,13 @@ La iniciativa Famisanar y `web/src/famisanarCase.ts` permanecen como trabajo fut
 
 - Acceso Google autorizado → apertura del diagrama guardado de Hospital Smart → mover una etapa → editar/conectar → guardar cambios → cerrar sesión → volver a ingresar y verificar persistencia.
 - Revisar por separado publicación y ejecución real con dos participantes; no confundir vistas previas con contratos activos.
+
+## Administrador institucional · V6.6.11
+
+- Alta inicial autorizada para la cuenta Google verificada indicada en la variable de Railway API `SMART_CONTRACT_INITIAL_ADMIN_EMAIL`, únicamente en Smart Contract Development.
+- La cuenta recibe los tres roles institucionales actuales: `ADMIN`, `CONFIGURADOR` y `OPERADOR`, dentro del único tenant que contiene el flujo original de Hospital Smart. No tiene acceso global a otras instituciones ni privilegios de infraestructura.
+- La pertenencia se crea en `memberships` en el primer inicio de sesión Google; los eventos se auditan como `DESIGNATED_ADMIN_FIRST_LOGIN_GRANTED`.
+- El alta falla cerrada si hay más de un tenant candidato, si no existe el borrador original o si el usuario fue desactivado. Si se revocan permisos después, el marcador de auditoría impide recrearlos.
+- El acceso MAIRA reconoce miembros `ADMIN` activos y verificados por Google además de la lista piloto actual; no autoriza por correo arbitrario ni solo por variable de invitación.
+- No se crean expedientes, contratos ni registros sintéticos para dar el acceso. Mantener la verificación de Google y retirar la variable de alta inicial una vez utilizado este mecanismo.
+- Esta habilitación no reemplaza una pantalla institucional de administración y revocación de usuarios, pendiente de diseño posterior.

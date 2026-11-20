@@ -137,8 +137,65 @@ def _original_seed_enabled() -> bool:
     return os.getenv("RAILWAY_ENVIRONMENT_ID")=="6e8d45ca-d6f2-448c-a48a-63e5a2ab1806"
 
 
+def _provision_designated_admin(db: Session, email: str) -> None:
+    """One-time, scoped first-login grant for an explicitly invited Google identity.
+
+    No wildcard emails, no new tenant, no cross-tenant SUPERUSER role.
+    This bootstrap is confined to Development and the sole existing tenant
+    owning Hospital Smart's original saved workflow. A revocation is final:
+    an audit marker prevents the bootstrap from regranting the role.
+    """
+    invited = os.getenv("SMART_CONTRACT_INITIAL_ADMIN_EMAIL", "").strip().lower()
+    if not _original_seed_enabled() or not invited or email != invited:
+        return
+    parties = db.scalars(select(ContractParty).join(
+        Tenant, Tenant.id == ContractParty.tenant_id
+    ).where(
+        Tenant.active.is_(True),
+        func.lower(ContractParty.name) == "hospital smart",
+    )).all()
+    tenant_ids: set[str] = set()
+    for party in parties:
+        drafts = db.scalars(select(PartyProcessPreview).where(
+            PartyProcessPreview.tenant_id == party.tenant_id,
+            PartyProcessPreview.party_id == party.id,
+            PartyProcessPreview.status == "WORKFLOW_DRAFT",
+        )).all()
+        if any(d.workflow.get("key") == "SMART_CICLO_CONTRATACION_V2" for d in drafts):
+            tenant_ids.add(party.tenant_id)
+    if len(tenant_ids) != 1:
+        # Fail closed when there is no known institutional owner or ambiguous scope.
+        return
+    tenant_id = next(iter(tenant_ids))
+    db.execute(select(Tenant.id).where(Tenant.id == tenant_id).with_for_update()).first()
+    event_type = "DESIGNATED_ADMIN_FIRST_LOGIN_GRANTED"
+    previous = db.scalar(select(AuditEvent.id).where(
+        AuditEvent.tenant_id == tenant_id,
+        AuditEvent.actor_id == email,
+        AuditEvent.event_type == event_type,
+    ))
+    if previous:
+        return
+    member = db.scalar(select(Membership).where(
+        Membership.tenant_id == tenant_id, Membership.user_id == email
+    ))
+    if member is not None and not member.active:
+        # An explicitly disabled member must never be silently reactivated.
+        return
+    roles = ["ADMIN", "CONFIGURADOR", "OPERADOR"]
+    if member is None:
+        db.add(Membership(tenant_id=tenant_id, user_id=email, roles=roles))
+    else:
+        member.roles = list(dict.fromkeys([*member.roles, *roles]))
+    _event(db, tenant_id, email, event_type, tenant_id, {
+        "roles": roles, "source": "google_verified_first_login", "scope": "TENANT_ONLY"
+    })
+    db.commit()
+
+
 @router.get("/session")
 def session(email: str=Depends(verify_google_email),db:Session=Depends(get_session)):
+    _provision_designated_admin(db,email)
     memberships=_memberships(db,email)
     assignments=db.scalars(select(ContractCaseAccess).where(
       ContractCaseAccess.email==email, ContractCaseAccess.active.is_(True))).all()
