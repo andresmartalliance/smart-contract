@@ -335,12 +335,71 @@ def _party_summary(db: Session, party: ContractParty) -> dict[str, Any]:
     return {"id":party.id,"name":party.name,"kind":party.kind,
             "email":party.contact_email,"case_count":total}
 
+def _party_process_item(record:PartyProcessPreview) -> dict[str,Any]:
+    wf=record.workflow if isinstance(record.workflow,dict) else {}
+    source=wf.get("metadata") or {}
+    return {"id":record.id,"name":str(wf.get("name") or record.filename or "Proceso sin título"),
+            "status":record.status,"kind":"PROPOSAL" if record.status=="DRAFT_REVIEW" else "PRESENTATION",
+            "activity_count":sum(1 for n in wf.get("nodes",[]) if n.get("kind") not in ("START","END")),
+            "source":source.get("source"),"created_at":record.created_at.isoformat()}
+
+
 @router.get("/parties")
 def parties(email: str=Depends(verify_google_email),db: Session=Depends(get_session)):
     m=_operator(db,email)
     rows=db.scalars(select(ContractParty).where(ContractParty.tenant_id==m.tenant_id)
        .order_by(ContractParty.created_at.desc())).all()
-    return [_party_summary(db,x) for x in rows]
+    records=db.scalars(select(PartyProcessPreview).where(
+       PartyProcessPreview.tenant_id==m.tenant_id,
+       PartyProcessPreview.status.in_(("DRAFT_REVIEW","PREVIEW_SHARED")))
+       .order_by(PartyProcessPreview.created_at.desc())).all()
+    by_party:dict[str,list[dict[str,Any]]]={}
+    for preview in records:
+        by_party.setdefault(preview.party_id,[]).append(_party_process_item(preview))
+    return [{**_party_summary(db,x),
+             "process_count":len(by_party.get(x.id,[])),
+             "latest_process":by_party.get(x.id,[None])[0]}
+            for x in rows]
+
+
+@router.get("/parties/{party_id}/portfolio")
+def party_portfolio(party_id:str,email:str=Depends(verify_google_email),
+                    db:Session=Depends(get_session)):
+    """One authorized directory view of all EXISTING resources for a party.
+
+    This endpoint never creates contracts and never implies that a local-only
+    Workflow Studio draft is saved against a person or enterprise.
+    """
+    m=_operator(db,email)
+    party=_party_record(db,m.tenant_id,party_id)
+    cases=db.scalars(select(ContractCase).where(
+       ContractCase.tenant_id==m.tenant_id,ContractCase.party_id==party.id)
+       .order_by(ContractCase.created_at.desc())).all()
+    previews=db.scalars(select(PartyProcessPreview).where(
+       PartyProcessPreview.tenant_id==m.tenant_id,
+       PartyProcessPreview.party_id==party.id,
+       PartyProcessPreview.status.in_(("DRAFT_REVIEW","PREVIEW_SHARED")))
+       .order_by(PartyProcessPreview.created_at.desc())).all()
+    return {
+        "party":_party_summary(db,party),
+        "cases":[_case_summary(db,c) for c in cases],
+        "processes":[_party_process_item(p) for p in previews]
+    }
+
+
+@router.get("/parties/{party_id}/workflow-presentations/{presentation_id}")
+def institution_presentation(party_id:str,presentation_id:str,
+          email:str=Depends(verify_google_email),db:Session=Depends(get_session)):
+    """A configurator/operator may reopen its own shared presentation."""
+    m=_operator(db,email)
+    _party_record(db,m.tenant_id,party_id)
+    record=db.scalar(select(PartyProcessPreview).where(
+        PartyProcessPreview.id==presentation_id,
+        PartyProcessPreview.tenant_id==m.tenant_id,
+        PartyProcessPreview.party_id==party_id,
+        PartyProcessPreview.status=="PREVIEW_SHARED"))
+    if record is None:raise HTTPException(404,"Vista previa no encontrada")
+    return _presentation_public(record,with_flow=True)
 
 @router.post("/parties",status_code=201)
 def create_party(body: PartyInput,email: str=Depends(verify_google_email),db: Session=Depends(get_session)):

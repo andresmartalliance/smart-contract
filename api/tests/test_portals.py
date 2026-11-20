@@ -387,3 +387,53 @@ def test_presentation_requires_configurator_and_contact(portal):
     assert portal.post(path,json={"workflow":sample_flow()}).status_code==422
     as_user("unknown@example.com")
     assert portal.post(path,json={"workflow":sample_flow()}).status_code==403
+
+
+def test_person_directory_portfolio_exposes_existing_processes_and_openable_cases(portal):
+    create_pilot(portal)
+    party=create_party_record(portal,name="Hospital Smart",email="hospital@example.com")
+    as_user("alice@example.com")
+    original=portal.post("/api/v1/portal/parties/"+party["id"]+"/process-previews",
+       json=proposal_for_previewer())
+    assert original.status_code==201,original.text
+    shared=portal.post("/api/v1/portal/parties/"+party["id"]+"/workflow-presentations",
+       json={"workflow":sample_flow()})
+    assert shared.status_code==201,shared.text
+    case=portal.post("/api/v1/portal/cases",json={"title":"Contratación en preparación",
+       "party_id":party["id"]})
+    assert case.status_code==201,case.text
+    parties=portal.get("/api/v1/portal/parties")
+    assert parties.status_code==200
+    entry=next(x for x in parties.json() if x["id"]==party["id"])
+    assert entry["case_count"]==1
+    assert entry["process_count"]==2
+    assert entry["latest_process"]["name"]
+    portfolio=portal.get("/api/v1/portal/parties/"+party["id"]+"/portfolio")
+    assert portfolio.status_code==200,portfolio.text
+    content=portfolio.json()
+    assert len(content["cases"])==1 and content["cases"][0]["id"]==case.json()["id"]
+    assert {p["kind"] for p in content["processes"]}=={"PROPOSAL","PRESENTATION"}
+    assert {p["id"] for p in content["processes"]}=={original.json()["id"],shared.json()["id"]}
+    assert all(p["activity_count"]>0 for p in content["processes"])
+    reopen=portal.get("/api/v1/portal/parties/"+party["id"]+
+       "/workflow-presentations/"+shared.json()["id"])
+    assert reopen.status_code==200 and reopen.json()["workflow"]["name"]==sample_flow()["name"]
+    as_user("outsider@example.com")
+    assert portal.get("/api/v1/portal/parties/"+party["id"]+"/portfolio").status_code==403
+    as_user("charlie")
+    assert portal.get("/api/v1/portal/parties/"+party["id"]+"/portfolio").status_code==404
+    assert portal.get("/api/v1/portal/parties/"+party["id"]+
+       "/workflow-presentations/"+shared.json()["id"]).status_code==404
+
+
+def test_directory_does_not_confuse_local_drafts_with_party_contracts(portal):
+    create_pilot(portal)
+    party=create_party_record(portal,name="Hospital sin procesos",email="none@example.com")
+    as_user("alice@example.com")
+    entry=next(x for x in portal.get("/api/v1/portal/parties").json()
+       if x["id"]==party["id"])
+    assert entry["case_count"]==0 and entry["process_count"]==0
+    assert entry["latest_process"] is None
+    detail=portal.get("/api/v1/portal/parties/"+party["id"]+"/portfolio")
+    assert detail.status_code==200
+    assert detail.json()["cases"]==[] and detail.json()["processes"]==[]
