@@ -1930,6 +1930,26 @@ function simulateDraft(){
                   <button class="ghost-button" @click="editingPartyId=''">Cancelar</button>
                 </div>
               </template>
+
+              <div v-if="partyPreview&&partyPreviewTarget?.id===party.id" class="party-record-presentation">
+                <div class="pilot-detail-top">
+                  <div><span class="eyebrow">PROPUESTA DE MAIRA · NO PUBLICADA</span>
+                    <h4>{{partyPreview.workflow.name}}</h4>
+                    <p class="pilot-muted">{{partyPreview.source_map.length}} actividades documentales · Requiere revisión</p>
+                  </div>
+                  <button type="button" class="ghost-button" @click="partyPreview=null;partyPreviewTarget=null">Cerrar vista</button>
+                </div>
+                <div class="workflow-side-toggle" role="group" aria-label="Ver propuesta por participante">
+                  <button type="button" :class="{selected:partyPreviewSide==='CONTRATANTE'}" @click="partyPreviewSide='CONTRATANTE'">Contratante</button>
+                  <button type="button" :class="{selected:partyPreviewSide==='CONTRATISTA'}" @click="partyPreviewSide='CONTRATISTA'">Contratista</button>
+                </div>
+                <WorkflowPresentation :workflow="workflowWithEvidence(partyPreview,party.kind)" :side="partyPreviewSide"/>
+                <div v-if="partyPreview.questions.length||partyPreview.observations.length" class="party-record-questions">
+                  <strong>Observaciones pendientes</strong>
+                  <p v-for="(question,index) in [...partyPreview.questions,...partyPreview.observations]" :key="index">{{question}}</p>
+                </div>
+                <div class="pilot-actions"><button type="button" class="primary-button" @click="openReviewInDesigner">Continuar en Workflow Studio</button></div>
+              </div>
               <div v-if="partyPresentationPreview" class="party-record-presentation">
                 <div class="pilot-detail-top"><div><span class="eyebrow">VISTA PREVIA GUARDADA</span><h4>{{partyPresentationPreview.name}}</h4></div>
                   <button class="ghost-button" @click="partyPresentationPreview=null">Cerrar vista</button></div>
@@ -1951,41 +1971,6 @@ function simulateDraft(){
           </div>
           <div class="pilot-actions"><button class="primary-button" :disabled="portalPartySaving||partyName.trim().length<2" @click="registerParty">Guardar registro</button>
             <button class="ghost-button" @click="showNewPartyForm=false">Cancelar</button></div>
-        </div>
-                <div v-if="partyPreviewTarget&&partyPreview" class="pilot-panel party-process-preview">
-          <div class="pilot-detail-top">
-            <div><span class="eyebrow">VISTA PREVIA · NO PUBLICADA</span><h3>{{partyPreviewTarget.name}}</h3>
-              <p>Proceso interpretado: {{partyPreview.workflow.name}} · {{partyPreview.source_map.length}} actividades</p></div>
-            <button type="button" class="ghost-button" @click="partyPreview=null;partyPreviewTarget=null">Cerrar</button>
-          </div>
-          <p class="pilot-notice">{{savedSourceOnly?'Texto extraído sin Gemini. Los roles pertenecen al documento original. Ninguna tarea está asignada a la empresa y las conexiones son provisionales.':'Esta es una simulación de responsabilidades. El prestador no recibe estas tareas hasta que un administrador apruebe y active una plantilla en un expediente.'}}</p>
-          <div v-if="savedSourceOnly" class="maira-preview-card">
-            <strong>Actividades originales pendientes de revisión</strong>
-            <div v-for="stage in savedPreviewStages" :key="stage.id" class="maira-preview-task">
-              <span class="maira-preview-number">{{stage.step}}</span>
-              <div><strong>{{stage.label}}</strong><small>Responsable original: {{stage.role}} · {{stage.page?'Página '+stage.page:'Sin página'}}</small><small>Conexión provisional: {{stage.dependencies.join(', ')||'Inicio'}} · Revisar en el diagrama</small></div>
-            </div>
-          </div>
-          <div v-else class="maira-preview-summary">
-            <span><b>{{savedPreviewStages.filter(s=>s.side==='CONTRATISTA').length}}</b> Actividades del prestador</span>
-            <span><b>{{savedPreviewStages.filter(s=>s.side==='CONTRATANTE').length}}</b> Actividades internas</span>
-            <span><b>{{savedPreviewStages.filter(s=>s.side==='REVISAR').length}}</b> Por clasificar</span>
-          </div>
-          <div v-if="!savedSourceOnly" class="maira-preview-task-grid">
-            <div class="maira-preview-card">
-              <strong>Así lo vería {{partyPreviewTarget.name}}</strong>
-              <p v-if="!savedPreviewStages.some(s=>s.side==='CONTRATISTA')" class="pilot-muted">Todavía no hay actividades asignadas al prestador. El responsable debe confirmarse.</p>
-              <div v-for="s in savedPreviewStages.filter(x=>x.side==='CONTRATISTA')" :key="s.id" class="maira-preview-task"><span class="maira-preview-number">{{s.step}}</span><div><strong>{{s.label}}</strong><small>{{s.source}} · {{s.role}}</small><small>Depende de: {{s.dependencies.join(', ')||'Inicio'}}</small></div></div>
-            </div>
-            <div class="maira-preview-card">
-              <strong>Actividades del contratante y pendientes</strong>
-              <div v-for="s in savedPreviewStages.filter(x=>x.side!=='CONTRATISTA')" :key="s.id" class="maira-preview-task"><span class="maira-preview-number">{{s.step}}</span><div><strong>{{s.label}}</strong><small>{{s.role}} · {{s.side==='REVISAR'?'Responsable por confirmar':'Gestión interna'}}</small></div></div>
-            </div>
-          </div>
-          <div v-if="partyPreview.questions.length||partyPreview.observations.length" class="maira-preview-alert"><strong>Revisiones pendientes</strong>
-            <p v-for="(q,i) in [...partyPreview.questions,...partyPreview.observations]" :key="i">{{q}}</p>
-          </div>
-          <div class="pilot-actions"><button type="button" class="primary-button" @click="openReviewInDesigner">Revisar y adaptar en Workflow Studio</button><button type="button" class="ghost-button" @click="partyPreview=null;partyPreviewTarget=null">Volver al directorio</button></div>
         </div>
       </section>
       <section v-else-if="current==='contrataciones'&&(hasInstitution||portalSession?.can_setup)" class="contract-space">
