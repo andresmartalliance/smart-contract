@@ -405,7 +405,7 @@ const savedSourceOnly=computed(()=>partyPreview.value?.workflow.metadata?.source
 const mairaApplyConfirm=ref(false)
 const loginGoogleMount=ref<HTMLElement|null>(null)
 const loginEmail=ref('')
-type PortalSession={email:string;institutions:{id:string;roles:string[]}[];invited_cases:number;can_setup:boolean;pilot:boolean}
+type PortalSession={email:string;institutions:{id:string;roles:string[]}[];invited_cases:number;can_setup:boolean;verification_enabled?:boolean;pilot:boolean}
 type CaseSummary={id:string;title:string;state:string;workflow_version_id:string|null;party_id:string|null;party_name:string|null;party_email?:string|null;invited:boolean;total:number;completed:number}
 type PartyRecord={id:string;name:string;kind:'NATURAL'|'JURIDICA';email:string|null;case_count:number}
 type ContractTaskView={id:string;node_id:string;label:string;kind:string;side:string;state:string;fields:WorkField[];answer?:Record<string,unknown>;note?:string}
@@ -438,6 +438,24 @@ const selectedWorkflowId=ref('')
 const answers=ref<Record<string,string>>({})
 const taskNote=ref('')
 const returnReason=ref('')
+const verificationContactEmail=ref('')
+async function prepareVerificationCase(){
+ const contact=verificationContactEmail.value.trim().toLowerCase()
+ if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact)){
+   portalError.value='Ingresa el correo de la segunda cuenta Google.'
+   return
+ }
+ portalBusy.value=true;portalError.value='';portalMessage.value=''
+ try{
+  const result=await portalRequest<{case:CaseSummary;synthetic:boolean;portal_path:string}>(
+    '/verification/cases','POST',{contact_email:contact})
+  await refreshPortal()
+  await openCase(result.case.id)
+  portalMessage.value='Expediente ficticio preparado para '+contact+
+    '. Ingresa al Portal de Prestadores con esa cuenta. No se enviaron correos ni se activaron contratos reales.'
+ }catch(e){portalError.value=e instanceof Error?e.message:'No fue posible preparar el expediente.'}
+ finally{portalBusy.value=false}
+}
 async function portalRequest<T>(path:string,method='GET',payload?:unknown):Promise<T>{
  const response=await fetch(MAIRA_API+'/api/v1/portal'+path,{
   method,headers:{Authorization:'Bearer '+loginToken.value,...(payload!==undefined?{'Content-Type':'application/json'}:{})},
@@ -1731,6 +1749,16 @@ function simulateDraft(){
       <section v-else-if="current==='contrataciones'&&(hasInstitution||portalSession?.can_setup)" class="contract-space">
         <div class="contract-hero"><div><span class="eyebrow">SMART CONTRACT · CONTRATANTE</span><h2>Gestión Contractual</h2><p>Gestiona expedientes, define responsables y revisa el avance de tus contratistas.</p></div><div class="pilot-actions"><button class="ghost-button" @click="openProviderPortal">Ver portal de IPS</button><button class="ghost-button" @click="refreshPortal">Actualizar</button></div></div>
         <div class="pilot-notice">Ambiente de evaluación con datos sintéticos. No admite documentos confidenciales, firma válida ni contratación productiva.</div>
+        <section v-if="portalSession?.verification_enabled" class="pilot-panel verification-panel">
+          <h3>Verificar intercambio con una IPS</h3>
+          <p>Prepara un expediente ficticio para comprobar recepción, respuesta, devolución y corrección. Disponible únicamente en Development.</p>
+          <div class="verification-inline">
+            <label>Correo Google del prestador
+              <input v-model.trim="verificationContactEmail" type="email" autocomplete="off" maxlength="254" placeholder="Segunda cuenta Google" />
+            </label>
+            <button type="button" class="primary-button" :disabled="portalBusy" @click="prepareVerificationCase">Preparar expediente sintético</button>
+          </div>
+        </section>
         <div v-if="portalError" class="pilot-error" role="alert">{{portalError}}</div>
         <div v-if="portalMessage" class="pilot-success" role="status">{{portalMessage}}</div>
         <div v-if="portalSession?.can_setup" class="pilot-panel">

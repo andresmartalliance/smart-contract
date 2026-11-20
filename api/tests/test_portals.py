@@ -351,3 +351,58 @@ def test_preview_does_not_give_external_case_access(portal):
     as_user("persona@example.com")
     assert portal.get("/api/v1/portal/my-cases").json()==[]
     assert portal.get(f"/api/v1/portal/parties/{party['id']}/process-previews").status_code==403
+
+
+def test_verification_e2e_two_identities_return_and_correction(portal,monkeypatch):
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT_ID","6e8d45ca-d6f2-448c-a48a-63e5a2ab1806")
+    create_pilot(portal)
+    as_user("alice@example.com")
+    created=portal.post("/api/v1/portal/verification/cases",
+        json={"contact_email":"ips.synthetic@example.com"})
+    assert created.status_code==201,created.text
+    case_id=created.json()["case"]["id"]
+    assert created.json()["case"]["invited"]
+    assert portal.get("/api/v1/portal/workflows").json()==[]
+    as_user("another@example.com")
+    assert portal.get("/api/v1/portal/cases/"+case_id).status_code==404
+    as_user("ips.synthetic@example.com")
+    assert portal.get("/api/v1/portal/session").status_code==200
+    assert [c["id"] for c in portal.get("/api/v1/portal/my-cases").json()]==[case_id]
+    detail=portal.get("/api/v1/portal/cases/"+case_id).json()
+    assert detail["side"]=="CONTRATISTA"
+    assert len(detail["tasks"])==1
+    task=detail["tasks"][0]
+    assert task["node_id"]=="ips_form" and task["state"]=="PENDING"
+    assert portal.post(f"/api/v1/portal/cases/{case_id}/tasks/{task['id']}/complete",
+        json={"data":{}}).status_code==422
+    assert portal.post(f"/api/v1/portal/cases/{case_id}/tasks/{task['id']}/complete",
+        json={"data":{"referencia_ficticia":"UNO"}}).status_code==200
+    as_user("alice@example.com")
+    ret=portal.post(f"/api/v1/portal/cases/{case_id}/tasks/{task['id']}/return",
+        json={"reason":"Corregir referencia inventada"})
+    assert ret.status_code==200,ret.text
+    as_user("ips.synthetic@example.com")
+    returned=portal.get("/api/v1/portal/cases/"+case_id).json()["tasks"][0]
+    assert returned["state"]=="RETURNED"
+    assert portal.post(f"/api/v1/portal/cases/{case_id}/tasks/{task['id']}/complete",
+        json={"data":{"referencia_ficticia":"DOS"}}).status_code==200
+    as_user("alice@example.com")
+    revised=portal.get("/api/v1/portal/cases/"+case_id).json()
+    contractor=next(t for t in revised["tasks"] if t["node_id"]=="ips_form")
+    assert contractor["answer"]["referencia_ficticia"]=="DOS"
+    internal=next(t for t in revised["tasks"] if t["node_id"]=="internal_review")
+    assert internal["state"]=="PENDING"
+
+
+def test_verification_not_available_in_production_or_to_unprivileged(portal,monkeypatch):
+    create_pilot(portal)
+    path="/api/v1/portal/verification/cases"
+    body={"contact_email":"ips.synthetic@example.com"}
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT_ID","production")
+    as_user("alice@example.com")
+    assert portal.post(path,json=body).status_code==404
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT_ID","6e8d45ca-d6f2-448c-a48a-63e5a2ab1806")
+    as_user("unknown@example.com")
+    assert portal.post(path,json=body).status_code==403
+    as_user("alice@example.com")
+    assert portal.post(path,json={"contact_email":"alice@example.com"}).status_code==422

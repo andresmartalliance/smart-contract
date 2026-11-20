@@ -143,7 +143,10 @@ def session(email: str=Depends(verify_google_email),db:Session=Depends(get_sessi
         raise HTTPException(403,"No institution, registration or invitation for this account")
     return {"email":email,"institutions":[{"id":m.tenant_id,"roles":m.roles} for m in memberships],
             "invited_cases":len(assignments),"registered_contact":bool(registered),
-            "can_setup":_allowed_bootstrap(email) and not memberships,"pilot":True}
+            "can_setup":_allowed_bootstrap(email) and not memberships,
+            "verification_enabled":_verification_available() and any(
+                set(m.roles).intersection({"ADMIN","CONFIGURADOR"}) for m in memberships
+            ),"pilot":True}
 
 @router.post("/demo/setup",status_code=201)
 def setup(payload:DemoSetup,email:str=Depends(verify_google_email),db:Session=Depends(get_session)):
@@ -466,6 +469,92 @@ def institution_cases(email:str=Depends(verify_google_email),db:Session=Depends(
     rows=db.scalars(select(ContractCase).where(ContractCase.tenant_id==m.tenant_id)
       .order_by(ContractCase.created_at.desc())).all()
     return [_case_summary(db,c) for c in rows]
+
+
+class VerificationCaseInput(BaseModel):
+    contact_email: EmailStr
+
+
+def _verification_available() -> bool:
+    return (
+        os.getenv("RAILWAY_ENVIRONMENT_ID") == "6e8d45ca-d6f2-448c-a48a-63e5a2ab1806"
+        and _pilot_enabled()
+    )
+
+
+def _verification_workflow() -> WorkflowDefinition:
+    """Strictly synthetic, unconditional and not contractually publishable."""
+    return WorkflowDefinition.model_validate({
+        "key": "SMART_CONTRACT_SYNTHETIC_HANDOFF",
+        "name": "Verificación de intercambio entre portales",
+        "nodes": [
+            {"id": "start", "label": "Inicio", "kind": "START"},
+            {"id": "ips_form", "label": "Diligenciar datos ficticios de IPS",
+             "kind": "FORM", "role": "CONTRATISTA",
+             "config": {"actor_side": "CONTRATISTA",
+                        "fields": [{"key": "referencia_ficticia",
+                                    "label": "Referencia ficticia",
+                                    "type": "text", "required": True}]}},
+            {"id": "internal_review", "label": "Revisión institucional",
+             "kind": "VALIDATION", "role": "CONTRATANTE",
+             "config": {"actor_side": "CONTRATANTE"}},
+            {"id": "end", "label": "Fin", "kind": "END"},
+        ],
+        "edges": [
+            {"source": "start", "target": "ips_form"},
+            {"source": "ips_form", "target": "internal_review"},
+            {"source": "internal_review", "target": "end"},
+        ],
+        "metadata": {"source": "SYNTHETIC_PORTAL_VERIFICATION",
+                     "synthetic": True, "not_contractual": True},
+    })
+
+
+@router.post("/verification/cases", status_code=201)
+def prepare_verification_case(
+    body: VerificationCaseInput,
+    email: str = Depends(verify_google_email),
+    db: Session = Depends(get_session),
+):
+    """Development-only; requires Google identity and institutional CONFIGURADOR."""
+    if not _verification_available():
+        raise HTTPException(404, "Not found")
+    m = _configurator(db, email)
+    contact_email = str(body.contact_email).strip().lower()
+    if contact_email == email or db.scalar(select(Membership.id).where(
+        Membership.tenant_id == m.tenant_id,
+        Membership.user_id == contact_email,
+        Membership.active.is_(True)
+    )):
+        raise HTTPException(422, "La contraparte debe ser una cuenta Google externa")
+    wf = _verification_workflow()
+    topological_order(wf)
+    version_number = db.scalar(select(func.max(WorkflowVersion.version)).where(
+        WorkflowVersion.tenant_id == m.tenant_id,
+        WorkflowVersion.template_key == wf.key
+    )) or 0
+    version = WorkflowVersion(
+        tenant_id=m.tenant_id,template_key=wf.key,version=version_number+1,
+        status="SYNTHETIC",definition=wf.model_dump(mode="json"),created_by=email,
+    )
+    party = ContractParty(
+        tenant_id=m.tenant_id,kind="JURIDICA",
+        name="IPS ficticia · Verificación de intercambio",
+        contact_email=contact_email,
+    )
+    db.add_all([version,party]);db.flush()
+    case = ContractCase(
+        tenant_id=m.tenant_id,party_id=party.id,
+        title="Verificación de intercambio · Sin valor contractual",
+        state="DRAFT",case_data={"synthetic":True,"not_contractual":True},
+    )
+    db.add(case);db.flush()
+    _bind_workflow(db,case,version,party,email)
+    _event(db,m.tenant_id,email,"SYNTHETIC_VERIFICATION_CREATED",
+           case.id,{"synthetic":True,"template_version":version.version})
+    db.commit()
+    return {"case":_case_summary(db,case),"synthetic":True,"portal_path":"/prestador"}
+
 
 @router.get("/my-cases")
 def my_cases(email:str=Depends(verify_google_email),db:Session=Depends(get_session)):

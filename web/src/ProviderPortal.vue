@@ -74,19 +74,19 @@ function submit(task:ProviderTask){
    </div>
   </aside>
   <main class="provider-main">
-   <header class="provider-page-top"><div><span>PORTAL DE CONTRATISTAS</span><h1>Mi contratación</h1><p>Consulta tus procesos, responde solicitudes y sigue el avance de cada actividad.</p></div>
+   <header class="provider-page-top"><div><span>PORTAL DE PRESTADORES</span><h1>Mi contratación</h1><p>Consulta tus procesos, responde solicitudes y sigue el avance de cada actividad.</p></div>
     <button type="button" class="provider-outline" :disabled="busy" @click="emit('refresh')">Actualizar</button>
    </header>
-   <div class="provider-evaluation-note">Versión de evaluación. No admite carga documental ni firma legal; no envíes información confidencial a través de este portal.</div>
+   <div class="provider-evaluation-note">Este portal aún no permite adjuntar documentos ni firmar contratos. No ingreses información confidencial.</div>
    <div v-if="error" class="provider-alert error" role="alert">{{error}}</div>
    <div v-if="message" class="provider-alert" role="status">{{message}}</div>
    <template v-if="!detail">
     <div class="provider-panel">
      <div class="provider-panel-top"><div><h2>Expedientes asignados</h2><p>{{cases.length}} proceso(s) relacionados con esta cuenta</p></div>
-      <input v-model="caseSearch" type="search" class="provider-search" placeholder="Buscar proceso" aria-label="Buscar procesos"/>
+      <input v-if="cases.length" v-model="caseSearch" type="search" class="provider-search" placeholder="Buscar proceso" aria-label="Buscar procesos"/>
      </div>
      <div v-if="!list.length" class="provider-empty"><div class="provider-empty-icon">▣</div><h3>{{cases.length?'No hay resultados':'Todavía no hay procesos asignados'}}</h3>
-      <p>{{cases.length?'Prueba con otro término.':'La entidad contratante debe registrar tu correo y asignarte un expediente. No necesitas configurar ningún flujo.'}}</p>
+      <p>{{cases.length?'Prueba con otro término.':'Aquí aparecerán las invitaciones y los procesos que una entidad contratante te asigne. No necesitas configurar flujos.'}}</p>
      </div>
      <button v-for="item in list" :key="item.id" type="button" class="provider-case" @click="emit('openCase',item.id)">
       <div><strong>{{item.title}}</strong><span>{{item.party_name||'Entidad contratista'}}</span></div>
