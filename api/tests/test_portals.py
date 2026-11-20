@@ -505,3 +505,44 @@ def test_first_flow_preload_idempotent_and_development_scoped(portal,monkeypatch
     assert portal.patch(url+"/"+original_id,json={"workflow":edited}).status_code==403
     as_user("charlie")
     assert portal.patch(url+"/"+original_id,json={"workflow":edited}).status_code==404
+
+
+def test_hospital_smart_original_diagram_is_preloaded_once_and_openable(portal,monkeypatch):
+    create_pilot(portal)
+    hospital=create_party_record(portal,name="Hospital Smart",
+                                 email="hospital@example.com",kind="JURIDICA")
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT_ID","6e8d45ca-d6f2-448c-a48a-63e5a2ab1806")
+    as_user("alice@example.com")
+    node_ids=["start"]+["step_"+str(i) for i in range(1,24)]+["end"]
+    nodes=[{"id":x,"label":x,"kind":"START" if i==0 else "END" if i==24 else "FORM",
+            "role":"ASPIRANTE" if i in (2,14) else "ADMINISTRADOR",
+            "policy":"ORG_REQUIRED","enabled":True,
+            "config":{"fields":[],"actor_side":"CONTRATISTA" if i in (2,14) else "CONTRATANTE"}}
+           for i,x in enumerate(node_ids)]
+    flow={"key":"SMART_CICLO_CONTRATACION_V2",
+          "name":"Ciclo de contratación v2 · Documento original",
+          "nodes":nodes,
+          "edges":[{"source":node_ids[i],"target":node_ids[i+1]} for i in range(24)],
+          "metadata":{"source":"smart-contract-original-pdf"}}
+    url="/api/v1/portal/parties/"+hospital["id"]+"/workflow-drafts"
+    saved=portal.post(url,json={"workflow":flow,"initialize_original":True})
+    assert saved.status_code==201,saved.text
+    assert saved.json()["already_exists"] is False
+    again=portal.post(url,json={"workflow":flow,"initialize_original":True})
+    assert again.status_code==201,again.text
+    assert again.json()["already_exists"] is True
+    assert again.json()["id"]==saved.json()["id"]
+    directory=portal.get("/api/v1/portal/parties").json()
+    row=next(r for r in directory if r["id"]==hospital["id"])
+    assert row["process_count"]==1 and row["case_count"]==0
+    assert row["has_original_first_flow"] is True
+    asset=portal.get(url+"/"+saved.json()["id"]).json()
+    assert len(asset["workflow"]["nodes"])==25
+    assert len(asset["workflow"]["edges"])==24
+    assert len(portal.get("/api/v1/portal/parties/"+hospital["id"]+"/portfolio").json()["processes"])==1
+    # Saving edited diagrams updates the same row.
+    flow["nodes"][1]["label"]="Primer paso editado"
+    patched=portal.patch(url+"/"+saved.json()["id"],json={"workflow":flow})
+    assert patched.status_code==200,patched.text
+    assert portal.get(url+"/"+saved.json()["id"]).json()["workflow"]["nodes"][1]["label"]=="Primer paso editado"
+    assert portal.get("/api/v1/portal/parties/"+hospital["id"]+"/portfolio").json()["cases"]==[]
