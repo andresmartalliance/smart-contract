@@ -1,55 +1,41 @@
-"""Diagnostic cannot expose secrets and distinguishes authentication vs inference."""
+"""Tiny probes: never log credentials or user data, maximum two generations."""
 import asyncio
 import logging
-
 import httpx
+from app.gemini_deploy_probe import run_gemini_deploy_probe, MODELS
 
-from app.gemini_deploy_probe import run_gemini_deploy_probe, MODEL
 
-
-def test_model_lookup_200_interactions_503_is_provider_generation_failure(monkeypatch, caplog):
+def test_fallback_candidate_succeeds_without_exposing_key(monkeypatch, caplog):
+    calls = []
     async def handler(request):
-        assert request.headers["x-goog-api-key"] == "fake-confidential-key"
+        assert request.headers["x-goog-api-key"] == "private-mock-key"
+        calls.append((request.method, str(request.url)))
         if request.method == "GET":
-            return httpx.Response(200, json={"name": "models/" + MODEL})
-        assert request.method == "POST"
-        return httpx.Response(503, json={"error": {"status": "UNAVAILABLE",
-            "message": "private provider message must not leak"}})
+            return httpx.Response(200, json={"name": "models/test"})
+        if MODELS[0] in str(request.url):
+            return httpx.Response(503, json={"error": {"status": "UNAVAILABLE",
+                 "message": "sensitive-provider-body"}})
+        return httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": "OK"}]}}]})
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: client)
     with caplog.at_level(logging.WARNING):
-        answer = asyncio.run(run_gemini_deploy_probe("fake-confidential-key"))
-    assert [x["phase"] for x in answer] == ["model_get", "interactions"]
-    assert [x["http"] for x in answer] == [200, 503]
-    assert [x["state"] for x in answer] == ["OK", "UNAVAILABLE"]
-    assert "fake-confidential-key" not in caplog.text
-    assert "private provider message" not in caplog.text
+        result = asyncio.run(run_gemini_deploy_probe("private-mock-key"))
+    assert len(result) == 4
+    assert result[-1]["state"] == "OK_TEXT"
+    assert result[-1]["model"] == MODELS[1]
+    assert sum(m == "POST" for m, _ in calls) == 2
+    assert "private-mock-key" not in caplog.text
+    assert "sensitive-provider-body" not in caplog.text
 
 
-def test_invalid_key_does_not_call_generation(monkeypatch):
+def test_auth_denied_does_not_generate(monkeypatch):
     calls = []
     def handler(request):
         calls.append(request.method)
         return httpx.Response(403, json={"error": {"status": "PERMISSION_DENIED"}})
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: client)
-    answer = asyncio.run(run_gemini_deploy_probe("invalid-key"))
-    assert calls == ["GET"]
-    assert len(answer) == 1
-    assert answer[0]["state"] == "PERMISSION_DENIED"
-
-def test_interactions_returns_actual_text_without_storing(monkeypatch):
-    seen = {}
-    async def handler(request):
-        if request.method == "GET":
-            return httpx.Response(200, json={"name":"models/"+MODEL})
-        seen["url"] = str(request.url)
-        seen["request"] = __import__("json").loads(request.content)
-        return httpx.Response(200, json={"status":"completed","output_text":"OK"})
-    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: client)
-    answer = asyncio.run(run_gemini_deploy_probe("key"))
-    assert answer[1]["state"] == "OK_TEXT"
-    assert seen["url"].endswith("/v1beta/interactions")
-    assert seen["request"]["store"] is False
-    assert seen["request"]["model"] == MODEL
+    result = asyncio.run(run_gemini_deploy_probe("invalid"))
+    assert len(result) == 2
+    assert all(r["state"] == "PERMISSION_DENIED" for r in result)
+    assert calls == ["GET", "GET"]
