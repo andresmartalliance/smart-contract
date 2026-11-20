@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, shallowRef, watch } from 'vue'
-import { VueFlow, type Node, type Edge, type Connection } from '@vue-flow/core'
+import { VueFlow, Position, type Node, type Edge, type Connection } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 
@@ -11,7 +11,7 @@ type Condition = {field:string;op:'eq'|'neq'|'gt'|'gte'|'lt'|'lte'|'in'|'exists'
 type FieldType = 'text'|'number'|'date'|'currency'|'boolean'|'select'
 type WorkField = {key:string;label:string;type:FieldType;required:boolean}
 type ExecutionMode = 'MANUAL'|'AI_ASSISTED'|'API'|'RPA'
-type WorkNode = {id:string;label:string;kind:Kind;policy:Policy;enabled:boolean;role:string|null;when?:Condition|null;config:{position?:{x:number;y:number};instructions?:string;execution_mode?:ExecutionMode;fields?:WorkField[];source_step?:string;source_excerpt?:string;source_page?:number|null;source_confidence?:string;actor_side?:'CONTRATANTE'|'CONTRATISTA'}}
+type WorkNode = {id:string;label:string;kind:Kind;policy:Policy;enabled:boolean;role:string|null;when?:Condition|null;config:{position?:{x:number;y:number};instructions?:string;execution_mode?:ExecutionMode;fields?:WorkField[];source_step?:string;source_excerpt?:string;source_page?:number|null;source_confidence?:string;actor_side?:'CONTRATANTE'|'CONTRATISTA'|'REVISAR';party_scope_pending?:boolean}}
 type WorkEdge = {source:string;target:string;when?:Condition|null}
 type Workflow = {key: string; name: string; modality_key: string | null; nodes: WorkNode[]; edges: WorkEdge[]; metadata: Record<string, unknown>}
 
@@ -110,13 +110,14 @@ type MairaMapping={source_step:string;source_excerpt:string;node_id:string;page:
 type MairaProposal={workflow:Workflow;source_map:MairaMapping[];questions:string[];observations:string[];node_count:number;mapped_steps:number;notice:string;analysis_method?:string}
 type PartyProcessPreview = {id:string;party_id:string;filename:string;status:string;workflow:Workflow;source_map:MairaMapping[];questions:string[];observations:string[];created_at:string}
 type PreviewStage={id:string;step:string;label:string;role:string;kind:string;side:'CONTRATISTA'|'CONTRATANTE'|'REVISAR';source:string;page:number|null;confidence:string;dependencies:string[]}
-function previewStages(proposal:{workflow:Workflow;source_map:MairaMapping[]}):PreviewStage[]{
+function previewStages(proposal:{workflow:Workflow;source_map:MairaMapping[]},partyKind?:'NATURAL'|'JURIDICA'):PreviewStage[]{
  const nodes=new Map(proposal.workflow.nodes.map(n=>[n.id,n]))
  const steps=new Map(proposal.source_map.map(m=>[m.node_id,m.source_step]))
  return proposal.source_map.map(m=>{
   const n=nodes.get(m.node_id)
   const role=(n?.role||'Por definir').toUpperCase()
-  const side=n?.config?.actor_side==='CONTRATISTA'?'CONTRATISTA':
+  const side=(partyKind==='JURIDICA'&&role==='ASPIRANTE')||n?.config?.actor_side==='REVISAR'?'REVISAR':
+    n?.config?.actor_side==='CONTRATISTA'?'CONTRATISTA':
     n?.config?.actor_side==='CONTRATANTE'?'CONTRATANTE':
     ['ASPIRANTE','CONTRATISTA','PRESTADOR','PROVEEDOR'].includes(role)?'CONTRATISTA':
     ['JURIDICO','JURÍDICO','SISTEMA','SUPERVISOR','FINANCIERO','SST','ADMINISTRADOR'].includes(role)?'CONTRATANTE':'REVISAR'
@@ -181,13 +182,73 @@ const mairaSourceFile=ref<File|null>(null)
 const mairaProposal=ref<MairaProposal|null>(null)
 const mairaTargetPartyId=ref('')
 const mairaTargetParty=computed(()=>partyRecords.value.find(x=>x.id===mairaTargetPartyId.value)||null)
-const mairaPreviewStages=computed(()=>mairaProposal.value?previewStages(mairaProposal.value).sort(numericStepOrder):[])
+const mairaPreviewStages=computed(()=>mairaProposal.value?previewStages(mairaProposal.value,mairaTargetParty.value?.kind).sort(numericStepOrder):[])
 const sourceOnlyPreview=computed(()=>mairaProposal.value?.workflow.metadata?.source_method==='PDF_TEXT_ONLY')
+
+/** The visual preview uses the actual MAIRA nodes, edges and source references. */
+function workflowWithEvidence(proposal:{workflow:Workflow;source_map:MairaMapping[]},partyKind?:'NATURAL'|'JURIDICA'):Workflow{
+ const byNode=new Map(proposal.source_map.map(m=>[m.node_id,m]))
+ return {...proposal.workflow,
+  metadata:{...proposal.workflow.metadata,source:'maira-document-import',draft:true,
+    requires_review:true,review_confirmed:false},
+  nodes:proposal.workflow.nodes.map(n=>{
+   const ref=byNode.get(n.id)
+   const applicant=partyKind==='JURIDICA'&&(n.role||'').trim().toUpperCase()==='ASPIRANTE'
+   return {...n,config:{...n.config,
+    ...(ref?{source_step:ref.source_step,source_excerpt:ref.source_excerpt,
+             source_page:ref.page,source_confidence:ref.confidence}:{}),
+    ...(applicant?{actor_side:'REVISAR' as const,party_scope_pending:true}:{})}}
+  })}
+}
+function mairaGraphPosition(index:number,total:number){
+ const cols=Math.min(5,Math.max(2,Math.ceil(Math.sqrt(total))))
+ const row=Math.floor(index/cols)
+ const col=row%2===0?index%cols:cols-1-index%cols
+ return {x:col*295+28,y:row*165+24}
+}
+const mairaDiagram=computed(()=>{
+ const p=mairaProposal.value
+ if(!p)return {nodes:[] as Node[],edges:[] as Edge[]}
+ const wf=workflowWithEvidence(p,mairaTargetParty.value?.kind)
+ const indexes=new Map(p.source_map.map((m,i)=>[m.node_id,i]))
+ const original=[...wf.nodes].sort((a,b)=>{
+   if(a.kind==='START')return -1
+   if(b.kind==='START')return 1
+   if(a.kind==='END')return 1
+   if(b.kind==='END')return -1
+   return (indexes.get(a.id)??999)-(indexes.get(b.id)??999)
+ })
+ const count=original.length
+ const columns=Math.min(5,Math.max(2,Math.ceil(Math.sqrt(count))))
+ const citations=new Map(p.source_map.map(m=>[m.node_id,m]))
+ const graphNodes:Node[]=original.map((n,i)=>{
+  const col=i%columns,row=Math.floor(i/columns)
+  const forward=row%2===0
+  const last=col===columns-1||i===count-1
+  const citation=citations.get(n.id)
+  const fullLabel=(citation?citation.source_step+' · ':'')+n.label
+  return {id:n.id,type:n.kind==='START'?'input':n.kind==='END'?'output':'default',
+   position:mairaGraphPosition(i,count),
+   sourcePosition:last?Position.Bottom:(forward?Position.Right:Position.Left),
+   targetPosition:col===0?Position.Top:(forward?Position.Left:Position.Right),
+   class:'maira-preview-node '+(n.kind==='START'?'preview-start':n.kind==='END'?'preview-end':''),
+   data:{label:fullLabel.length>84?fullLabel.slice(0,81)+'…':fullLabel,
+    original_role:n.role,source_step:citation?.source_step}}
+ })
+ const ids=new Set(graphNodes.map(n=>n.id))
+ const graphEdges:Edge[]=wf.edges.filter(e=>ids.has(e.source)&&ids.has(e.target))
+  .map((e,i)=>({id:'maira_map_edge_'+i,source:e.source,target:e.target,type:'smoothstep',
+  style:{stroke:'#84a5c5',strokeWidth:2},animated:false}))
+ return {nodes:graphNodes,edges:graphEdges}
+})
+const mairaDiagramVersion=ref(0)
+const studioDiagramVersion=ref(0)
+
 const mairaPreviewSaving=ref(false)
 const partyPreview=ref<PartyProcessPreview|null>(null)
 const partyPreviewTarget=ref<PartyRecord|null>(null)
 const partyPreviewBusy=ref(false)
-const savedPreviewStages=computed(()=>partyPreview.value?previewStages(partyPreview.value).sort(numericStepOrder):[])
+const savedPreviewStages=computed(()=>partyPreview.value?previewStages(partyPreview.value,partyPreviewTarget.value?.kind).sort(numericStepOrder):[])
 const savedSourceOnly=computed(()=>partyPreview.value?.workflow.metadata?.source_method==='PDF_TEXT_ONLY')
 
 const mairaApplyConfirm=ref(false)
@@ -517,7 +578,7 @@ async function analyzeMairaDocument(){
    const event=JSON.parse(line) as MairaStreamEvent
    if(event.event==='progress'&&event.phase&&event.label)mairaProgress(event.phase,event.label)
    if(event.event==='done'&&event.result){
-    mairaProposal.value=event.result;resultReceived=true
+    mairaProposal.value=event.result;resultReceived=true;mairaDiagramVersion.value++
     mairaProgress('TERMINADO','Propuesta lista: '+event.result.mapped_steps+' actividades identificadas.')
     mairaImportInfo.value='MAIRA generó una propuesta. Revisa los pasos antes de aplicarla.'
    }
@@ -561,7 +622,7 @@ async function extractMairaPdfWithoutGemini(){
   if(!response.ok)throw new Error(result.detail||'No se pudo recuperar el texto del PDF.')
   if(result.analysis_method!=='PDF_TEXT_ONLY'||!result.workflow||!Array.isArray(result.source_map))
    throw new Error('No se recibió una vista documental válida.')
-  mairaProposal.value=result
+  mairaProposal.value=result;mairaDiagramVersion.value++
   mairaProgress('TERMINADO','Vista documental lista: '+result.mapped_steps+' actividades recuperadas.')
   mairaImportInfo.value='Extracción sin Gemini. Revisa cuidadosamente responsables, numeración y flechas antes de guardar.'
  }catch(e){
@@ -577,7 +638,7 @@ async function saveMairaPreview(){
   const id=mairaTargetParty.value.id
   const preview=await portalRequest<PartyProcessPreview>('/parties/'+id+'/process-previews','POST',{
     filename:mairaSourceFile.value?.name||'Documento analizado',
-    workflow:mairaProposal.value.workflow,
+    workflow:workflowWithEvidence(mairaProposal.value,mairaTargetParty.value.kind),
     source_map:mairaProposal.value.source_map,
     questions:mairaProposal.value.questions,
     observations:mairaProposal.value.observations
@@ -601,7 +662,7 @@ async function viewPartyProcessPreview(party:PartyRecord){
 function openReviewInDesigner(){
  if(!partyPreview.value)return
  try{
-  loadDefinition(partyPreview.value.workflow)
+  loadDefinition(workflowWithEvidence(partyPreview.value,partyPreviewTarget.value?.kind))
   current.value='flujos'
   mairaImportOpen.value=false
   flowMessage.value='Propuesta en revisión para '+(partyPreviewTarget.value?.name||'tercero')+'. Revisa responsabilidades, requisitos y dependencias antes de publicar.'
@@ -609,25 +670,26 @@ function openReviewInDesigner(){
 }
 function applyMairaProposal(){
  if(!mairaProposal.value)return
- if(!mairaApplyConfirm.value){
-  mairaApplyConfirm.value=true
-  mairaImportInfo.value='Esta acción sustituirá el borrador actual en este navegador. Puedes exportarlo antes de continuar.'
-  return
- }
  const previous=definition()
  try{
-  loadDefinition(mairaProposal.value.workflow)
-  const valid=validateDraft()
-  if(!valid)throw new Error(errors.value.slice(0,3).join('; '))
-  flowMessage.value='Propuesta MAIRA importada como borrador LOCAL. Revisa las etapas y su origen antes de publicar.'
+  const proposal=mairaProposal.value
+  const imported=workflowWithEvidence(proposal,mairaTargetParty.value?.kind)
+  if(imported.nodes.length!==proposal.node_count||
+     imported.nodes.filter(n=>Boolean(n.config?.source_step)).length!==proposal.mapped_steps){
+    throw new Error('No coinciden los pasos del documento y los nodos del workflow.')
+  }
+  loadDefinition(imported)
+  if(!validateDraft())throw new Error(errors.value.slice(0,3).join('; '))
+  current.value='flujos'
   mairaImportOpen.value=false
-  mairaImportInfo.value=''
+  flowMessage.value='Workflow importado: '+proposal.mapped_steps+' actividades / '+
+   imported.nodes.length+' nodos. Revisa responsables y conexiones; no se publicó ningún contrato.'
  }catch(e){
   loadDefinition(previous)
-  mairaImportError.value=e instanceof Error?e.message:'No se pudo aplicar la propuesta'
-  mairaApplyConfirm.value=false
+  mairaImportError.value=e instanceof Error?e.message:'No se pudo abrir el workflow generado'
  }
 }
+
 watch(mairaImportOpen,open=>{if(!open){mairaSourceFile.value=null;mairaProposal.value=null;mairaApplyConfirm.value=false}})
 
 const nodes = shallowRef<Node[]>([])
@@ -930,6 +992,7 @@ function loadDefinition(parsed:Partial<Workflow>){
    if(typeof value.field!=='string'||!value.field.trim()||!validOps.has(value.op))throw new Error('Condición incompleta o no admitida.')
    return {field:value.field.trim(),op:value.op,value:value.value}
  }
+ const documentary=parsed.metadata?.source==='maira-document-import'
  const imported:Node[]=parsed.nodes.map((raw,i)=>{
    if(typeof raw.id!=='string'||!raw.id.trim()||raw.id.length>120||typeof raw.label!=='string'||!raw.label.trim()||!validKinds.has(raw.kind)||!validPolicies.has(raw.policy)||typeof raw.enabled!=='boolean')throw new Error('La etapa '+(i+1)+' tiene valores inválidos.')
    if(!raw.enabled&&['LEGAL_LOCKED','ORG_REQUIRED'].includes(raw.policy))throw new Error('El archivo intenta desactivar un requisito protegido.')
@@ -938,8 +1001,9 @@ function loadDefinition(parsed:Partial<Workflow>){
      return {key:f.key,label:f.label,type:f.type,required:f.required}
    })
    const position=raw.config?.position
-   const x=typeof position?.x==='number'&&Number.isFinite(position.x)?position.x:260
-   const y=typeof position?.y==='number'&&Number.isFinite(position.y)?position.y:i*130
+   const suggested=documentary?mairaGraphPosition(i,parsed.nodes!.length):{x:260,y:i*130}
+   const x=typeof position?.x==='number'&&Number.isFinite(position.x)?position.x:suggested.x
+   const y=typeof position?.y==='number'&&Number.isFinite(position.y)?position.y:suggested.y
    const n=nodeInfo(raw.id,raw.kind,raw.label,x,y,raw.role||null,raw.policy);if(!raw.enabled)n.class='node-disabled'
    const mode=raw.config?.execution_mode
    n.data={label:raw.label,kind:raw.kind,role:raw.role||null,policy:raw.policy,enabled:raw.enabled,when:safeCondition(raw.when),config:{position:{x,y},instructions:String(raw.config?.instructions||'').slice(0,5000),execution_mode:executionModes.some(x=>x.value===mode)?mode:'MANUAL',fields,
@@ -947,7 +1011,8 @@ function loadDefinition(parsed:Partial<Workflow>){
      source_excerpt:typeof raw.config?.source_excerpt==='string'?raw.config.source_excerpt.slice(0,650):undefined,
      source_page:typeof raw.config?.source_page==='number'?raw.config.source_page:null,
      source_confidence:typeof raw.config?.source_confidence==='string'?raw.config.source_confidence.slice(0,25):undefined,
-     actor_side:raw.config?.actor_side==='CONTRATISTA'?'CONTRATISTA':'CONTRATANTE'}}
+     actor_side:raw.config?.actor_side==='REVISAR'?'REVISAR':raw.config?.actor_side==='CONTRATISTA'?'CONTRATISTA':'CONTRATANTE',
+     party_scope_pending:raw.config?.party_scope_pending===true}}
    return n
  })
  const parsedEdges:Edge[]=parsed.edges.map((e,i)=>{
@@ -961,7 +1026,7 @@ function loadDefinition(parsed:Partial<Workflow>){
  workflowMetadata.value={...(parsed.metadata||{}),draft:true}
  resetSourceReview()
  nodes.value=imported;edges.value=parsedEdges;selectedId.value=null;selectedEdgeId.value=null;simulationVisible.value=false
- nodeCounter.value=imported.length+1;errors.value=[]
+ nodeCounter.value=imported.length+1;errors.value=[];studioDiagramVersion.value++
 }
 async function importDraft(event:Event){
  const input=event.target as HTMLInputElement,file=input.files?.[0]
@@ -1170,7 +1235,7 @@ function simulateDraft(){
                   <div class="maira-preview-tasks">
                     <div v-for="stage in mairaPreviewStages" :key="stage.id" class="maira-preview-task">
                       <span class="maira-preview-number">{{stage.step}}</span>
-                      <div><strong>{{stage.label}}</strong><small v-if="sourceOnlyPreview">Responsable original: {{stage.role}} · Asignación institucional no verificada</small><small v-else>{{stage.role}} · {{stage.side==='CONTRATISTA'?'Hospital / contratista':stage.side==='CONTRATANTE'?'Entidad contratante':'Por asignar'}}</small>
+                      <div><strong>{{stage.label}}</strong><small v-if="sourceOnlyPreview">Responsable original: {{stage.role}} · Asignación institucional no verificada</small><small v-else>{{stage.role}} · {{stage.side==='CONTRATISTA'?'Contratista (propuesto)':stage.side==='CONTRATANTE'?'Contratante (propuesto)':'Por definir · no asignado'}}</small>
                         <small>Origen: {{stage.source}}{{stage.page?' · Página '+stage.page:''}}</small>
                         <small v-if="sourceOnlyPreview">Conexión provisional por numeración: {{stage.dependencies.join(', ')||'Inicio'}} · Validar flechas</small>
                         <small v-else>Depende de: {{stage.dependencies.join(', ')||'Inicio'}}</small></div>
@@ -1182,14 +1247,32 @@ function simulateDraft(){
                 <div v-if="mairaProposal.observations.length"><strong>Observaciones</strong><p v-for="(item,i) in mairaProposal.observations" :key="i">• {{item}}</p></div>
                 <div class="pilot-actions">
                   <button v-if="mairaTargetParty" type="button" class="primary-button" :disabled="mairaPreviewSaving" @click="saveMairaPreview">{{mairaPreviewSaving?'Guardando…':sourceOnlyPreview?'Guardar borrador sin aprobar en '+mairaTargetParty.name:'Guardar vista previa en '+mairaTargetParty.name}}</button>
-                  <button type="button" class="ghost-button" @click="applyMairaProposal">{{mairaApplyConfirm?'Confirmar reemplazo del borrador':'Revisar en diseñador'}}</button>
+                  <button type="button" class="ghost-button" @click="applyMairaProposal">Editar workflow de {{mairaProposal.mapped_steps}} actividades</button>
                 </div>
-                <p class="maira-import-fine">Las etapas originales conservarán su número y cita en Propiedades. Antes de aplicar puedes usar «Exportar JSON» para respaldar el borrador actual.</p>
+                <p class="maira-import-fine">El diagrama muestra el proceso generado, no la plantilla del piloto. Al abrirlo en el diseñador sustituye el borrador local; puedes exportar el borrador actual antes de hacerlo.</p>
               </template>
               <p v-else class="maira-import-fine">MAIRA mostrará aquí el mapeo de pasos originales a etapas, dependencias, dudas y observaciones. Nada se aplica sin tu revisión.</p>
             </div>
           </div>
         </div>
+
+          <section v-if="mairaProposal" class="maira-workflow-visual" aria-label="Workflow generado por MAIRA">
+            <div class="maira-workflow-visual-head">
+              <div>
+                <span class="eyebrow">Workflow propuesto · Borrador no publicado</span>
+                <h3>Diagrama generado a partir del documento</h3>
+                <p>{{mairaProposal.mapped_steps}} actividades · {{mairaProposal.node_count}} nodos · {{mairaProposal.workflow.edges.length}} conexiones propuestas</p>
+              </div>
+              <button type="button" class="primary-button" @click="applyMairaProposal">Abrir workflow en diseñador</button>
+            </div>
+            <div class="maira-workflow-visual-canvas">
+              <VueFlow :key="'maira-map-'+mairaDiagramVersion" id="maira-generated-diagram"
+                       :nodes="mairaDiagram.nodes" :edges="mairaDiagram.edges" :fit-view-on-init="true"
+                       :nodes-draggable="false" :nodes-connectable="false" :edges-updatable="false"
+                       :min-zoom="0.22" :max-zoom="1.7" :elements-selectable="true"/>
+            </div>
+            <p class="maira-workflow-visual-note">Las conexiones representan el workflow propuesto por MAIRA. Debes confirmar las flechas, responsables y condiciones con el documento original antes de publicar.</p>
+          </section>
         <input ref="fileInput" type="file" accept="application/json,.json" class="hidden-input" @change="importDraft" />
         <div class="workflow-meta">
           <label>Nombre del proceso<input v-model="workflowName" maxlength="200" aria-label="Nombre del proceso" /></label>
@@ -1220,7 +1303,7 @@ function simulateDraft(){
           <div class="diagram-panel">
             <div class="panel-title"><strong>Diagrama del proceso</strong><span class="flow-count">{{activeCount}} etapas activas</span></div>
             <div class="canvas-area">
-              <VueFlow v-model:nodes="nodes" v-model:edges="edges" :fit-view-on-init="true" :nodes-connectable="true" :nodes-draggable="true" :elements-selectable="true" :min-zoom="0.2" :max-zoom="2" @connect="onConnect" @node-click="({node}) => {selectedId=node.id;selectedEdgeId=null}" @edge-click="({edge}) => {selectedEdgeId=edge.id;selectedId=null}" @node-drag-stop="onNodeDragStop" @pane-click="() => {selectedId=null;selectedEdgeId=null}" />
+              <VueFlow :key="'studio-'+studioDiagramVersion" v-model:nodes="nodes" v-model:edges="edges" :fit-view-on-init="true" :nodes-connectable="true" :nodes-draggable="true" :elements-selectable="true" :min-zoom="0.2" :max-zoom="2" @connect="onConnect" @node-click="({node}) => {selectedId=node.id;selectedEdgeId=null}" @edge-click="({edge}) => {selectedEdgeId=edge.id;selectedId=null}" @node-drag-stop="onNodeDragStop" @pane-click="() => {selectedId=null;selectedEdgeId=null}" />
             </div>
             <div class="canvas-footer"><span>Arrastra las etapas · Conecta los puntos · Selecciona para editar</span><div class="canvas-buttons"><button @click="validateDraft">Verificar</button><button @click="simulateDraft">Simular</button></div></div>
           </div>
@@ -1232,11 +1315,12 @@ function simulateDraft(){
                 <strong>Origen del documento · Paso {{selectedData.config.source_step}}</strong>
                 <p>{{selectedData.config.source_excerpt||'Sin cita disponible'}}</p>
                 <span>Fuente MAIRA{{selectedData.config.source_page?' · Página '+selectedData.config.source_page:''}}{{selectedData.config.source_confidence?' · Confianza '+selectedData.config.source_confidence:''}} · Revisión humana requerida</span>
+                <span v-if="selectedData.config.party_scope_pending" class="maira-evidence-warning">Este responsable del PDF no equivale a Hospital Smart. Asigna el ejecutor antes de publicar.</span>
               </div>
               <label class="inspector-field">Nombre de la etapa<input :value="selectedData.label" maxlength="200" @input="editNode('label',($event.target as HTMLInputElement).value)" /></label>
               <label class="inspector-field">Tipo de componente<input :value="blocks.find(b=>b.kind===selectedData?.kind)?.title||selectedData.kind" disabled /></label>
               <label class="inspector-field">Responsable<input list="roles-contrato" :value="selectedData.role||''" placeholder="Selecciona o escribe otro rol" maxlength="120" @input="editNode('role',($event.target as HTMLInputElement).value)"/><datalist id="roles-contrato"><option v-for="role in roles" :key="role" :value="role" /></datalist></label>
-              <label v-if="selectedData.kind!=='START'&&selectedData.kind!=='END'" class="inspector-field">Ejecuta la actividad<select :value="selectedData.config?.actor_side||'CONTRATANTE'" @change="editNode('actorSide',($event.target as HTMLSelectElement).value)"><option value="CONTRATANTE">Entidad contratante</option><option value="CONTRATISTA">Contratista / prestador</option></select></label>
+              <label v-if="selectedData.kind!=='START'&&selectedData.kind!=='END'" class="inspector-field">Ejecuta la actividad<select :value="selectedData.config?.actor_side||'REVISAR'" @change="editNode('actorSide',($event.target as HTMLSelectElement).value)"><option value="REVISAR">Por definir · no asignado</option><option value="CONTRATANTE">Entidad contratante</option><option value="CONTRATISTA">Contratista / prestador</option></select></label>
               <label class="inspector-field">Clasificación<select :value="selectedData.policy" @change="editNode('policy',($event.target as HTMLSelectElement).value)"><option v-for="p in policies" :key="p.value" :value="p.value">{{p.label}}</option></select></label>
               <label class="inspector-field">Campo de condición <span class="field-hint">opcional</span><input :value="selectedData.when?.field||''" placeholder="Ej. contract.requires_policy" @input="editNode('conditionField',($event.target as HTMLInputElement).value)" /></label>
               <label v-if="selectedData.when?.field" class="inspector-field">Operador<select :value="selectedData.when?.op||'eq'" @change="editNode('conditionOperator',($event.target as HTMLSelectElement).value)"><option v-for="op in conditionOperators" :key="op.value" :value="op.value">{{op.label}}</option></select></label>

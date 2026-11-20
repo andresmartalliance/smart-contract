@@ -456,3 +456,17 @@ nav button.active .nav-icon{stroke:#236ed3;transform:scale(1.03)}
 .maira-review-gate input[type=checkbox]{margin-top:3px;accent-color:#357d7a}
 .maira-review-ok{color:#28745f;font-size:11px}
 .maira-review-pending{color:#9c7144;font-size:11px}
+
+/* MAIRA actual generated workflow (no four-step demo) */
+.maira-workflow-visual{margin-top:22px;background:white;border:1px solid #d6e6f6;border-radius:19px;padding:20px;display:grid;gap:14px}
+.maira-workflow-visual-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px}
+.maira-workflow-visual-head h3{font-size:18px;color:#204368;margin:5px 0}
+.maira-workflow-visual-head p{font-size:12px;color:#6e869f;margin:0;line-height:1.6}
+.maira-workflow-visual-canvas{height:580px;position:relative;border:1px solid #d9e6f2;border-radius:15px;overflow:hidden;background-color:#fbfdff;background-image:radial-gradient(#d3e1ee .8px,transparent .8px);background-size:22px 22px}
+.maira-workflow-visual-canvas .vue-flow{width:100%;height:100%}
+.maira-workflow-visual-canvas .vue-flow__node{width:224px;min-height:61px;max-width:224px;white-space:normal;overflow-wrap:anywhere;border:1px solid #cbddec;background:#fff;border-radius:12px;box-shadow:0 5px 17px rgba(19,60,102,.07);padding:14px;font-size:11px;font-weight:700;color:#294c6b;text-align:center}
+.maira-workflow-visual-canvas .vue-flow__node.preview-start{background:#ecf5ff;border-color:#99c4f1;color:#1e60a7}
+.maira-workflow-visual-canvas .vue-flow__node.preview-end{background:#ecfaf5;border-color:#9fdaca;color:#217d68}
+.maira-workflow-visual-note{margin:0;padding:11px 14px;border:1px solid #e2d9bf;background:#fffcf5;border-radius:11px;color:#7a6c50;font-size:12px;line-height:1.6}
+.maira-evidence-warning{display:block;color:#986735!important;font-weight:700;margin-top:7px}
+@media(max-width:700px){.maira-workflow-visual{padding:12px}.maira-workflow-visual-canvas{height:470px}.maira-workflow-visual-head .primary-button{width:100%}}
