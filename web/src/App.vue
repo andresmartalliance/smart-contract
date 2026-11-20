@@ -1151,7 +1151,7 @@ function simulateDraft(){
     <main class="main">
       <header class="top-header">
         <div><small>Workspace / Smart Contract / {{screenTitle}}</small><h1>{{screenTitle}}</h1></div>
-        <div class="top-meta"><span class="top-product">Smart Contract · V6.3 PILOTO</span><span class="context-pill">Development</span><button type="button" class="logout-button" @click="logoutGoogle" title="Cerrar sesión Google">Salir</button></div>
+        <div class="top-meta"><span class="top-product">Smart Contract · V6.5.13</span><span class="context-pill">Development</span><button type="button" class="logout-button" @click="logoutGoogle" title="Cerrar sesión Google">Salir</button></div>
       </header>
       <section v-if="current==='flujos'&&hasInstitution" class="stack">
         <div class="heading"><div><span class="eyebrow">Diseño inteligente de procesos</span><h2>Workflow Studio</h2><p>Diseña, conecta y valida etapas configurables. Todos los cambios siguen siendo un borrador local.</p></div><div class="header-actions"><button class="primary-button" @click="openMairaDocumentImport()">✧ Crear con MAIRA</button><button class="ghost-button" @click="loadPortalPilotExample">Ejemplo de doble portal</button><button class="ghost-button" @click="newWorkflow">＋ Nuevo flujo</button><button class="ghost-button" @click="fileInput?.click()">↥ Importar</button><button class="primary-button" @click="exportDraft">↧ Exportar JSON</button><button class="ghost-button" :disabled="portalBusy" @click="publishPilot">Publicar plantilla de prueba</button></div></div>
