@@ -177,11 +177,40 @@ def _requires_source_review(wf: WorkflowDefinition) -> bool:
     )
 
 
+
+def _missing_maira_dialogue(wf: WorkflowDefinition) -> bool:
+    """Block documentary workflow publication until source questions are answered."""
+    imported = wf.metadata.get("source") == "maira-document-import" or any(
+        bool(n.config.get("source_step")) for n in wf.nodes)
+    if not imported:
+        return False
+    dialogue = wf.metadata.get("maira_dialogue")
+    if not isinstance(dialogue, dict):
+        return True
+    if dialogue.get("completed") is not True or dialogue.get("scope_decision") not in (
+        "KEEP_ORIGINAL", "ADAPT_TO_ENTITY"
+    ):
+        return True
+    count = dialogue.get("questions_total")
+    answers = dialogue.get("answers")
+    return not (
+        isinstance(count, int) and count >= 1
+        and isinstance(answers, list) and count == len(answers) + 1
+        and all(
+            isinstance(a, dict)
+            and isinstance(a.get("question"), str) and a["question"].strip()
+            and isinstance(a.get("answer"), str) and len(a["answer"].strip()) >= 4
+            for a in answers
+        )
+    )
+
 @router.post("/workflows/publish",status_code=201)
 def publish(input:PublishInput,email:str=Depends(verify_google_email),db:Session=Depends(get_session)):
     m=_configurator(db,email);wf=input.workflow
     if _requires_source_review(wf):
         raise HTTPException(422,"Antes de publicar, revisa responsables y conexiones del documento y confirma la revisión en Workflow Studio.")
+    if _missing_maira_dialogue(wf):
+        raise HTTPException(422,"Faltan respuestas a las preguntas de MAIRA. Define el alcance del documento y responde las dudas antes de publicar.")
     if (wf.metadata.get("source")=="maira-document-import" or any(n.config.get("source_step") for n in wf.nodes)) and any(
         n.kind not in ("START","END") and n.config.get("actor_side") not in ("CONTRATANTE","CONTRATISTA")
         for n in wf.nodes

@@ -100,3 +100,30 @@ def test_document_sources_cannot_publish_without_review():
     assert _requires_source_review(workflow)
     workflow.metadata["review_confirmed"] = True
     assert not _requires_source_review(workflow)
+
+def test_maira_questions_are_required_before_publication():
+    from app.routers.portals import _missing_maira_dialogue
+    from app.workflow.schema import WorkflowDefinition
+    from tests.test_maira_import import valid_proposal
+    raw = valid_proposal()["workflow"]
+    raw["metadata"] = {"source":"maira-document-import","review_confirmed":True}
+    workflow = WorkflowDefinition.model_validate(raw)
+    assert _missing_maira_dialogue(workflow)
+    workflow.metadata["maira_dialogue"] = {
+       "scope_decision":"ADAPT_TO_ENTITY", "completed":True,
+       "questions_total":2,
+       "answers":[{"question":"¿Cómo se adapta el proceso?", "answer":"Revisar requisitos y responsables institucionales"}]
+    }
+    assert not _missing_maira_dialogue(workflow)
+    workflow.metadata["maira_dialogue"]["answers"][0]["answer"]=""
+    assert _missing_maira_dialogue(workflow)
+
+
+def test_ordinary_workflow_not_blocked_by_maira_questions():
+    from app.routers.portals import _missing_maira_dialogue
+    from app.workflow.schema import WorkflowDefinition
+    from tests.test_maira_import import valid_proposal
+    raw = valid_proposal()["workflow"]
+    raw["metadata"] = {"source":"smart-contract-workflow-studio"}
+    wf = WorkflowDefinition.model_validate(raw)
+    assert not _missing_maira_dialogue(wf)

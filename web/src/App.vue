@@ -1279,28 +1279,6 @@ function simulateDraft(){
               <div v-if="mairaImportError" class="maira-import-error" role="alert">{{mairaImportError}}</div>
               <div v-if="mairaImportInfo" class="maira-import-notice" role="status">{{mairaImportInfo}}</div>
               <template v-if="mairaProposal">
-                <div class="maira-import-metrics"><span><b>{{mairaProposal.node_count}}</b> nodos</span><span><b>{{mairaProposal.mapped_steps}}</b> pasos identificados</span><span><b>{{mairaProposal.questions.length}}</b> preguntas</span></div>
-                <div class="maira-preview-card">
-                  <strong>{{sourceOnlyPreview?'Actividades recuperadas del documento original':'Así se distribuirían las actividades '+(mairaTargetParty?'para '+mairaTargetParty.name:'')}}</strong>
-                  <p v-if="sourceOnlyPreview" class="maira-preview-alert">Extracción textual sin Gemini. Los responsables provienen del PDF, no son asignaciones aprobadas para {{mairaTargetParty?.name||'la institución'}}. Las conexiones son provisionales.</p>
-                  <p class="maira-import-fine">Las responsabilidades son una propuesta. No se inventan campos o documentos que no figuren en el diagrama.</p>
-                  <div v-if="!sourceOnlyPreview" class="maira-preview-summary">
-                    <span><b>{{mairaPreviewStages.filter(s=>s.side==='CONTRATISTA').length}}</b> Del contratista</span>
-                    <span><b>{{mairaPreviewStages.filter(s=>s.side==='CONTRATANTE').length}}</b> Del contratante</span>
-                    <span><b>{{mairaPreviewStages.filter(s=>s.side==='REVISAR').length}}</b> Por definir</span>
-                  </div>
-                  <div v-else class="maira-preview-summary"><span><b>{{mairaPreviewStages.length}}</b> actividades del documento</span><span>Roles por revisar</span><span>Dependencias provisionales</span></div>
-                  <div class="maira-preview-tasks">
-                    <div v-for="stage in mairaPreviewStages" :key="stage.id" class="maira-preview-task">
-                      <span class="maira-preview-number">{{stage.step}}</span>
-                      <div><strong>{{stage.label}}</strong><small v-if="sourceOnlyPreview">Responsable original: {{stage.role}} · Asignación institucional no verificada</small><small v-else>{{stage.role}} · {{stage.side==='CONTRATISTA'?'Contratista (propuesto)':stage.side==='CONTRATANTE'?'Contratante (propuesto)':'Por definir · no asignado'}}</small>
-                        <small>Origen: {{stage.source}}{{stage.page?' · Página '+stage.page:''}}</small>
-                        <small v-if="sourceOnlyPreview">Conexión provisional por numeración: {{stage.dependencies.join(', ')||'Inicio'}} · Validar flechas</small>
-                        <small v-else>Depende de: {{stage.dependencies.join(', ')||'Inicio'}}</small></div>
-                    </div>
-                  </div>
-                  <p v-if="mairaTargetParty?.kind==='JURIDICA'&&mairaPreviewStages.some(s=>s.role==='ASPIRANTE')" class="maira-preview-alert">El documento identifica actividades de un aspirante. Antes de asignarlas a una empresa, valida si aplican al hospital o a un representante autorizado.</p>
-                </div>
                 <section class="maira-dialogue" aria-label="Preguntas de MAIRA">
                   <div class="maira-dialogue-top"><div><span class="eyebrow">MAIRA · Definición guiada</span><strong>{{mairaQuestionsDone?'Respuestas registradas':'Necesito una respuesta antes de continuar'}}</strong></div>
                     <small>{{mairaAnsweredQuestions}} de {{mairaTotalQuestions}} respondidas</small>
@@ -1325,10 +1303,32 @@ function simulateDraft(){
                     <button type="button" class="ghost-button" @click="mairaQuestionCursor=0;mairaAnswerText='';mairaQuestionError=''">Revisar respuestas</button>
                   </div>
                 </section>
+                <div class="maira-import-metrics"><span><b>{{mairaProposal.node_count}}</b> nodos</span><span><b>{{mairaProposal.mapped_steps}}</b> pasos identificados</span><span><b>{{mairaTotalQuestions}}</b> preguntas de MAIRA</span></div>
+                <div class="maira-preview-card">
+                  <strong>{{sourceOnlyPreview?'Actividades recuperadas del documento original':'Así se distribuirían las actividades '+(mairaTargetParty?'para '+mairaTargetParty.name:'')}}</strong>
+                  <p v-if="sourceOnlyPreview" class="maira-preview-alert">Extracción textual sin Gemini. Los responsables provienen del PDF, no son asignaciones aprobadas para {{mairaTargetParty?.name||'la institución'}}. Las conexiones son provisionales.</p>
+                  <p class="maira-import-fine">Las responsabilidades son una propuesta. No se inventan campos o documentos que no figuren en el diagrama.</p>
+                  <div v-if="!sourceOnlyPreview" class="maira-preview-summary">
+                    <span><b>{{mairaPreviewStages.filter(s=>s.side==='CONTRATISTA').length}}</b> Del contratista</span>
+                    <span><b>{{mairaPreviewStages.filter(s=>s.side==='CONTRATANTE').length}}</b> Del contratante</span>
+                    <span><b>{{mairaPreviewStages.filter(s=>s.side==='REVISAR').length}}</b> Por definir</span>
+                  </div>
+                  <div v-else class="maira-preview-summary"><span><b>{{mairaPreviewStages.length}}</b> actividades del documento</span><span>Roles por revisar</span><span>Dependencias provisionales</span></div>
+                  <div class="maira-preview-tasks">
+                    <div v-for="stage in mairaPreviewStages" :key="stage.id" class="maira-preview-task">
+                      <span class="maira-preview-number">{{stage.step}}</span>
+                      <div><strong>{{stage.label}}</strong><small v-if="sourceOnlyPreview">Responsable original: {{stage.role}} · Asignación institucional no verificada</small><small v-else>{{stage.role}} · {{stage.side==='CONTRATISTA'?'Contratista (propuesto)':stage.side==='CONTRATANTE'?'Contratante (propuesto)':'Por definir · no asignado'}}</small>
+                        <small>Origen: {{stage.source}}{{stage.page?' · Página '+stage.page:''}}</small>
+                        <small v-if="sourceOnlyPreview">Conexión provisional por numeración: {{stage.dependencies.join(', ')||'Inicio'}} · Validar flechas</small>
+                        <small v-else>Depende de: {{stage.dependencies.join(', ')||'Inicio'}}</small></div>
+                    </div>
+                  </div>
+                  <p v-if="mairaTargetParty?.kind==='JURIDICA'&&mairaPreviewStages.some(s=>s.role==='ASPIRANTE')" class="maira-preview-alert">El documento identifica actividades de un aspirante. Antes de asignarlas a una empresa, valida si aplican al hospital o a un representante autorizado.</p>
+                </div>
                 <div v-if="mairaProposal.observations.length"><strong>Observaciones</strong><p v-for="(item,i) in mairaProposal.observations" :key="i">• {{item}}</p></div>
                 <div class="pilot-actions">
                   <button v-if="mairaTargetParty" type="button" class="primary-button" :disabled="mairaPreviewSaving" @click="saveMairaPreview">{{mairaPreviewSaving?'Guardando…':sourceOnlyPreview?'Guardar borrador sin aprobar en '+mairaTargetParty.name:'Guardar vista previa en '+mairaTargetParty.name}}</button>
-                  <button type="button" class="ghost-button" @click="applyMairaProposal">Editar workflow de {{mairaProposal.mapped_steps}} actividades</button>
+                  <button type="button" class="ghost-button" :disabled="!mairaQuestionsDone" @click="applyMairaProposal">Editar workflow de {{mairaProposal.mapped_steps}} actividades</button>
                 </div>
                 <p class="maira-import-fine">El diagrama muestra el proceso generado, no la plantilla del piloto. Al abrirlo en el diseñador sustituye el borrador local; puedes exportar el borrador actual antes de hacerlo.</p>
               </template>
@@ -1344,7 +1344,7 @@ function simulateDraft(){
                 <h3>Diagrama generado a partir del documento</h3>
                 <p>{{mairaProposal.mapped_steps}} actividades · {{mairaProposal.node_count}} nodos · {{mairaProposal.workflow.edges.length}} conexiones propuestas</p>
               </div>
-              <button type="button" class="primary-button" @click="applyMairaProposal">Abrir workflow en diseñador</button>
+              <button type="button" class="primary-button" :disabled="!mairaQuestionsDone" @click="applyMairaProposal">Abrir workflow en diseñador</button>
             </div>
             <div class="maira-workflow-visual-canvas">
               <VueFlow :key="'maira-map-'+mairaDiagramVersion" id="maira-generated-diagram"
