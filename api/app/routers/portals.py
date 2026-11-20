@@ -143,10 +143,7 @@ def session(email: str=Depends(verify_google_email),db:Session=Depends(get_sessi
         raise HTTPException(403,"No institution, registration or invitation for this account")
     return {"email":email,"institutions":[{"id":m.tenant_id,"roles":m.roles} for m in memberships],
             "invited_cases":len(assignments),"registered_contact":bool(registered),
-            "can_setup":_allowed_bootstrap(email) and not memberships,
-            "verification_enabled":_verification_available() and any(
-                set(m.roles).intersection({"ADMIN","CONFIGURADOR"}) for m in memberships
-            ),"pilot":True}
+            "can_setup":_allowed_bootstrap(email) and not memberships,"pilot":True
 
 @router.post("/demo/setup",status_code=201)
 def setup(payload:DemoSetup,email:str=Depends(verify_google_email),db:Session=Depends(get_session)):
@@ -471,89 +468,87 @@ def institution_cases(email:str=Depends(verify_google_email),db:Session=Depends(
     return [_case_summary(db,c) for c in rows]
 
 
-class VerificationCaseInput(BaseModel):
-    contact_email: EmailStr
+
+# Party-specific read-only interface snapshots. No ContractCase, task or published
+# template is created. Share is an explicit action by a configurator.
+class PresentationInput(BaseModel):
+    workflow: WorkflowDefinition
 
 
-def _verification_available() -> bool:
-    return (
-        os.getenv("RAILWAY_ENVIRONMENT_ID") == "6e8d45ca-d6f2-448c-a48a-63e5a2ab1806"
-        and _pilot_enabled()
-    )
+def _presentation_public(p: PartyProcessPreview, with_flow:bool=False) -> dict[str,Any]:
+    result={"id":p.id,"name":p.workflow.get("name","Proceso"),"status":"VISTA_PREVIA",
+            "created_at":p.created_at.isoformat()}
+    if with_flow:
+        wf=WorkflowDefinition.model_validate(p.workflow)
+        nodes=[]
+        for n in wf.nodes:
+            actor=n.config.get("actor_side")
+            actor=actor if actor in ("CONTRATANTE","CONTRATISTA") else "REVISAR"
+            cfg={"actor_side":actor}
+            if actor=="CONTRATISTA":
+                cfg["fields"]=[
+                    {k:v for k,v in f.items() if k in ("key","label","type","required","options")}
+                    for f in n.config.get("fields",[]) if isinstance(f,dict)
+                ][:50]
+            nodes.append({"id":n.id,"label":n.label,"kind":n.kind,
+                          "enabled":n.enabled,"config":cfg})
+        result["workflow"]={"key":wf.key,"name":wf.name,"nodes":nodes,
+                            "edges":[{"source":e.source,"target":e.target} for e in wf.edges],
+                            "metadata":{"draft":True,"shared_preview":True}}
+    return result
 
 
-def _verification_workflow() -> WorkflowDefinition:
-    """Strictly synthetic, unconditional and not contractually publishable."""
-    return WorkflowDefinition.model_validate({
-        "key": "SMART_CONTRACT_SYNTHETIC_HANDOFF",
-        "name": "Verificación de intercambio entre portales",
-        "nodes": [
-            {"id": "start", "label": "Inicio", "kind": "START"},
-            {"id": "ips_form", "label": "Diligenciar datos ficticios de IPS",
-             "kind": "FORM", "role": "CONTRATISTA",
-             "config": {"actor_side": "CONTRATISTA",
-                        "fields": [{"key": "referencia_ficticia",
-                                    "label": "Referencia ficticia",
-                                    "type": "text", "required": True}]}},
-            {"id": "internal_review", "label": "Revisión institucional",
-             "kind": "VALIDATION", "role": "CONTRATANTE",
-             "config": {"actor_side": "CONTRATANTE"}},
-            {"id": "end", "label": "Fin", "kind": "END"},
-        ],
-        "edges": [
-            {"source": "start", "target": "ips_form"},
-            {"source": "ips_form", "target": "internal_review"},
-            {"source": "internal_review", "target": "end"},
-        ],
-        "metadata": {"source": "SYNTHETIC_PORTAL_VERIFICATION",
-                     "synthetic": True, "not_contractual": True},
-    })
-
-
-@router.post("/verification/cases", status_code=201)
-def prepare_verification_case(
-    body: VerificationCaseInput,
-    email: str = Depends(verify_google_email),
-    db: Session = Depends(get_session),
-):
-    """Development-only; requires Google identity and institutional CONFIGURADOR."""
-    if not _verification_available():
-        raise HTTPException(404, "Not found")
-    m = _configurator(db, email)
-    contact_email = str(body.contact_email).strip().lower()
-    if contact_email == email or db.scalar(select(Membership.id).where(
-        Membership.tenant_id == m.tenant_id,
-        Membership.user_id == contact_email,
-        Membership.active.is_(True)
-    )):
-        raise HTTPException(422, "La contraparte debe ser una cuenta Google externa")
-    wf = _verification_workflow()
-    topological_order(wf)
-    version_number = db.scalar(select(func.max(WorkflowVersion.version)).where(
-        WorkflowVersion.tenant_id == m.tenant_id,
-        WorkflowVersion.template_key == wf.key
-    )) or 0
-    version = WorkflowVersion(
-        tenant_id=m.tenant_id,template_key=wf.key,version=version_number+1,
-        status="SYNTHETIC",definition=wf.model_dump(mode="json"),created_by=email,
-    )
-    party = ContractParty(
-        tenant_id=m.tenant_id,kind="JURIDICA",
-        name="IPS ficticia · Verificación de intercambio",
-        contact_email=contact_email,
-    )
-    db.add_all([version,party]);db.flush()
-    case = ContractCase(
-        tenant_id=m.tenant_id,party_id=party.id,
-        title="Verificación de intercambio · Sin valor contractual",
-        state="DRAFT",case_data={"synthetic":True,"not_contractual":True},
-    )
-    db.add(case);db.flush()
-    _bind_workflow(db,case,version,party,email)
-    _event(db,m.tenant_id,email,"SYNTHETIC_VERIFICATION_CREATED",
-           case.id,{"synthetic":True,"template_version":version.version})
+@router.post("/parties/{party_id}/workflow-presentations", status_code=201)
+def share_workflow_presentation(party_id:str,body:PresentationInput,
+      email:str=Depends(verify_google_email),db:Session=Depends(get_session)):
+    m=_configurator(db,email)
+    party=_party_record(db,m.tenant_id,party_id)
+    if not party.contact_email:
+        raise HTTPException(422,"Registra un correo autorizado para compartir la vista previa")
+    if len(body.workflow.nodes)>200 or len(body.workflow.edges)>600:
+        raise HTTPException(413,"La vista previa es demasiado grande")
+    workflow=body.workflow.model_dump(mode="json")
+    if len(str(workflow))>350000:raise HTTPException(413,"Vista previa demasiado grande")
+    try:topological_order(body.workflow)
+    except WorkflowInvalid as exc:raise HTTPException(422,{"problems":exc.problems})
+    workflow["metadata"]={**workflow.get("metadata",{}),
+        "draft":True,"presentation_only":True,"review_confirmed":False}
+    p=PartyProcessPreview(tenant_id=m.tenant_id,party_id=party.id,
+        filename="Presentacion "+body.workflow.key[:90],status="PREVIEW_SHARED",
+        workflow=workflow,source_map=[],questions=[],observations=[],created_by=email)
+    db.add(p);db.flush()
+    _event(db,m.tenant_id,email,"WORKFLOW_PRESENTATION_SHARED",p.id,
+           {"party_id":party.id,"nodes":len(body.workflow.nodes),"case_created":False})
     db.commit()
-    return {"case":_case_summary(db,case),"synthetic":True,"portal_path":"/prestador"}
+    return {"id":p.id,"status":"VISTA_PREVIA","shared":True,"case_created":False,
+            "recipient":party.contact_email}
+
+
+@router.get("/my-workflow-presentations")
+def my_workflow_presentations(email:str=Depends(verify_google_email),
+      db:Session=Depends(get_session)):
+    rows=db.scalars(select(PartyProcessPreview)
+      .join(ContractParty,ContractParty.id==PartyProcessPreview.party_id)
+      .join(Tenant,Tenant.id==PartyProcessPreview.tenant_id)
+      .where(PartyProcessPreview.status=="PREVIEW_SHARED",
+             PartyProcessPreview.tenant_id==ContractParty.tenant_id,
+             ContractParty.contact_email==email,Tenant.active.is_(True))
+      .order_by(PartyProcessPreview.created_at.desc()).limit(40)).all()
+    return [_presentation_public(p) for p in rows]
+
+
+@router.get("/my-workflow-presentations/{presentation_id}")
+def my_workflow_presentation(presentation_id:str,email:str=Depends(verify_google_email),
+      db:Session=Depends(get_session)):
+    p=db.scalar(select(PartyProcessPreview)
+      .join(ContractParty,ContractParty.id==PartyProcessPreview.party_id)
+      .join(Tenant,Tenant.id==PartyProcessPreview.tenant_id)
+      .where(PartyProcessPreview.id==presentation_id,
+             PartyProcessPreview.status=="PREVIEW_SHARED",
+             PartyProcessPreview.tenant_id==ContractParty.tenant_id,
+             ContractParty.contact_email==email,Tenant.active.is_(True)))
+    if not p:raise HTTPException(404,"Vista previa no disponible")
+    return _presentation_public(p,with_flow=True)
 
 
 @router.get("/my-cases")

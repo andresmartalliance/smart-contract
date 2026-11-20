@@ -353,56 +353,37 @@ def test_preview_does_not_give_external_case_access(portal):
     assert portal.get(f"/api/v1/portal/parties/{party['id']}/process-previews").status_code==403
 
 
-def test_verification_e2e_two_identities_return_and_correction(portal,monkeypatch):
-    monkeypatch.setenv("RAILWAY_ENVIRONMENT_ID","6e8d45ca-d6f2-448c-a48a-63e5a2ab1806")
+
+def test_workflow_presentation_shared_without_cases_or_publication(portal):
     create_pilot(portal)
+    party=create_party_record(portal,name="IPS vista previa",email="ips-preview@example.com")
     as_user("alice@example.com")
-    created=portal.post("/api/v1/portal/verification/cases",
-        json={"contact_email":"ips.synthetic@example.com"})
-    assert created.status_code==201,created.text
-    case_id=created.json()["case"]["id"]
-    assert created.json()["case"]["invited"]
+    result=portal.post("/api/v1/portal/parties/"+party["id"]+"/workflow-presentations",
+        json={"workflow":sample_flow()})
+    assert result.status_code==201,result.text
+    assert result.json()["case_created"] is False
+    assert portal.get("/api/v1/portal/cases").json()==[]
     assert portal.get("/api/v1/portal/workflows").json()==[]
-    as_user("another@example.com")
-    assert portal.get("/api/v1/portal/cases/"+case_id).status_code==404
-    as_user("ips.synthetic@example.com")
-    assert portal.get("/api/v1/portal/session").status_code==200
-    assert [c["id"] for c in portal.get("/api/v1/portal/my-cases").json()]==[case_id]
-    detail=portal.get("/api/v1/portal/cases/"+case_id).json()
-    assert detail["side"]=="CONTRATISTA"
-    assert len(detail["tasks"])==1
-    task=detail["tasks"][0]
-    assert task["node_id"]=="ips_form" and task["state"]=="PENDING"
-    assert portal.post(f"/api/v1/portal/cases/{case_id}/tasks/{task['id']}/complete",
-        json={"data":{}}).status_code==422
-    assert portal.post(f"/api/v1/portal/cases/{case_id}/tasks/{task['id']}/complete",
-        json={"data":{"referencia_ficticia":"UNO"}}).status_code==200
-    as_user("alice@example.com")
-    ret=portal.post(f"/api/v1/portal/cases/{case_id}/tasks/{task['id']}/return",
-        json={"reason":"Corregir referencia inventada"})
-    assert ret.status_code==200,ret.text
-    as_user("ips.synthetic@example.com")
-    returned=portal.get("/api/v1/portal/cases/"+case_id).json()["tasks"][0]
-    assert returned["state"]=="RETURNED"
-    assert portal.post(f"/api/v1/portal/cases/{case_id}/tasks/{task['id']}/complete",
-        json={"data":{"referencia_ficticia":"DOS"}}).status_code==200
-    as_user("alice@example.com")
-    revised=portal.get("/api/v1/portal/cases/"+case_id).json()
-    contractor=next(t for t in revised["tasks"] if t["node_id"]=="ips_form")
-    assert contractor["answer"]["referencia_ficticia"]=="DOS"
-    internal=next(t for t in revised["tasks"] if t["node_id"]=="internal_review")
-    assert internal["state"]=="PENDING"
+    pid=result.json()["id"]
+    as_user("other@example.com")
+    assert portal.get("/api/v1/portal/my-workflow-presentations").json()==[]
+    assert portal.get("/api/v1/portal/my-workflow-presentations/"+pid).status_code==404
+    as_user("ips-preview@example.com")
+    assert len(portal.get("/api/v1/portal/my-workflow-presentations").json())==1
+    response=portal.get("/api/v1/portal/my-workflow-presentations/"+pid)
+    assert response.status_code==200
+    wf=response.json()["workflow"]
+    assert len(wf["nodes"])==4 and len(wf["edges"])==3
+    assert next(n for n in wf["nodes"] if n["id"]=="docs")["config"]["fields"][0]["key"]=="contacto"
+    assert "fields" not in next(n for n in wf["nodes"] if n["id"]=="review")["config"]
+    assert portal.get("/api/v1/portal/my-cases").json()==[]
 
 
-def test_verification_not_available_in_production_or_to_unprivileged(portal,monkeypatch):
+def test_presentation_requires_configurator_and_contact(portal):
     create_pilot(portal)
-    path="/api/v1/portal/verification/cases"
-    body={"contact_email":"ips.synthetic@example.com"}
-    monkeypatch.setenv("RAILWAY_ENVIRONMENT_ID","production")
+    party=create_party_record(portal,email=None)
+    path="/api/v1/portal/parties/"+party["id"]+"/workflow-presentations"
     as_user("alice@example.com")
-    assert portal.post(path,json=body).status_code==404
-    monkeypatch.setenv("RAILWAY_ENVIRONMENT_ID","6e8d45ca-d6f2-448c-a48a-63e5a2ab1806")
+    assert portal.post(path,json={"workflow":sample_flow()}).status_code==422
     as_user("unknown@example.com")
-    assert portal.post(path,json=body).status_code==403
-    as_user("alice@example.com")
-    assert portal.post(path,json={"contact_email":"alice@example.com"}).status_code==422
+    assert portal.post(path,json={"workflow":sample_flow()}).status_code==403
