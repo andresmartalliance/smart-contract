@@ -1,14 +1,19 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import WorkflowPresentation, { type PreviewWorkflow } from './WorkflowPresentation.vue'
 
 type Field = { key:string;label:string;type:string;required:boolean }
 type ProviderTask = {id:string;node_id:string;label:string;kind:string;side:string;state:string;fields:Field[];note?:string}
 type ProviderCase = {id:string;title:string;party_name:string|null;state:string;workflow_version_id:string|null;total:number;completed:number}
+type SharedPresentation={id:string;name:string;status:string;created_at:string}
+type SharedPresentationDetail=SharedPresentation&{workflow:PreviewWorkflow}
 type ProviderCaseDetail = {case:ProviderCase;side:'CONTRATANTE'|'CONTRATISTA';tasks:ProviderTask[]}
 const props=defineProps<{
  email:string
  cases:ProviderCase[]
  detail:ProviderCaseDetail|null
+ presentations:SharedPresentation[]
+ presentation:SharedPresentationDetail|null
  busy:boolean
  error:string
  message:string
@@ -16,6 +21,8 @@ const props=defineProps<{
 }>()
 const emit=defineEmits<{
  (e:'openCase',id:string):void
+ (e:'openPresentation',id:string):void
+ (e:'closePresentation'):void
  (e:'refresh'):void
  (e:'closeCase'):void
  (e:'complete',payload:{taskId:string;data:Record<string,unknown>;note:string}):void
@@ -80,13 +87,27 @@ function submit(task:ProviderTask){
    <div class="provider-evaluation-note">Este portal aún no permite adjuntar documentos ni firmar contratos. No ingreses información confidencial.</div>
    <div v-if="error" class="provider-alert error" role="alert">{{error}}</div>
    <div v-if="message" class="provider-alert" role="status">{{message}}</div>
-   <template v-if="!detail">
+   <template v-if="presentation">
+     <button type="button" class="provider-back" @click="emit('closePresentation')">‹ Volver a mis procesos</button>
+     <WorkflowPresentation :workflow="presentation.workflow" side="CONTRATISTA"/>
+   </template>
+   <template v-else-if="!detail">
+    <section v-if="presentations.length" class="provider-panel">
+      <div class="provider-panel-top"><div><h2>Procesos disponibles para visualizar</h2>
+        <p>Revisa las pantallas propuestas antes de que se active una contratación.</p></div></div>
+      <button v-for="item in presentations" :key="item.id" type="button"
+        class="provider-case" @click="emit('openPresentation',item.id)">
+        <div><strong>{{item.name}}</strong><span>Vista previa compartida · Sin expediente activo</span></div>
+        <div class="provider-case-state"><span>Ver pantallas</span><small>No requiere diligenciamiento</small></div>
+        <span class="provider-chevron" aria-hidden="true">›</span>
+      </button>
+    </section>
     <div class="provider-panel">
      <div class="provider-panel-top"><div><h2>Expedientes asignados</h2><p>{{cases.length}} proceso(s) relacionados con esta cuenta</p></div>
       <input v-if="cases.length" v-model="caseSearch" type="search" class="provider-search" placeholder="Buscar proceso" aria-label="Buscar procesos"/>
      </div>
-     <div v-if="!list.length" class="provider-empty"><div class="provider-empty-icon">▣</div><h3>{{cases.length?'No hay resultados':'Todavía no hay procesos asignados'}}</h3>
-      <p>{{cases.length?'Prueba con otro término.':'Aquí aparecerán las invitaciones y los procesos que una entidad contratante te asigne. No necesitas configurar flujos.'}}</p>
+     <div v-if="!list.length" class="provider-empty"><div class="provider-empty-icon">▣</div><h3>{{cases.length?'No hay resultados':presentations.length?'Aún no hay expedientes activos':'Todavía no hay procesos asignados'}}</h3>
+      <p>{{cases.length?'Prueba con otro término.':presentations.length?'Puedes revisar las vistas previas compartidas arriba. Un expediente aparecerá aquí cuando sea activado formalmente.':'Aquí aparecerán las invitaciones y los procesos que una entidad contratante te asigne. No necesitas configurar flujos.'}}</p>
      </div>
      <button v-for="item in list" :key="item.id" type="button" class="provider-case" @click="emit('openCase',item.id)">
       <div><strong>{{item.title}}</strong><span>{{item.party_name||'Entidad contratista'}}</span></div>
