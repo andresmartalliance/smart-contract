@@ -25,3 +25,17 @@ La iniciativa Famisanar y `web/src/famisanarCase.ts` permanecen como trabajo fut
 - El borrador local antiguo de dos tareas se archiva sin borrarse.
 - Cualquier publicación legal sigue bloqueada hasta confirmación humana de responsabilidades, alcance y reglas.
 
+
+## Continuidad Smart Contract 3 · V6.6.10
+
+- En Development, después del inicio de sesión del configurador, el flujo `Ciclo de contratación v2` de Hospital Smart se recupera desde PostgreSQL (borrador asociado a su registro), no desde la copia local del navegador.
+- Personas y empresas muestra un botón **Editar diagrama** para el último borrador del diseñador y mantiene **Abrir ficha** para consultar otros flujos y expedientes.
+- El editor inicia en **Lienzo** para ver las 25 tarjetas y 24 conexiones en un único espacio; **Recorrido** y **Vista operativa** siguen disponibles como perspectivas alternativas del mismo workflow.
+- Se distingue la **versión guardada en PostgreSQL** de los **cambios sin guardar**. Guardar cambios actualiza el mismo borrador institucional, sin crear duplicados ni contratos.
+- La fuente documental original continúa disponible como copia de referencia. No altera el borrador institucional salvo que el configurador guarde explícitamente esa copia.
+- Se conservan los controles de revisión y publicación; no se activa expediente ni se infieren campos ausentes del PDF.
+
+### Validación funcional aún necesaria
+
+- Acceso Google autorizado → apertura del diagrama guardado de Hospital Smart → mover una etapa → editar/conectar → guardar cambios → cerrar sesión → volver a ingresar y verificar persistencia.
+- Revisar por separado publicación y ejecución real con dos participantes; no confundir vistas previas con contratos activos.
