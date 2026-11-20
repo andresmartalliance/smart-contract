@@ -132,6 +132,11 @@ def _sync(db: Session,c: ContractCase):
 class DemoSetup(BaseModel):
     name: str = Field(default="Institución piloto",min_length=2,max_length=150)
 
+def _original_seed_enabled() -> bool:
+    # Restrict legacy preloading to the existing Smart Contract Development environment.
+    return os.getenv("RAILWAY_ENVIRONMENT_ID")=="6e8d45ca-d6f2-448c-a48a-63e5a2ab1806"
+
+
 @router.get("/session")
 def session(email: str=Depends(verify_google_email),db:Session=Depends(get_session)):
     memberships=_memberships(db,email)
@@ -143,7 +148,11 @@ def session(email: str=Depends(verify_google_email),db:Session=Depends(get_sessi
         raise HTTPException(403,"No institution, registration or invitation for this account")
     return {"email":email,"institutions":[{"id":m.tenant_id,"roles":m.roles} for m in memberships],
             "invited_cases":len(assignments),"registered_contact":bool(registered),
-            "can_setup":_allowed_bootstrap(email) and not memberships,"pilot":True}
+            "can_setup":_allowed_bootstrap(email) and not memberships,
+            "original_flow_preload_enabled":_original_seed_enabled() and any(
+                set(m.roles).intersection({"ADMIN","CONFIGURADOR"}) for m in memberships
+            ),
+            "pilot":True}
 
 @router.post("/demo/setup",status_code=201)
 def setup(payload:DemoSetup,email:str=Depends(verify_google_email),db:Session=Depends(get_session)):
@@ -342,7 +351,8 @@ def _party_process_item(record:PartyProcessPreview) -> dict[str,Any]:
             "status":record.status,"kind":{"DRAFT_REVIEW":"PROPOSAL","PREVIEW_SHARED":"PRESENTATION",
                     "WORKFLOW_DRAFT":"DESIGN"}.get(record.status,"PROPOSAL"),
             "activity_count":sum(1 for n in wf.get("nodes",[]) if n.get("kind") not in ("START","END")),
-            "source":source.get("source"),"created_at":record.created_at.isoformat()}
+            "source":source.get("source"),"workflow_key":wf.get("key"),
+            "created_at":record.created_at.isoformat()}
 
 
 @router.get("/parties")
@@ -359,6 +369,10 @@ def parties(email: str=Depends(verify_google_email),db: Session=Depends(get_sess
         by_party.setdefault(preview.party_id,[]).append(_party_process_item(preview))
     return [{**_party_summary(db,x),
              "process_count":len(by_party.get(x.id,[])),
+             "has_original_first_flow":any(
+                 p.get("workflow_key")=="SMART_CICLO_CONTRATACION_V2"
+                 and p.get("kind")=="DESIGN"
+                 for p in by_party.get(x.id,[])),
              "latest_process":by_party.get(x.id,[None])[0]}
             for x in rows]
 
@@ -390,38 +404,88 @@ def party_portfolio(party_id:str,email:str=Depends(verify_google_email),
 
 
 
-@router.post("/parties/{party_id}/workflow-drafts",status_code=201)
-def save_party_workflow_design(party_id:str,body:PresentationInput,
-        email:str=Depends(verify_google_email),db:Session=Depends(get_session)):
-    """Explicitly save a designer draft to a particular party, no invitation.
+class PartyWorkflowDraftInput(PresentationInput):
+    initialize_original: bool = False
 
-    A local-only Studio flow must not be labeled associated until this action
-    is authorized and performed by its configurator.
-    """
+
+def _validate_party_draft(workflow:WorkflowDefinition,party_id:str)->dict[str,Any]:
+    if len(workflow.nodes)>200 or len(workflow.edges)>600:
+        raise HTTPException(413,"El flujo supera el límite del diseñador")
+    document=workflow.model_dump(mode="json")
+    if len(str(document))>350000:
+        raise HTTPException(413,"El flujo es demasiado grande")
+    try:topological_order(workflow)
+    except WorkflowInvalid as exc:raise HTTPException(422,{"problems":exc.problems})
+    document["metadata"]={**document.get("metadata",{}),
+          "draft":True,"review_confirmed":False,"associated_party_id":party_id}
+    return document
+
+
+def _party_draft(db:Session,tenant_id:str,party_id:str,draft_id:str)->PartyProcessPreview:
+    existing=db.scalar(select(PartyProcessPreview).where(
+        PartyProcessPreview.id==draft_id,PartyProcessPreview.tenant_id==tenant_id,
+        PartyProcessPreview.party_id==party_id,PartyProcessPreview.status=="WORKFLOW_DRAFT"))
+    if existing is None:raise HTTPException(404,"Borrador no encontrado")
+    return existing
+
+
+@router.post("/parties/{party_id}/workflow-drafts",status_code=201)
+def save_party_workflow_design(party_id:str,body:PartyWorkflowDraftInput,
+        email:str=Depends(verify_google_email),db:Session=Depends(get_session)):
+    """Save a designer draft; optional idempotent legacy preload in Development only."""
     m=_configurator(db,email)
     party=_party_record(db,m.tenant_id,party_id)
-    if len(body.workflow.nodes)>200 or len(body.workflow.edges)>600:
-        raise HTTPException(413,"El flujo supera el límite de almacenamiento del diseñador")
-    workflow=body.workflow.model_dump(mode="json")
-    if len(str(workflow))>350000:
-        raise HTTPException(413,"El flujo es demasiado grande")
-    try: topological_order(body.workflow)
-    except WorkflowInvalid as exc: raise HTTPException(422,{"problems":exc.problems})
-    workflow["metadata"]={**workflow.get("metadata",{}),
-                           "draft":True,"review_confirmed":False,
-                           "associated_party_id":party.id}
+    if body.initialize_original:
+        if not _original_seed_enabled() or party.name.strip().casefold()!="hospital smart":
+            raise HTTPException(403,"La precarga solo está habilitada para Hospital Smart en Development")
+        source=body.workflow.metadata or {}
+        if (body.workflow.key!="SMART_CICLO_CONTRATACION_V2"
+           or source.get("source")!="smart-contract-original-pdf"
+           or len(body.workflow.nodes)!=25 or len(body.workflow.edges)!=24):
+            raise HTTPException(422,"La definición no corresponde al diagrama original")
+        # Lock the scoped party in PostgreSQL to avoid double-preload from two tabs.
+        db.execute(select(ContractParty.id).where(
+            ContractParty.tenant_id==m.tenant_id,
+            ContractParty.id==party.id).with_for_update()).first()
+        candidates=db.scalars(select(PartyProcessPreview).where(
+            PartyProcessPreview.tenant_id==m.tenant_id,
+            PartyProcessPreview.party_id==party.id,
+            PartyProcessPreview.status=="WORKFLOW_DRAFT")).all()
+        for existing in candidates:
+            if existing.workflow.get("key")=="SMART_CICLO_CONTRATACION_V2":
+                return {"id":existing.id,"status":existing.status,"party_id":party.id,
+                        "name":existing.workflow.get("name"),"published":False,
+                        "case_created":False,"already_exists":True}
+    document=_validate_party_draft(body.workflow,party.id)
     record=PartyProcessPreview(
         tenant_id=m.tenant_id,party_id=party.id,
         filename="Borrador "+body.workflow.key[:120],status="WORKFLOW_DRAFT",
-        workflow=workflow,source_map=[],questions=[],observations=[],created_by=email,
-    )
+        workflow=document,source_map=[],questions=[],observations=[],created_by=email)
     db.add(record);db.flush()
-    _event(db,m.tenant_id,email,"PARTY_WORKFLOW_DRAFT_SAVED",record.id,
-          {"party_id":party.id,"nodes":len(body.workflow.nodes),
-           "published":False,"case_created":False})
+    _event(db,m.tenant_id,email,
+           "ORIGINAL_WORKFLOW_PRELOADED" if body.initialize_original else "PARTY_WORKFLOW_DRAFT_SAVED",
+           record.id,{"party_id":party.id,"nodes":len(body.workflow.nodes),
+                      "published":False,"case_created":False})
     db.commit()
     return {"id":record.id,"status":"WORKFLOW_DRAFT","party_id":party.id,
-            "name":body.workflow.name,"published":False,"case_created":False}
+            "name":body.workflow.name,"published":False,
+            "case_created":False,"already_exists":False}
+
+
+@router.patch("/parties/{party_id}/workflow-drafts/{draft_id}")
+def update_party_workflow_design(party_id:str,draft_id:str,body:PresentationInput,
+        email:str=Depends(verify_google_email),db:Session=Depends(get_session)):
+    """Keep edits in the SAME linked draft; no duplicate workflow or contract."""
+    m=_configurator(db,email)
+    _party_record(db,m.tenant_id,party_id)
+    record=_party_draft(db,m.tenant_id,party_id,draft_id)
+    document=_validate_party_draft(body.workflow,party_id)
+    record.workflow=document
+    _event(db,m.tenant_id,email,"PARTY_WORKFLOW_DRAFT_UPDATED",record.id,
+           {"party_id":party_id,"nodes":len(body.workflow.nodes),"published":False})
+    db.commit()
+    return {"id":record.id,"party_id":party_id,"name":body.workflow.name,
+            "status":"WORKFLOW_DRAFT","published":False,"case_created":False}
 
 
 @router.get("/parties/{party_id}/workflow-drafts/{draft_id}")

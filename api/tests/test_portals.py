@@ -466,3 +466,42 @@ def test_designer_draft_must_be_explicitly_linked_to_existing_party(portal):
     assert portal.get("/api/v1/portal/my-workflow-presentations").json()==[]
     as_user("charlie")
     assert portal.get(path).status_code==404
+
+
+def test_first_flow_preload_idempotent_and_development_scoped(portal,monkeypatch):
+    create_pilot(portal)
+    party=create_party_record(portal,name="Hospital Smart",
+                              email="hospital.preview@example.com",kind="JURIDICA")
+    # Development only and configurator only, not any public Hospital Smart record.
+    as_user("alice@example.com")
+    canonical=sample_flow()
+    canonical["key"]="SMART_CICLO_CONTRATACION_V2"
+    canonical["metadata"]={"source":"smart-contract-original-pdf"}
+    url=f"/api/v1/portal/parties/{party['id']}/workflow-drafts"
+    body={"workflow":canonical,"initialize_original":True}
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT_ID","production")
+    assert portal.post(url,json=body).status_code==403
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT_ID","6e8d45ca-d6f2-448c-a48a-63e5a2ab1806")
+    assert portal.post(url,json=body).status_code==422
+    # Exact diagram shape required for preload; ordinary drafts still accepted.
+    standard=portal.post(url,json={"workflow":canonical})
+    assert standard.status_code==201
+    assert standard.json()["published"] is False
+    original_id=standard.json()["id"]
+    refreshed=portal.get("/api/v1/portal/parties").json()
+    row=next(r for r in refreshed if r["id"]==party["id"])
+    assert row["process_count"]==1 and row["has_original_first_flow"] is True
+    # Subsequent writes update the SAME draft, not create a second record.
+    edited=canonical.copy()
+    edited["name"]="Diagrama editado"
+    patched=portal.patch(url+"/"+original_id,json={"workflow":edited})
+    assert patched.status_code==200,patched.text
+    record=portal.get(url+"/"+original_id)
+    assert record.status_code==200
+    assert record.json()["workflow"]["name"]=="Diagrama editado"
+    assert portal.get("/api/v1/portal/cases").json()==[]
+    assert portal.get("/api/v1/portal/workflows").json()==[]
+    as_user("hospital.preview@example.com")
+    assert portal.patch(url+"/"+original_id,json={"workflow":edited}).status_code==403
+    as_user("charlie")
+    assert portal.patch(url+"/"+original_id,json={"workflow":edited}).status_code==404
