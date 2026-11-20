@@ -200,11 +200,22 @@ const mairaScopePrompt=computed(()=>mairaScopeMismatch.value?
  'Este diagrama describe la contratación de aspirantes, pero el destinatario es '+(mairaTargetParty.value?.name||'una persona jurídica')+
  '. ¿Quieres conservar el proceso original o adaptarlo a la contratación de una IPS?':
  '¿Deseas conservar el proceso original del documento o adaptarlo a la entidad seleccionada?')
+/** A Gemini observation about the same scope mismatch is evidence for the scope
+ * question, not a second decision. Never delete the provider's original text. */
+function sameDocumentScopeConcern(note:string,scope:string):boolean{
+ const normalized=(text:string)=>text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()
+ const n=normalized(note),s=normalized(scope)
+ return /aspirant|personal a contratar/.test(n)&&/persona juridica|destinatario|institucion/.test(n)&&
+        /aspirant|personal a contratar/.test(s)
+}
+const mairaScopeEvidence=computed(()=>mairaProposal.value?.questions.filter(q=>
+ sameDocumentScopeConcern(q,mairaScopePrompt.value))||[])
 const mairaQuestions=computed(()=>{
  if(!mairaProposal.value)return [] as string[]
+ const independent=mairaProposal.value.questions.filter(q=>!sameDocumentScopeConcern(q,mairaScopePrompt.value))
  return [mairaScopePrompt.value,
  ...(mairaIntent.value==='ADAPT_TO_ENTITY'?['¿Qué reglas, documentos y responsables necesitarían cambiar para esta entidad? Indica qué información falta por definir.']:[]),
- ...mairaProposal.value.questions]
+ ...independent]
 })
 const mairaTotalQuestions=computed(()=>mairaQuestions.value.length)
 const mairaAnsweredQuestions=computed(()=>mairaQuestions.value.filter((q,i)=>i===0?Boolean(mairaIntent.value):Boolean(mairaAnswers.value[q]?.trim())).length)
@@ -238,8 +249,9 @@ const studioMairaDialogue=computed(()=>workflowMetadata.value.maira_dialogue as 
 const studioReviewQuestions=computed(()=>{
  const original=workflowMetadata.value.maira_review_questions
  const raw=Array.isArray(original)?original.filter((q):q is string=>typeof q==='string'&&q.trim().length>0):[]
- const scope=studioMairaDialogue.value?.scope_question
- return [...(typeof scope==='string'&&scope.trim()?[scope]:[]),...raw]
+ const scope=studioMairaDialogue.value?.scope_question||''
+ const independent=raw.filter(q=>!sameDocumentScopeConcern(q,scope))
+ return [...(scope.trim()?[scope]:[]),...independent]
 })
 
 
@@ -267,21 +279,40 @@ function mairaGraphPosition(index:number,total:number){
  return {x:col*295+28,y:row*165+24}
 }
 
-type MairaGraphicQuestion={text:string;step:string|null;node_id:string|null}
-function assignDiagramReviewQuestions(questions:string[],sources:MairaMapping[]):MairaGraphicQuestion[]{
+type MairaGraphicQuestion={text:string;step:string|null;node_ids:string[];steps:string[];context:string}
+function normalizeReviewText(value:string):string{
+ return value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim()
+}
+/** Attach only quoted source wording or literal acronyms that are present in
+ * the original activity. This is a citation match, NOT a causal dependency. */
+function literalReviewReferences(note:string):string[]{
+ const quoted=[...note.matchAll(/['"“”‘’]([^'"“”‘’]{3,80})['"“”‘’]/g)].map(m=>m[1])
+ const acronyms=[...note.matchAll(/\b[A-Z]{3,6}\b/g)].map(m=>m[0])
+ return [...new Set([...quoted,...acronyms].map(normalizeReviewText).filter(x=>x.length>=3))]
+}
+function assignDiagramReviewQuestions(questions:string[],sources:MairaMapping[],
+ scope:string,scopeEvidence:string[]):MairaGraphicQuestion[]{
  const byStep=new Map(sources.map(source=>[source.source_step,source.node_id]))
- return questions.filter(q=>typeof q==='string'&&q.trim()).map(text=>{
-  // Explicit references only. Semantic keyword guesses are not reliable enough
-  // to attach a legal review issue to a specific executable task.
+ return questions.filter(q=>typeof q==='string'&&q.trim()).map((text,index)=>{
+  const isScope=index===0&&text===scope
+  const evidence=isScope?scopeEvidence.join(' '):text
+  const references=literalReviewReferences(evidence)
+  const related=sources.filter(source=>references.some(term=>
+    normalizeReviewText(source.source_excerpt).includes(term)))
   const match=text.match(/\b(?:paso|etapa|actividad)\s*(\d+(?:\.\d+)*)\b/i)
-  const step=match&&byStep.has(match[1])?match[1]:null
-  return {text,step,node_id:step?byStep.get(step)||null:null}
+  const explicitlyNamed=match&&byStep.has(match[1])?match[1]:null
+  const ids=[...new Set([...related.map(x=>x.node_id),
+    ...(explicitlyNamed?[byStep.get(explicitlyNamed)!]:[])])]
+  const steps=[...new Set([...related.map(x=>x.source_step),
+    ...(explicitlyNamed?[explicitlyNamed]:[])])]
+  return {text,step:explicitlyNamed,node_ids:ids,steps,context:isScope?scopeEvidence.join(' · '):''}
  })
 }
 const mairaGraphReviewQuestions=computed(()=>mairaProposal.value?
- assignDiagramReviewQuestions(mairaQuestions.value,mairaProposal.value.source_map):[])
+ assignDiagramReviewQuestions(mairaQuestions.value,mairaProposal.value.source_map,
+  mairaScopePrompt.value,mairaScopeEvidence.value):[])
 const mairaGraphReviewMarkers=computed(()=>
- new Set(mairaGraphReviewQuestions.value.map(q=>q.node_id).filter((id):id is string=>Boolean(id))))
+ new Set(mairaGraphReviewQuestions.value.flatMap(q=>q.node_ids)))
 const mairaVerifiedBranchCount=computed(()=>{
  const p=mairaProposal.value
  if(!p)return 0
@@ -1390,7 +1421,9 @@ function simulateDraft(){
                   <div v-for="(item,i) in mairaGraphReviewQuestions" :key="'graph-question-'+i" class="maira-flow-question">
                     <span class="maira-flow-question-icon">?</span>
                     <div><strong>{{item.text}}</strong>
-                      <small>{{item.step?'Vinculada al paso '+item.step:'Consulta general del proceso · no vinculada automáticamente a una etapa'}}</small>
+                      <small v-if="item.context" class="maira-flow-question-context">Hallazgo de MAIRA: {{item.context}}</small>
+                      <small v-if="item.steps.length">Relacionada con términos originales de los pasos {{item.steps.join(', ')}}. Esta coincidencia no valida las conexiones.</small>
+                      <small v-else>Consulta general del proceso · sin referencia textual inequívoca a un paso</small>
                     </div>
                   </div>
                 </div>

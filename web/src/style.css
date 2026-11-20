@@ -511,3 +511,6 @@ nav button.active .nav-icon{stroke:#236ed3;transform:scale(1.03)}
 .maira-studio-questions p span{font-weight:800;margin-right:7px;color:#b3793e}
 .maira-studio-questions small{font-size:10px;color:#917f66;line-height:1.5}
 @media(max-width:700px){.maira-workflow-map-body{height:470px;min-height:360px}.maira-flow-questions-items{grid-template-columns:1fr}}
+
+/* Keep one scope question, retaining the source observation as evidence. */
+.maira-flow-question-context{color:#735a37!important;font-size:11px!important;line-height:1.55!important;background:#fff8e9;padding:8px;border-left:2px solid #deb876;border-radius:4px}
