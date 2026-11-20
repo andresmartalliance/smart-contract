@@ -88,7 +88,7 @@ def test_diagnose_models_finds_real_text_alternative_without_documents(testing, 
     try:
         response = client.post("/api/v1/maira/workflow-import/diagnose-models")
         assert response.status_code == 200
-        assert sorted(captured) == ["gemini-3.6-flash", "gemini-3.5-flash-lite"]
+        assert sorted(captured) == ["gemini-3.5-flash-lite", "gemini-3.6-flash"]
         assert response.json()["recommended_model"] == "gemini-3.5-flash-lite"
         assert "secret_test_key" not in response.text
         assert "PDF" in response.json()["notice"]

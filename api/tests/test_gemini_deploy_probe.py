@@ -12,7 +12,7 @@ def test_fallback_candidate_succeeds_without_exposing_key(monkeypatch, caplog):
         calls.append((request.method, str(request.url)))
         if request.method == "GET":
             return httpx.Response(200, json={"name": "models/test"})
-        if MODELS[0] in str(request.url):
+        if "/models/" + MODELS[0] + ":generateContent" in str(request.url):
             return httpx.Response(503, json={"error": {"status": "UNAVAILABLE",
                  "message": "sensitive-provider-body"}})
         return httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": "OK"}]}}]})
