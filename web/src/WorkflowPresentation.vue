@@ -10,9 +10,11 @@ const props=defineProps<{workflow:PreviewWorkflow;side:PreviewSide}>()
 const selectedId=ref('')
 const draftValues=ref<Record<string,string>>({})
 const stages=computed(()=>props.workflow.nodes.filter(n=>n.kind!=='START'&&n.kind!=='END'&&n.enabled!==false))
-const active=computed(()=>stages.value.find(n=>n.id===selectedId.value)||stages.value[0]||null)
+const active=computed(()=>stages.value.find(n=>n.id===selectedId.value)||
+ stages.value.find(n=>sideOf(n)===props.side)||stages.value[0]||null)
 const index=computed(()=>stages.value.findIndex(n=>n.id===active.value?.id))
 watch(()=>props.workflow.key,()=>{selectedId.value='';draftValues.value={}})
+watch(()=>props.side,()=>{selectedId.value='';draftValues.value={}})
 function sideOf(n:PreviewNode){
  const side=n.config?.actor_side
  return side==='CONTRATANTE'||side==='CONTRATISTA'?side:'REVISAR'

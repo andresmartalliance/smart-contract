@@ -89,6 +89,8 @@ const conditionOperators = [{value:'eq',label:'Igual a'},{value:'neq',label:'Dis
 const fieldTypes:FieldType[] = ['text','number','date','currency','boolean','select']
 const executionModes: {value:ExecutionMode;label:string}[] = [{value:'MANUAL',label:'Manual'},{value:'AI_ASSISTED',label:'Asistida por MAIRA (futura)'},{value:'API',label:'API (requiere conector)'},{value:'RPA',label:'RPA (requiere conector)'}]
 const LOCAL_DRAFT_KEY = 'smart-contract:workflow-studio:v5.2:local-only'
+const ARCHIVED_PILOT_DRAFT_KEY = 'smart-contract:workflow-studio:archive:two-portal-example:v6.6.3'
+const archivedPilotDraft=ref<Partial<Workflow>|null>(null)
 const selectedId = ref<string | null>(null)
 const selectedEdgeId = ref<string | null>(null)
 const lastSavedAt = ref('')
@@ -1225,13 +1227,47 @@ async function importDraft(event:Event){
  }catch(e){flowMessage.value='No se pudo importar: '+(e instanceof Error?e.message:'archivo incorrecto')}
  finally{input.value=''}
 }
-function restoreLocalDraft(){
+function isLegacyTwoPortalExample(draft:Partial<Workflow>):boolean{
+ if(draft.name!=='Ciclo de contratación · prueba entre dos portales')return false
+ if(!Array.isArray(draft.nodes)||draft.nodes.length!==4)return false
+ const labels=new Set(draft.nodes.map(n=>n.label))
+ return labels.has('Datos del contratista')&&labels.has('Revisión interna')
+}
+function openArchivedPilotDraft(){
+ if(!archivedPilotDraft.value)return
  try{
+  loadDefinition(archivedPilotDraft.value)
+  studioTab.value='pantallas'
+  flowMessage.value='Se abrió el ejercicio histórico de dos portales. Es un borrador de referencia, no el caso de Famisanar.'
+ }catch(e){flowMessage.value='No se pudo abrir el ejercicio anterior: '+(e instanceof Error?e.message:'borrador inválido')}
+}
+function restoreLocalDraft(){
+ // Preserve intentional user work. Migrate ONLY the exact retired four-node
+ // demonstration, not all previously saved workflows.
+ try{
+   const archived=localStorage.getItem(ARCHIVED_PILOT_DRAFT_KEY)
+   if(archived){
+    const parsedArchive=JSON.parse(archived) as Partial<Workflow>
+    if(isLegacyTwoPortalExample(parsedArchive))archivedPilotDraft.value=parsedArchive
+   }
    const raw=localStorage.getItem(LOCAL_DRAFT_KEY)
    if(!raw)return
-   loadDefinition(JSON.parse(raw) as Partial<Workflow>)
-   flowMessage.value='Se recuperó el último borrador de este navegador.'
- }catch{flowMessage.value='No se pudo recuperar el borrador local. Se cargó el ejemplo base.'}
+   const parsed=JSON.parse(raw) as Partial<Workflow>
+   if(isLegacyTwoPortalExample(parsed)){
+     try{
+       localStorage.setItem(ARCHIVED_PILOT_DRAFT_KEY,raw)
+       archivedPilotDraft.value=parsed
+       loadFamisanarCaseDraft()
+       flowMessage.value='Se archivó el ejemplo anterior sin borrarlo. Ahora estás visualizando el primer caso de Famisanar.'
+     }catch{
+       loadDefinition(parsed)
+       flowMessage.value='No se pudo crear una copia de seguridad del piloto. Sigue disponible en este navegador; usa Caso Famisanar para cambiar de flujo.'
+     }
+     return
+   }
+   loadDefinition(parsed)
+   flowMessage.value='Se recuperó tu último borrador del diseñador.'
+ }catch{flowMessage.value='No se pudo recuperar el borrador local. Se cargó el caso documental de Famisanar.'}
 }
 restoreLocalDraft()
 watch([nodes,edges,workflowKey,workflowName,modalityKey],()=>{
@@ -1353,6 +1389,15 @@ function simulateDraft(){
         <div class="workflow-mode-select" role="group" aria-label="Modo de visualización del proceso">
           <button type="button" :class="{active:studioTab==='pantallas'}" @click="studioTab='pantallas'">Vista operativa</button>
           <button type="button" :class="{active:studioTab==='editor'}" @click="studioTab='editor'">Diseñar workflow</button>
+        </div>
+        <div class="workflow-source-banner">
+          <div><span class="eyebrow">PROCESO SELECCIONADO</span><strong>{{workflowName}}</strong>
+            <small v-if="isFamisanarCase">Famisanar · Fuente documental · Responsables y condiciones por validar</small>
+            <small v-else>Borrador local · La vista muestra exactamente la definición seleccionada</small></div>
+          <div class="workflow-source-actions">
+            <button type="button" class="ghost-button" @click="loadFamisanarCaseDraft">Abrir caso Famisanar</button>
+            <button v-if="archivedPilotDraft" type="button" class="ghost-button" @click="openArchivedPilotDraft">Ver ejercicio anterior</button>
+          </div>
         </div>
         <section v-if="studioTab==='pantallas'" class="workflow-front-preview">
           <div class="workflow-front-heading">

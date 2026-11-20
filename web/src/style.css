@@ -549,3 +549,11 @@ nav button.active .nav-icon{stroke:#236ed3;transform:scale(1.03)}
 .workflow-sharing-note{color:#9d7d4f!important}
 .workflow-preview-review{font-size:11px;color:#7c94aa;margin:0;line-height:1.5}
 @media(max-width:720px){.workflow-sharing{padding:15px}.workflow-sharing-actions button{width:100%}}
+
+/* An explicit workflow source prevents historic local drafts from being mistaken for Famisanar. */
+.workflow-source-banner{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;border:1px solid #dae6f3;background:#f8fbff;border-radius:15px;padding:15px 19px}
+.workflow-source-banner>div:first-child{display:grid;gap:5px;min-width:230px}
+.workflow-source-banner strong{font-size:15px;color:#244c70;line-height:1.4}
+.workflow-source-banner small{font-size:11px;color:#7c91a5;line-height:1.5}
+.workflow-source-actions{display:flex;flex-wrap:wrap;gap:9px}
+.workflow-source-actions button{white-space:normal}
