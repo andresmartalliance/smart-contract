@@ -49,8 +49,8 @@ console.log('Original PDF verified: 23 numbered tasks, 25 nodes, 24 edges, 21/2 
 // Connected diagram regression: its links are generated from actual workflow edges.
 assert.ok(app.includes('const directedChain=computed('))
 assert.ok(app.includes('edges.value.length!==ordered.length-1'))
-assert.ok(app.includes('v-if="directedChain&&!freeformMode"'))
-assert.ok(app.includes('<CompactWorkflowDiagram v-if="directedChain&&!freeformMode"'))
+assert.ok(app.includes('const compactSavedPositions=computed('))
+assert.ok(app.includes('<CompactWorkflowDiagram v-if="!freeformMode"'))
 assert.ok(app.includes('@select-edge="selectCompactEdge"'))
 assert.ok(!app.includes('Editar conexión</span>'),'remove repeated edge editing pills')
 
@@ -91,3 +91,30 @@ for(const [i,edge] of diagram.segments.entries()){
 }
 assert.ok(fs.readFileSync(new URL('../src/CompactWorkflowDiagram.vue',import.meta.url),'utf8').includes('compact-flow-arrows'))
 console.log('Compact flow verified: 25 readable cards, 24 actual continuous routes, 7 rows, no intersections.')
+
+
+// Genuine editable canvas regression: movement, panning, linking, persisted coordinates.
+const editable=buildEditableLayout(ids,edges)
+assert.equal(editable.points.length,25)
+assert.equal(editable.segments.length,24)
+assert.equal(editable.points[0].x,diagram.points[0].x)
+const moved=buildEditableLayout(ids,edges,{[ids[1]]:{x:1250,y:190}})
+assert.equal(moved.points[1].x,1250)
+assert.equal(moved.points[1].y,190)
+assert.ok(moved.width>=1475,'board expands when a node is dragged right')
+assert.notEqual(moved.segments[0].path,editable.segments[0].path,'edges follow moved stages')
+assert.notEqual(moved.segments[1].path,editable.segments[1].path,'all incident routes follow movement')
+const extra=buildEditableLayout(ids,[...edges,{id:'new_branch',source:ids[1],target:ids[4]}])
+assert.equal(extra.segments.length,25)
+assert.equal(extra.segments.at(-1).target,ids[4])
+const comp=fs.readFileSync(new URL('../src/CompactWorkflowDiagram.vue',import.meta.url),'utf8')
+assert.ok(comp.includes("@pointerdown=\"startCardDrag($event,card)\""))
+assert.ok(comp.includes("@pointermove=\"moveCard\""))
+assert.ok(comp.includes("@pointerdown=\"startPan\""))
+assert.ok(comp.includes("@click=\"setZoom(zoom+.15)\""))
+assert.ok(comp.includes("emit('connect',connectionSource.value,id)"))
+assert.ok(app.includes("@move-node=\"onCompactMove\""))
+assert.ok(app.includes("canvas_layout:'manual'"))
+assert.ok(app.includes("config:{...d.config,position:{x:n.position.x,y:n.position.y}}"))
+assert.ok(app.includes("'PATCH',{workflow:definition()}"))
+console.log('Editable workflow verified: drag updates routed geometry, free panning, zoom, branching and persisted positions.')

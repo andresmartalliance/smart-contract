@@ -679,3 +679,8 @@ nav button.active .nav-icon{stroke:#236ed3;transform:scale(1.03)}
 .studio-map-switch span{font-size:10px;color:#7891a7;background:transparent;padding:0;flex:1;white-space:normal;line-height:1.4}
 .studio-map-switch button{background:#f7fbff;white-space:nowrap}
 @media(max-width:1100px){.studio-map-switch{flex-wrap:wrap}.studio-map-switch span{order:3;flex-basis:100%}}
+
+/* Direct canvas manipulation is the default, not a hidden alternate mode. */
+.studio-canvas-readable>.compact-flow-editor{flex:1;min-height:0}
+.studio-map-switch{min-height:42px}
+.studio-map-switch button{font-weight:700}

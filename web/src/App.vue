@@ -4,6 +4,7 @@ import { VueFlow, Position, type Node, type Edge, type Connection } from '@vue-f
 import ProviderPortal from './ProviderPortal.vue'
 import WorkflowPresentation from './WorkflowPresentation.vue'
 import CompactWorkflowDiagram from './CompactWorkflowDiagram.vue'
+import { buildEditableLayout } from './compactFlowLayout'
 import { buildOriginalContractFlow } from './originalContractFlow'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
@@ -1037,6 +1038,40 @@ const directedChain=computed(()=>{
  return ordered.every((n,i)=>i===ordered.length-1||
    edges.value.some(e=>e.source===n.id&&e.target===ordered[i+1].id))
 })
+
+const compactSavedPositions=computed<Record<string,{x:number;y:number}>|null>(()=>{
+ if(workflowMetadata.value.canvas_layout!=='manual')return null
+ return Object.fromEntries(nodes.value.map(n=>[n.id,{x:n.position.x,y:n.position.y}]))
+})
+function onCompactMove(id:string,point:{x:number;y:number}){
+ if(!nodes.value.some(n=>n.id===id))return
+ const positions=compactSavedPositions.value
+ const initial=buildEditableLayout(
+   guidedOrderedNodes.value.map(n=>n.id),
+   edges.value.map(e=>({id:e.id,source:e.source,target:e.target})),
+   positions||{})
+ const byId=new Map(initial.points.map(p=>[p.id,{x:p.x,y:p.y}]))
+ nodes.value=nodes.value.map(n=>{
+   const position=n.id===id?point:(positions?.[n.id]||byId.get(n.id)||n.position)
+   return {...n,position:{x:position.x,y:position.y}}
+ })
+ workflowMetadata.value={...workflowMetadata.value,canvas_layout:'manual'}
+ errors.value=[]
+ flowMessage.value='Etapa movida. Guarda cambios en '+(editingLinkedDraft.value?.partyName||'tu borrador')+' para conservar la posición.'
+}
+function organizeCompactLayout(){
+ const model=buildEditableLayout(
+   guidedOrderedNodes.value.map(n=>n.id),
+   edges.value.map(e=>({id:e.id,source:e.source,target:e.target})))
+ const byId=new Map(model.points.map(p=>[p.id,{x:p.x,y:p.y}]))
+ nodes.value=nodes.value.map(n=>({...n,position:{...(byId.get(n.id)||n.position)}}))
+ workflowMetadata.value={...workflowMetadata.value,canvas_layout:'manual'}
+ errors.value=[]
+ flowMessage.value='Distribución reorganizada. Los pasos y conexiones no cambiaron; guarda para conservar las posiciones.'
+}
+function connectCompactNodes(source:string,target:string){
+ onConnect({source,target} as Connection)
+}
 function selectCompactEdge(edgeId:string){
  if(!edges.value.some(e=>e.id===edgeId))return
  selectedId.value=null
@@ -1892,20 +1927,17 @@ function simulateDraft(){
             </div>
             <div v-else class="canvas-area studio-canvas-readable">
               <div class="studio-map-tools studio-map-switch">
-                <strong>{{directedChain&&!freeformMode?'Diagrama completo · '+guidedOrderedNodes.length+' nodos':'Editor libre de nodos'}}</strong>
-                <span>{{directedChain&&!freeformMode
-                  ?'Selecciona una tarjeta o una flecha para editar sus propiedades.'
-                  :'Arrastra para ajustar posiciones y crea conexiones desde los puntos de cada nodo.'}}</span>
-                <button v-if="directedChain" type="button" @click="freeformMode=!freeformMode">
-                  {{freeformMode?'Volver al diagrama':'Diseño libre'}}
-                </button>
-                <button v-if="freeformMode&&workflowKey==='SMART_CICLO_CONTRATACION_V2'"
-                  type="button" @click="organizeOriginalCanvas">Ordenar</button>
+                <strong>{{freeformMode?'Editor técnico':'Workflow editable'}} · {{guidedOrderedNodes.length}} nodos</strong>
+                <span>{{freeformMode?'Editor alternativo de enlaces y posiciones.':'Puedes mover las etapas y el lienzo directamente.'}}</span>
+                <button type="button" @click="freeformMode=!freeformMode">{{freeformMode?'Volver al workflow':'Editor técnico'}}</button>
               </div>
-              <CompactWorkflowDiagram v-if="directedChain&&!freeformMode"
+              <CompactWorkflowDiagram v-if="!freeformMode"
                 :ordered-nodes="guidedOrderedNodes" :edges="edges"
+                :manual-positions="compactSavedPositions"
                 :selected-node-id="selectedId" :selected-edge-id="selectedEdgeId"
-                @select-node="selectGuidedStage" @select-edge="selectCompactEdge"/>
+                @select-node="selectGuidedStage" @select-edge="selectCompactEdge"
+                @move-node="onCompactMove" @organize="organizeCompactLayout"
+                @connect="connectCompactNodes"/>
               <VueFlow v-else :key="'studio-'+studioDiagramVersion" v-model:nodes="nodes"
                 v-model:edges="edges" :fit-view-on-init="false"
                 :default-viewport="{x:90,y:35,zoom:0.9}"
@@ -1919,7 +1951,7 @@ function simulateDraft(){
             </div>
             <div class="canvas-footer">
               <span v-if="studioCanvasMode==='guided'">Selecciona cada etapa y edita su nombre, responsable, campos y condiciones a la derecha.</span>
-              <span v-else>Desplaza el lienzo para explorar · Arrastra y conecta los nodos</span>
+              <span v-else>Mueve etapas y fondo directamente · Guarda cambios para conservar el diseño</span>
               <div class="canvas-buttons" v-if="studioCanvasMode==='guided'">
                 <button type="button" :disabled="guidedCurrentPage===0" @click="changeGuidedPage(guidedCurrentPage-1)">Anterior</button>
                 <button type="button" :disabled="guidedCurrentPage>=guidedPages-1" @click="changeGuidedPage(guidedCurrentPage+1)">Siguiente</button>
