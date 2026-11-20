@@ -1,5 +1,19 @@
 # Smart Contract + MAIRA
 
+## V6.6.2 — Del workflow a pantallas compartidas (sin expediente sintético)
+
+**Objetivo:** convertir el mismo workflow en una interfaz operativa de **contratante** y **prestador** antes de cualquier activación. El diseñador sigue siendo la fuente de verdad, no una segunda aplicación ni dos modelos de datos distintos.
+
+**Navegación:** en Flujos, la primera vista es ahora «Vista operativa» y permite alternar «Contratante» / «Prestador». El componente único `web/src/WorkflowPresentation.vue` toma `definition()` en tiempo real y representa actividades, responsables, campos configurados, dependencias y salidas condicionales documentadas. El botón «Diseñar workflow» vuelve al editor de Vue Flow. Los campos de la previsualización no se guardan ni ejecutan.
+
+**Compartir con la IPS:** un configurador elige una persona/empresa registrada con correo autorizado y pulsa «Compartir vista previa». La API `POST /api/v1/portal/parties/{party_id}/workflow-presentations` conserva una copia inmutable de visualización en `PartyProcessPreview(status=PREVIEW_SHARED)` y no crea ni publica `ContractCase`, `ContractTask` ni `WorkflowVersion`. El prestador inicia sesión en `/prestador`, recibe la lista con `GET /my-workflow-presentations` y visualiza el mismo componente por `GET /my-workflow-presentations/{id}`, con una proyección segura que no revela notas internas ni campos exclusivos del contratante. Los controles dependen de la cuenta Google verificada y del correo registrado. No se envían correos automáticamente.
+
+**Eliminación del desvío:** se retiraron la acción y el endpoint `/verification/cases` que creaban un expediente sintético; no es el mecanismo solicitado para la demostración del frontend. Las vistas compartidas se mantienen separadas de las vistas documentales generadas por MAIRA.
+
+**Estado real Famisanar:** `FAMISANAR_RED_PRESTADORA_CASO_01` aún es un borrador documental de diez nodos, con responsables `REVISAR` y condiciones pendientes de validación. Aparecerán como «Por definir» en ambas pantallas hasta configurarlos. Compartir la visualización no equivale a aprobación de Famisanar, ni habilita carga de documentos, firma o tareas operativas.
+
+**Pruebas:** tests de API para compartir, no crear contratos, aislamiento por usuario y campos visibles del prestador; compilación web con el mismo renderer. La prueba visual con sesión externa sigue pendiente.
+
 ## V6.6.0 — Famisanar, primer caso de red prestadora y portal separado para IPS
 
 **Cierre del ejercicio anterior:** el prototipo de contratación de aspirantes y el ejemplo de doble portal pasan a referencia histórica. Se retiró el botón de ejemplo y ya no es el flujo de entrada. No se eliminaron expedientes ni se activaron contratos.
