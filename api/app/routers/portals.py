@@ -182,6 +182,11 @@ def publish(input:PublishInput,email:str=Depends(verify_google_email),db:Session
     m=_configurator(db,email);wf=input.workflow
     if _requires_source_review(wf):
         raise HTTPException(422,"Antes de publicar, revisa responsables y conexiones del documento y confirma la revisión en Workflow Studio.")
+    if (wf.metadata.get("source")=="maira-document-import" or any(n.config.get("source_step") for n in wf.nodes)) and any(
+        n.kind not in ("START","END") and n.config.get("actor_side") not in ("CONTRATANTE","CONTRATISTA")
+        for n in wf.nodes
+    ):
+        raise HTTPException(422,"Hay actividades sin lado ejecutor confirmado. Asigna cada actividad a contratante o contratista antes de publicar.")
     try: topological_order(wf)
     except WorkflowInvalid as exc: raise HTTPException(422,{"problems":exc.problems})
     # Do not silently execute conditional branches, external APIs, or signatures as valid legal acts.

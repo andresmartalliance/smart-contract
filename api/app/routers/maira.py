@@ -291,7 +291,12 @@ def _compile_source_extraction(raw: Any) -> Proposal:
         if kind == "APPROVAL" and not role:
             kind = "HUMAN_DECISION"
             questions.append(f"Paso {key}: falta responsable de aprobación; revisar antes de activar.")
-        config: dict[str, Any] = {"source_step":key}
+        config: dict[str, Any] = {
+            "source_step": key,
+            "source_excerpt": step.source_excerpt.strip(),
+            "source_page": step.page,
+            "source_confidence": (step.confidence or "media").strip().lower(),
+        }
         if role and role.upper() in _EXTERNAL_ROLES:
             config["actor_side"] = "CONTRATISTA"
         elif role and role.upper() in _INTERNAL_ROLES:
@@ -658,6 +663,10 @@ async def _call_gemini(data: bytes, suffix: str, filename: str, api_key: str,
 
 def _document_result(result: Proposal, name: str, party_kind: str | None) -> dict[str, Any]:
     if party_kind == "JURIDICA":
+        for node in result.workflow.nodes:
+            if (node.role or "").strip().upper() == "ASPIRANTE":
+                node.config["actor_side"] = "REVISAR"
+                node.config["party_scope_pending"] = True
         source = " ".join(n.label + " " + str(n.role or "") for n in result.workflow.nodes).lower()
         if any(word in source for word in ("aspirante", "personal a contratar")):
             alert = "El diagrama menciona aspirantes o personal; revisar pertinencia para persona jurídica antes de asignarle tareas."
