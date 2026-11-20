@@ -634,3 +634,35 @@ nav button.active .nav-icon{stroke:#236ed3;transform:scale(1.03)}
 .inspector-panel .panel-title,.inspector-panel .panel-caption,.inspector-panel .field-editor,.inspector-panel .switch-row,.inspector-panel .delete-button,.inspector-panel .select-message{grid-column:auto}
 .inspector-field{margin:11px}}
 @media(max-width:700px){.guided-flow{padding:12px}.guided-flow-card{gap:9px;flex-wrap:wrap}.guided-flow-owner{white-space:normal}.studio-map-tools span{display:none}}
+
+/* Reliable single-chain diagram: DOM connectors between every real adjacency.
+ * Unlike the freeform SVG editor these links cannot be clipped mid-edge. */
+.studio-map-switch{left:10px;right:10px;flex-wrap:wrap}
+.connected-diagram{width:100%;height:100%;overflow:auto;background:#f9fcff;padding:70px 24px 52px;box-sizing:border-box}
+.connected-diagram-list{width:min(100%,610px);margin:auto;display:flex;flex-direction:column;align-items:stretch}
+.connected-diagram-node{position:relative;display:flex;align-items:center;gap:12px;min-height:77px;width:100%;text-align:left;
+ border:1px solid #c9ddec;border-left:4px solid #337bce;border-radius:14px;background:white;padding:13px 17px;
+ box-shadow:0 3px 12px rgba(42,85,131,.08);cursor:pointer;color:#2b4a68}
+.connected-diagram-node.active,.connected-diagram-node:hover{border-color:#3580d3;background:#ecf5ff;box-shadow:0 0 0 3px rgba(49,115,201,.12)}
+.connected-diagram-node.endpoint{background:#eef6ff}
+.connected-diagram-node.endpoint:last-child{background:#eaf9f3;border-left-color:#28a788}
+.connected-diagram-count{flex:none;display:grid;place-items:center;min-width:49px;height:36px;padding:0 4px;box-sizing:border-box;
+ border-radius:9px;background:#e8f2fd;color:#286cab;font-weight:800;font-size:11px}
+.connected-diagram-label{min-width:0;flex:1;display:grid;gap:6px}
+.connected-diagram-label strong{font-size:13px;line-height:1.5;color:#294e70;overflow-wrap:anywhere}
+.connected-diagram-label small{font-size:11px;color:#8196aa;line-height:1.45}
+.connected-diagram-edit{flex:none;font-size:11px;color:#3a79b8;font-weight:700}
+.connected-diagram-link{height:54px;position:relative;display:flex;align-items:stretch;justify-content:center}
+.connected-diagram-link:before{content:'';position:absolute;top:0;bottom:0;left:50%;transform:translateX(-50%);
+ width:3px;background:#6596cb;pointer-events:none}
+.connected-diagram-link:after{content:'';position:absolute;bottom:-1px;left:50%;transform:translateX(-50%) rotate(45deg);
+ width:8px;height:8px;border-right:3px solid #6596cb;border-bottom:3px solid #6596cb;pointer-events:none}
+.connected-diagram-edge{z-index:1;position:relative;align-self:center;min-width:116px;height:28px;cursor:pointer;
+ border:1px solid #d2e3f4;border-radius:14px;background:#fff;color:#487fae;font-size:10px;font-weight:700;
+ opacity:.98;transition:background .15s}
+.connected-diagram-edge:hover,.connected-diagram-edge.active{border-color:#4e8dd0;background:#e7f3ff}
+@media(max-width:700px){.connected-diagram{padding-left:10px;padding-right:10px}
+.connected-diagram-node{gap:8px;padding:11px}
+.connected-diagram-edit{display:none}
+.studio-map-switch{flex-wrap:wrap}
+.studio-map-switch span{display:none}}

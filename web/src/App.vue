@@ -1028,6 +1028,19 @@ watch(mairaImportOpen,open=>{if(!open){mairaSourceFile.value=null;mairaProposal.
 const nodes = shallowRef<Node[]>([])
 const edges = shallowRef<Edge[]>([])
 const studioCanvasMode=ref<'guided'|'canvas'>('guided')
+const freeformMode=ref(false)
+const directedChain=computed(()=>{
+ const ordered=guidedOrderedNodes.value
+ if(ordered.length<2||edges.value.length!==ordered.length-1)return false
+ if(new Set(ordered.map(n=>n.id)).size!==ordered.length)return false
+ return ordered.every((n,i)=>i===ordered.length-1||
+   edges.value.some(e=>e.source===n.id&&e.target===ordered[i+1].id))
+})
+function selectChainConnection(source:string,target:string){
+ const edge=edges.value.find(e=>e.source===source&&e.target===target)
+ if(edge){selectedId.value=null;selectedEdgeId.value=edge.id}
+}
+
 const guidedPage=ref(0)
 const guidedPageSize=5
 const guidedOrderedNodes=computed(()=>{
@@ -1876,18 +1889,60 @@ function simulateDraft(){
               </div>
             </div>
             <div v-else class="canvas-area studio-canvas-readable">
-              <div class="studio-map-tools" v-if="workflowKey==='SMART_CICLO_CONTRATACION_V2'">
-                <button type="button" @click="organizeOriginalCanvas">Ordenar diagrama</button>
-                <span>Desplázate para recorrer las etapas. Arrastra los nodos para reorganizarlos.</span>
+              <div class="studio-map-tools studio-map-switch">
+                <button v-if="directedChain" type="button" @click="freeformMode=!freeformMode">
+                  {{freeformMode?'Ver conexiones continuas':'Mover nodos libremente'}}
+                </button>
+                <button v-if="freeformMode&&workflowKey==='SMART_CICLO_CONTRATACION_V2'"
+                  type="button" @click="organizeOriginalCanvas">Ordenar posiciones</button>
+                <span>{{directedChain&&!freeformMode
+                  ?'Las líneas representan exactamente las dependencias del workflow; selecciona una actividad o conexión para editarla.'
+                  :'Lienzo libre para mover nodos y crear bifurcaciones.'}}</span>
               </div>
-              <VueFlow :key="'studio-'+studioDiagramVersion" v-model:nodes="nodes" v-model:edges="edges"
-                :fit-view-on-init="false" :default-viewport="{x:90,y:35,zoom:0.9}"
+              <div v-if="directedChain&&!freeformMode" class="connected-diagram"
+                role="region" aria-label="Diagrama completo con conexiones continuas">
+                <div class="connected-diagram-list">
+                  <template v-for="(node,i) in guidedOrderedNodes" :key="node.id">
+                    <button type="button"
+                      :class="['connected-diagram-node',{
+                        active:selectedId===node.id,
+                        endpoint:(node.data as WorkNode).kind==='START'||(node.data as WorkNode).kind==='END'
+                      }]"
+                      :aria-pressed="selectedId===node.id"
+                      @click="selectGuidedStage(node.id)">
+                      <span v-if="(node.data as WorkNode).config?.source_step" class="connected-diagram-count">
+                        {{(node.data as WorkNode).config.source_step}}
+                      </span>
+                      <span v-else class="connected-diagram-count">{{i===0?'INICIO':'FIN'}}</span>
+                      <span class="connected-diagram-label">
+                        <strong>{{(node.data as WorkNode).label}}</strong>
+                        <small v-if="(node.data as WorkNode).kind!=='START'&&(node.data as WorkNode).kind!=='END'">
+                          {{(node.data as WorkNode).role||'Por definir'}} · {{guidedSide(node)}}
+                        </small>
+                      </span>
+                      <span class="connected-diagram-edit">Editar</span>
+                    </button>
+                    <div v-if="i<guidedOrderedNodes.length-1" class="connected-diagram-link">
+                      <button type="button" class="connected-diagram-edge"
+                        :class="{active:selectedEdgeId===edges.find(e=>e.source===node.id&&e.target===guidedOrderedNodes[i+1].id)?.id}"
+                        :aria-label="'Editar conexión entre '+String((node.data as WorkNode).label)+' y '+String((guidedOrderedNodes[i+1].data as WorkNode).label)"
+                        @click="selectChainConnection(node.id,guidedOrderedNodes[i+1].id)">
+                        <span class="connected-diagram-edge-caption">Editar conexión</span>
+                      </button>
+                    </div>
+                  </template>
+                </div>
+              </div>
+              <VueFlow v-else :key="'studio-'+studioDiagramVersion" v-model:nodes="nodes"
+                v-model:edges="edges" :fit-view-on-init="false"
+                :default-viewport="{x:90,y:35,zoom:0.9}"
                 :nodes-connectable="true" :nodes-draggable="true" :elements-selectable="true"
                 :pan-on-scroll="true" :zoom-on-scroll="false" :zoom-on-pinch="true"
                 :min-zoom="0.55" :max-zoom="1.6" @connect="onConnect"
                 @node-click="({node}) => {selectedId=node.id;selectedEdgeId=null}"
                 @edge-click="({edge}) => {selectedEdgeId=edge.id;selectedId=null}"
-                @node-drag-stop="onNodeDragStop" @pane-click="() => {selectedId=null;selectedEdgeId=null}" />
+                @node-drag-stop="onNodeDragStop"
+                @pane-click="() => {selectedId=null;selectedEdgeId=null}" />
             </div>
             <div class="canvas-footer">
               <span v-if="studioCanvasMode==='guided'">Selecciona cada etapa y edita su nombre, responsable, campos y condiciones a la derecha.</span>

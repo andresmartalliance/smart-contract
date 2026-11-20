@@ -45,3 +45,10 @@ assert.ok(!app.includes('loadFamisanarCaseDraft'), 'the unrelated case must not 
 assert.ok(!app.includes('Caso Famisanar · Prefactibilidad'),'no unrelated navigation')
 assert.ok(app.includes('archivedPilotDraft'),'preserve the retired two-node demo')
 console.log('Original PDF verified: 23 numbered tasks, 25 nodes, 24 edges, 21/2 actor sides; no invented form fields.')
+
+// Connected diagram regression: its links are generated from actual workflow edges.
+assert.ok(app.includes('const directedChain=computed('))
+assert.ok(app.includes('edges.value.length!==ordered.length-1'))
+assert.ok(app.includes('v-if="directedChain&&!freeformMode"'))
+assert.ok(app.includes('connected-diagram-link'))
+assert.ok(app.includes('selectChainConnection(node.id,guidedOrderedNodes[i+1].id)'))
