@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, ref, shallowRef, watch } from 'vue'
 import { VueFlow, Position, type Node, type Edge, type Connection } from '@vue-flow/core'
 import ProviderPortal from './ProviderPortal.vue'
+import WorkflowPresentation from './WorkflowPresentation.vue'
 import { buildFamisanarFirstCase } from './famisanarCase'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
@@ -18,6 +19,13 @@ type WorkEdge = {source:string;target:string;when?:Condition|null}
 type Workflow = {key: string; name: string; modality_key: string | null; nodes: WorkNode[]; edges: WorkEdge[]; metadata: Record<string, unknown>}
 
 const current = ref<Screen>('resumen')
+const studioTab=ref<'pantallas'|'editor'>('pantallas')
+const previewSide=ref<'CONTRATANTE'|'CONTRATISTA'>('CONTRATANTE')
+const previewPartyId=ref('')
+const previewShareBusy=ref(false)
+const previewShareMessage=ref('')
+const previewShareError=ref('')
+
 const providerPortalMode=ref(window.location.pathname.replace(/\/$/,'')==='/prestador' ||
  new URLSearchParams(window.location.search).get('view')==='mi-contratacion')
 function openProviderPortal(){
@@ -405,7 +413,7 @@ const savedSourceOnly=computed(()=>partyPreview.value?.workflow.metadata?.source
 const mairaApplyConfirm=ref(false)
 const loginGoogleMount=ref<HTMLElement|null>(null)
 const loginEmail=ref('')
-type PortalSession={email:string;institutions:{id:string;roles:string[]}[];invited_cases:number;can_setup:boolean;verification_enabled?:boolean;pilot:boolean}
+type PortalSession={email:string;institutions:{id:string;roles:string[]}[];invited_cases:number;can_setup:boolean;pilot:boolean}
 type CaseSummary={id:string;title:string;state:string;workflow_version_id:string|null;party_id:string|null;party_name:string|null;party_email?:string|null;invited:boolean;total:number;completed:number}
 type PartyRecord={id:string;name:string;kind:'NATURAL'|'JURIDICA';email:string|null;case_count:number}
 type ContractTaskView={id:string;node_id:string;label:string;kind:string;side:string;state:string;fields:WorkField[];answer?:Record<string,unknown>;note?:string}
@@ -426,6 +434,35 @@ const editingPartyId=ref('')
 const editingPartyEmail=ref('')
 const draftWorkflowId=ref('')
 const internalCases=ref<CaseSummary[]>([])
+
+type SharedPresentation={id:string;name:string;status:string;created_at:string}
+type SharedPresentationDetail=SharedPresentation&{workflow:Workflow}
+const mySharedPresentations=ref<SharedPresentation[]>([])
+const selectedSharedPresentation=ref<SharedPresentationDetail|null>(null)
+async function openSharedPresentation(id:string){
+ portalError.value='';selectedSharedPresentation.value=null
+ try{
+  selectedSharedPresentation.value=await portalRequest<SharedPresentationDetail>('/my-workflow-presentations/'+id)
+  activeCase.value=null
+ }catch(e){portalError.value=e instanceof Error?e.message:'No se pudo abrir la vista previa'}
+}
+async function shareWorkflowPreview(){
+ const party=partyRecords.value.find(p=>p.id===previewPartyId.value)
+ previewShareError.value='';previewShareMessage.value=''
+ if(!party?.email){
+  previewShareError.value='Selecciona una persona jurídica registrada con correo de contacto autorizado.'
+  return
+ }
+ previewShareBusy.value=true
+ try{
+  const result=await portalRequest<{id:string;recipient:string;case_created:boolean}>(
+   '/parties/'+party.id+'/workflow-presentations','POST',{workflow:definition()})
+  previewShareMessage.value='Vista previa compartida para '+result.recipient+
+   '. Al iniciar sesión en Portal de Prestadores verá las pantallas del proceso. No se creó un expediente.'
+ }catch(e){previewShareError.value=e instanceof Error?e.message:'No se pudo compartir la vista previa'}
+ finally{previewShareBusy.value=false}
+}
+
 const myCases=ref<CaseSummary[]>([])
 const activeCase=ref<CaseView|null>(null)
 const portalError=ref('')
@@ -438,24 +475,6 @@ const selectedWorkflowId=ref('')
 const answers=ref<Record<string,string>>({})
 const taskNote=ref('')
 const returnReason=ref('')
-const verificationContactEmail=ref('')
-async function prepareVerificationCase(){
- const contact=verificationContactEmail.value.trim().toLowerCase()
- if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact)){
-   portalError.value='Ingresa el correo de la segunda cuenta Google.'
-   return
- }
- portalBusy.value=true;portalError.value='';portalMessage.value=''
- try{
-  const result=await portalRequest<{case:CaseSummary;synthetic:boolean;portal_path:string}>(
-    '/verification/cases','POST',{contact_email:contact})
-  await refreshPortal()
-  await openCase(result.case.id)
-  portalMessage.value='Expediente ficticio preparado para '+contact+
-    '. Ingresa al Portal de Prestadores con esa cuenta. No se enviaron correos ni se activaron contratos reales.'
- }catch(e){portalError.value=e instanceof Error?e.message:'No fue posible preparar el expediente.'}
- finally{portalBusy.value=false}
-}
 async function portalRequest<T>(path:string,method='GET',payload?:unknown):Promise<T>{
  const response=await fetch(MAIRA_API+'/api/v1/portal'+path,{
   method,headers:{Authorization:'Bearer '+loginToken.value,...(payload!==undefined?{'Content-Type':'application/json'}:{})},
@@ -475,6 +494,7 @@ async function refreshPortal(){
  try{
   portalSession.value=await portalRequest<PortalSession>('/session')
   myCases.value=await portalRequest<CaseSummary[]>('/my-cases')
+  mySharedPresentations.value=await portalRequest<SharedPresentation[]>('/my-workflow-presentations')
   if(hasInstitution.value){
    templates.value=await portalRequest<TemplateOption[]>('/workflows')
    partyRecords.value=await portalRequest<PartyRecord[]>('/parties')
@@ -893,6 +913,7 @@ function nodeInfo(id:string, kind:Kind, label:string, x:number,y:number,role:str
   return {id,type:kind==='START'?'input':kind==='END'?'output':'default',position:{x,y},data:{label,kind,role,policy,enabled:true,config:{execution_mode:'MANUAL',fields:[]}},class:kind==='START'?'node-start':kind==='END'?'node-end':'node-'+kind.toLowerCase()}
 }
 function loadFamisanarCaseDraft(){
+ studioTab.value='pantallas'
  famisanarScopeChoice.value='';famisanarClarificationAnswers.value={}
  const draft=buildFamisanarFirstCase()
  loadDefinition(draft)
@@ -1296,9 +1317,11 @@ function simulateDraft(){
     </div>
   </div>
   <div v-else-if="providerPortalMode" class="provider-standalone">
-    <ProviderPortal :email="loginEmail" :cases="myCases" :detail="activeCase" :busy="portalBusy"
+    <ProviderPortal :email="loginEmail" :cases="myCases" :detail="activeCase"
+      :presentations="mySharedPresentations" :presentation="selectedSharedPresentation" :busy="portalBusy"
       :error="portalError" :message="portalMessage" :can-return-to-admin="hasInstitution"
       @refresh="refreshPortal" @open-case="openCase" @close-case="activeCase=null"
+      @open-presentation="openSharedPresentation" @close-presentation="selectedSharedPresentation=null"
       @complete="completeProviderPortalTask" @logout="logoutGoogle" @back-office="closeProviderPortal"/>
   </div>
   <div v-else class="shell">
@@ -1325,7 +1348,42 @@ function simulateDraft(){
         <div class="top-meta"><span class="top-product">Smart Contract · Famisanar 01</span><span class="context-pill">Development</span><button type="button" class="logout-button" @click="logoutGoogle" title="Cerrar sesión Google">Salir</button></div>
       </header>
       <section v-if="current==='flujos'&&hasInstitution" class="stack">
-        <div class="heading"><div><span class="eyebrow">Diseño inteligente de procesos</span><h2>Workflow Studio</h2><p>Diseña, conecta y valida etapas configurables. Todos los cambios siguen siendo un borrador local.</p></div><div class="header-actions"><button class="primary-button" @click="openMairaDocumentImport()">✧ Crear con MAIRA</button><button class="ghost-button" @click="loadFamisanarCaseDraft">Caso Famisanar · Prefactibilidad</button><button class="ghost-button" @click="newWorkflow">＋ Nuevo flujo</button><button class="ghost-button" @click="fileInput?.click()">↥ Importar</button><button class="primary-button" @click="exportDraft">↧ Exportar JSON</button><button class="ghost-button" :disabled="portalBusy" @click="publishPilot">Publicar plantilla</button></div></div>
+        <div class="heading"><div><span class="eyebrow">Diseño inteligente de procesos</span><h2>Workflow Studio</h2><p>Diseña, conecta y valida etapas configurables. Todos los cambios siguen siendo un borrador local.</p></div><div class="header-actions"><button class="primary-button" @click="studioTab='editor';openMairaDocumentImport()">✧ Crear con MAIRA</button><button class="ghost-button" @click="loadFamisanarCaseDraft">Caso Famisanar · Prefactibilidad</button><button class="ghost-button" @click="newWorkflow">＋ Nuevo flujo</button><button class="ghost-button" @click="fileInput?.click()">↥ Importar</button><button class="primary-button" @click="exportDraft">↧ Exportar JSON</button><button class="ghost-button" :disabled="portalBusy" @click="publishPilot">Publicar plantilla</button></div></div>
+
+        <div class="workflow-mode-select" role="group" aria-label="Modo de visualización del proceso">
+          <button type="button" :class="{active:studioTab==='pantallas'}" @click="studioTab='pantallas'">Vista operativa</button>
+          <button type="button" :class="{active:studioTab==='editor'}" @click="studioTab='editor'">Diseñar workflow</button>
+        </div>
+        <section v-if="studioTab==='pantallas'" class="workflow-front-preview">
+          <div class="workflow-front-heading">
+            <div><span class="eyebrow">Una definición · dos interfaces</span>
+              <h3>Así se verá el proceso en la plataforma</h3>
+              <p>La vista se actualiza con las actividades, campos y responsables del diseñador. No requiere expediente ni publicación.</p>
+            </div>
+            <div class="workflow-side-toggle" role="group" aria-label="Ver interfaz por participante">
+              <button type="button" :class="{selected:previewSide==='CONTRATANTE'}" @click="previewSide='CONTRATANTE'">Contratante</button>
+              <button type="button" :class="{selected:previewSide==='CONTRATISTA'}" @click="previewSide='CONTRATISTA'">Prestador</button>
+            </div>
+          </div>
+          <WorkflowPresentation :workflow="definition()" :side="previewSide" />
+          <section class="workflow-sharing">
+            <div><h4>Compartir esta vista con un prestador</h4>
+              <p>Selecciona un contacto registrado para mostrarle estas mismas pantallas en su portal. Se comparte una copia de solo lectura, no una contratación.</p>
+            </div>
+            <div class="workflow-sharing-actions">
+              <select v-model="previewPartyId" aria-label="Prestador destinatario de la vista previa">
+                <option value="">Seleccionar prestador autorizado</option>
+                <option v-for="party in partyRecords.filter(p=>p.email)" :key="party.id" :value="party.id">{{party.name}} · {{party.email}}</option>
+              </select>
+              <button type="button" class="primary-button" :disabled="previewShareBusy||!previewPartyId" @click="shareWorkflowPreview">Compartir vista previa</button>
+            </div>
+            <p v-if="previewShareError" class="pilot-error" role="alert">{{previewShareError}}</p>
+            <p v-if="previewShareMessage" class="pilot-success" role="status">{{previewShareMessage}}</p>
+            <p v-if="!partyRecords.some(p=>p.email)" class="workflow-sharing-note">Para compartir la visualización, primero registra el contacto autorizado en Personas y empresas.</p>
+          </section>
+          <p class="workflow-preview-review">Este diseño tiene {{definition().nodes.length}} nodos. Sus responsabilidades y condiciones siguen sujetas a revisión mientras no estén validadas en el diseñador.</p>
+        </section>
+
 
         <div v-if="mairaImportOpen" class="maira-import-surface" role="region" aria-label="Crear flujo a partir de documento con MAIRA">
           <div class="maira-import-head">
@@ -1491,12 +1549,12 @@ function simulateDraft(){
             <p class="maira-workflow-visual-note">Las conexiones representan el workflow propuesto por MAIRA. Debes confirmar las flechas, responsables y condiciones con el documento original antes de publicar.</p>
           </section>
         <input ref="fileInput" type="file" accept="application/json,.json" class="hidden-input" @change="importDraft" />
-        <div class="workflow-meta">
+        <div v-show="studioTab==='editor'" class="workflow-meta">
           <label>Nombre del proceso<input v-model="workflowName" maxlength="200" aria-label="Nombre del proceso" /></label>
           <label>Identificador<input v-model="workflowKey" maxlength="120" aria-label="Identificador del proceso" /></label>
           <label>Modalidad <span class="field-hint">opcional</span><input v-model="modalityKey" placeholder="Definida por la entidad" maxlength="120" aria-label="Modalidad configurable" /></label>
         </div>
-        <section v-if="sourceReviewRequired" class="maira-review-gate">
+        <section v-if="studioTab==='editor'&&sourceReviewRequired" class="maira-review-gate">
           <strong>Revisión documental obligatoria</strong>
           <p>El proceso conserva los datos del documento, pero no verifica automáticamente los responsables ni las flechas. Comprueba cada etapa en el diseñador antes de confirmar.</p>
           <div v-if="isFamisanarCase" class="famisanar-review-form">
@@ -1529,7 +1587,7 @@ function simulateDraft(){
             <span v-else class="maira-review-pending">Publicación bloqueada hasta completar la revisión.</span>
           </div>
         </section>
-        <div class="studio-layout">
+        <div v-show="studioTab==='editor'" class="studio-layout">
           <div class="studio-catalog">
             <div class="panel-title"><strong>Componentes</strong><button class="tiny-link" @click="loadFamisanarCaseDraft">Restaurar caso Famisanar</button></div>
             <p class="panel-caption">Selecciona una etapa y agrega bloques a su recorrido.</p>
@@ -1597,14 +1655,14 @@ function simulateDraft(){
              <div v-else class="select-message"><div>◇</div><p>Selecciona una etapa o conexión para configurar sus datos y reglas.</p></div>
           </div>
         </div>
-        <div v-if="simulationVisible" class="simulation-panel"><div class="panel-title"><strong>Simulación de recorrido</strong><button class="tiny-link" @click="simulationVisible=false">Cerrar</button></div><p class="panel-caption">Datos de ejemplo en JSON; indica etapas completadas separadas por coma. Esta prueba es local y no ejecuta tareas.</p>
+        <div v-if="studioTab==='editor'&&simulationVisible" class="simulation-panel"><div class="panel-title"><strong>Simulación de recorrido</strong><button class="tiny-link" @click="simulationVisible=false">Cerrar</button></div><p class="panel-caption">Datos de ejemplo en JSON; indica etapas completadas separadas por coma. Esta prueba es local y no ejecuta tareas.</p>
           <div class="simulation-fields"><label>Datos del expediente (JSON)<textarea v-model="simulationFacts" rows="3" spellcheck="false"/></label><label>Identificadores completados<input v-model="simulationCompleted" placeholder="inicio, documentos"/></label><button class="primary-button" @click="simulateDraft">Ejecutar simulación</button></div>
           <p v-if="simulationError" class="validation-list">{{simulationError}}</p>
           <div class="simulation-results"><div v-for="(status,id) in simulationStatuses" :key="id" class="simulation-item"><span>{{labelFor(String(id))}}</span><strong>{{status}}</strong></div></div>
         </div>
         <div v-if="flowMessage" class="status-message" role="status">{{flowMessage}}</div>
         <div v-if="errors.length" class="validation-list"><strong>Observaciones del flujo</strong><p v-for="(err,i) in errors" :key="i">{{err}}</p></div>
-        <div class="summary-strip"><span>{{nodeCount}} etapas · {{edges.length}} conexiones · {{policyCount}} protegidas</span><span>Borrador guardado en este navegador{{lastSavedAt?' · '+lastSavedAt:''}}. Para compartirlo, usa Exportar. La publicación institucional requiere inicio de sesión.</span></div>
+        <div v-show="studioTab==='editor'" class="summary-strip"><span>{{nodeCount}} etapas · {{edges.length}} conexiones · {{policyCount}} protegidas</span><span>Borrador guardado en este navegador{{lastSavedAt?' · '+lastSavedAt:''}}. Para compartirlo, usa Exportar. La publicación institucional requiere inicio de sesión.</span></div>
       </section>
       <section v-else-if="current==='resumen'" class="overview">
         <div class="summary-hero">
@@ -1749,17 +1807,7 @@ function simulateDraft(){
       <section v-else-if="current==='contrataciones'&&(hasInstitution||portalSession?.can_setup)" class="contract-space">
         <div class="contract-hero"><div><span class="eyebrow">SMART CONTRACT · CONTRATANTE</span><h2>Gestión Contractual</h2><p>Gestiona expedientes, define responsables y revisa el avance de tus contratistas.</p></div><div class="pilot-actions"><button class="ghost-button" @click="openProviderPortal">Ver portal de IPS</button><button class="ghost-button" @click="refreshPortal">Actualizar</button></div></div>
         <div class="pilot-notice">Ambiente de evaluación con datos sintéticos. No admite documentos confidenciales, firma válida ni contratación productiva.</div>
-        <section v-if="portalSession?.verification_enabled" class="pilot-panel verification-panel">
-          <h3>Verificar intercambio con una IPS</h3>
-          <p>Prepara un expediente ficticio para comprobar recepción, respuesta, devolución y corrección. Disponible únicamente en Development.</p>
-          <div class="verification-inline">
-            <label>Correo Google del prestador
-              <input v-model.trim="verificationContactEmail" type="email" autocomplete="off" maxlength="254" placeholder="Segunda cuenta Google" />
-            </label>
-            <button type="button" class="primary-button" :disabled="portalBusy" @click="prepareVerificationCase">Preparar expediente sintético</button>
-          </div>
-        </section>
-        <div v-if="portalError" class="pilot-error" role="alert">{{portalError}}</div>
+                <div v-if="portalError" class="pilot-error" role="alert">{{portalError}}</div>
         <div v-if="portalMessage" class="pilot-success" role="status">{{portalMessage}}</div>
         <div v-if="portalSession?.can_setup" class="pilot-panel">
           <h3>Crear institución de prueba</h3><p>Solo se crearán datos ficticios. El acceso queda vinculado a tu cuenta Google.</p>
